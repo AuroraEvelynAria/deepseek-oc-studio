@@ -45,6 +45,14 @@
   margin-left: 4px;
 }
 
+.actionTrigger {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
 [data-android] .item {
   content-visibility: auto;
   padding-inline: 7px 4px;

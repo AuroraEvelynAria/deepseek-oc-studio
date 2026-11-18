@@ -25,6 +25,10 @@ export const SessionItem = memo(function SessionItem({
   const [editing, setEditing] = useState(false)
   const actionsRef = useRef<HTMLDivElement>(null)
   const displayTitle = session.title || t('untitledChat')
+  const openSession = () => {
+    selectSession(session.id)
+    closeMobileSider()
+  }
 
   if (selection) {
     return (
@@ -69,15 +73,21 @@ export const SessionItem = memo(function SessionItem({
   return (
     <div
       className={clsx(styles.item, active && styles.active)}
+      role={android ? 'link' : undefined}
+      tabIndex={android ? 0 : undefined}
+      aria-label={android ? displayTitle : undefined}
       onContextMenu={(event) => {
         if (android) {
           event.preventDefault()
           actionsRef.current?.querySelector('button')?.click()
         }
       }}
-      onClick={() => {
-        selectSession(session.id)
-        closeMobileSider()
+      onClick={openSession}
+      onKeyDown={(event) => {
+        if (android && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault()
+          openSession()
+        }
       }}
     >
       <div className={styles.title}>{displayTitle}</div>
@@ -99,9 +109,23 @@ export const SessionItem = memo(function SessionItem({
             },
           ]}
         >
-          {({ toggle }) => (
-            <IconButton icon={<IconEllipsisOutline16 />} aria-label={t('more')} onClick={toggle} />
-          )}
+          {({ toggle }) =>
+            android ? (
+              <button
+                type="button"
+                className={styles.actionTrigger}
+                aria-hidden="true"
+                tabIndex={-1}
+                onClick={toggle}
+              />
+            ) : (
+              <IconButton
+                icon={<IconEllipsisOutline16 />}
+                aria-label={t('more')}
+                onClick={toggle}
+              />
+            )
+          }
         </Menu>
       </div>
     </div>
