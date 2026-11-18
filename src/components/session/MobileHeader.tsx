@@ -32,6 +32,7 @@ export const MobileHeader = ({ title }: { title?: string }) => {
             <IconButton
               size="xl"
               tone="primary"
+              role="link"
               className={styles.sound}
               icon={<AndroidSound muted={!autoRead} />}
               aria-label={t('androidAutoRead')}
@@ -48,6 +49,7 @@ export const MobileHeader = ({ title }: { title?: string }) => {
           <IconButton
             size="xl"
             tone="primary"
+            role="link"
             className={styles.newChat}
             icon={<IconNewChatOutline20 />}
             aria-label={t('newChat')}

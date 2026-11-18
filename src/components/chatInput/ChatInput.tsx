@@ -409,6 +409,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
             <Tooltip content={t('deactivatedThinkTooltip')}>
               <button
                 type="button"
+                role="link"
                 className={clsx(styles.toggle, thinking && styles.selected)}
                 aria-label={t('thinkingSwitch')}
                 aria-pressed={thinking}
@@ -421,6 +422,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
             <Tooltip content={t('deactivatedSearchTooltip')}>
               <button
                 type="button"
+                role="link"
                 className={clsx(styles.toggle, search && styles.selected)}
                 aria-label={t('search')}
                 aria-pressed={search}
@@ -437,6 +439,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
                 <IconButton
                   size="xl"
                   tone="primary"
+                  role="link"
                   icon={<AndroidCircle icon={showAttachments ? 'close' : 'add'} />}
                   aria-label={t(showAttachments ? 'close' : 'uploadFile')}
                   aria-expanded={showAttachments}
