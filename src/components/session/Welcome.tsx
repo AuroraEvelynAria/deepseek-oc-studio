@@ -11,7 +11,7 @@ export const Welcome = () => {
   const t = useTranslate()
   const isMobile = useIsMobile()
   return (
-    <div className={styles.container}>
+    <div className={styles.container} data-drawer-free-pan={android ? '' : undefined}>
       {isMobile ? <MobileHeader /> : null}
       <div className={styles.welcome}>
         <div className={styles.greeting}>

@@ -25,24 +25,25 @@ declare module 'mdast' {
 
 const text = (value: string): Text => ({ type: 'text', value })
 
+export type MarkdownParseOptions = { sources: Source[] | undefined; disableLink: boolean }
+
+const parserOptions = {
+  extensions: [
+    // codeIndented 语法导致有前导空格的列表无法正常渲染
+    { ...gfm(), disable: { null: ['codeIndented'] } },
+    math({ singleDollarTextMath: true }),
+  ],
+  mdastExtensions: [gfmFromMarkdown(), mathFromMarkdown()],
+}
+
 /**
  * 解析正文，并把渲染器不单独处理的节点提前换掉，渲染时无需再读原文：
  * - 传入 sources 时，[citation:N] 换成角标节点，找不到来源的直接去掉
  * - disableLink 时链接只保留文字
  * - 删除线保留原样的 ~ 定界符，脚注、引用式链接与定义显示原文
  */
-export function toMdAst(
-  input: string,
-  { sources, disableLink }: { sources: Source[] | undefined; disableLink: boolean }
-): Root {
-  const ast = fromMarkdown(input, {
-    extensions: [
-      // codeIndented 语法导致有前导空格的列表无法正常渲染
-      { ...gfm(), disable: { null: ['codeIndented'] } },
-      math({ singleDollarTextMath: true }),
-    ],
-    mdastExtensions: [gfmFromMarkdown(), mathFromMarkdown()],
-  })
+export function toMdAst(input: string, { sources, disableLink }: MarkdownParseOptions): Root {
+  const ast = fromMarkdown(input, parserOptions)
   if (sources) {
     const sourcesByIndex = new Map(sources.map((source) => [source.index, source]))
     findAndReplace(

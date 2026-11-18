@@ -1,4 +1,5 @@
 import clsx from 'clsx'
+import { memo } from 'react'
 import { android } from '../../app/android.js'
 import { useIsMobile } from '../../app/viewport.js'
 import { useTranslate } from '../../i18n/index.js'
@@ -9,7 +10,7 @@ import { MobileHeader } from './MobileHeader.js'
 import styles from './SessionView.module.css'
 
 /** 会话页：标题栏（移动端为顶栏）+ 消息列表，输入框吸底 */
-export const SessionView = ({
+export const SessionView = memo(function SessionView({
   session,
   streaming,
   siderCollapsed,
@@ -17,7 +18,7 @@ export const SessionView = ({
   session: Session
   streaming: boolean
   siderCollapsed: boolean
-}) => {
+}) {
   const t = useTranslate()
   const isMobile = useIsMobile()
   const title = session.title || t('untitledChat')
@@ -46,4 +47,4 @@ export const SessionView = ({
       />
     </div>
   )
-}
+})

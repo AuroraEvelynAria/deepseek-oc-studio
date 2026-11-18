@@ -252,6 +252,7 @@
   padding-top: var(--android-status-inset, 0px);
   background: var(--dsw-alias-bg-base);
   transform: translateX(calc((var(--drawer-progress) - 1) * 100%));
+  will-change: transform;
   transition: transform var(--drawer-transition);
   box-sizing: border-box;
 }
@@ -271,7 +272,13 @@
   left: var(--drawer-edge);
 }
 
+[data-android] .list {
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
+}
+
 [data-android] .mobile {
+  --drawer-progress: initial;
   width: 100%;
   max-width: none;
   padding: 12px 24px 16px 16px;

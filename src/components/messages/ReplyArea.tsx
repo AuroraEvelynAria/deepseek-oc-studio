@@ -104,15 +104,20 @@ export const ReplyArea = memo(function ReplyArea({
     const follow = (time: number) => {
       frame = 0
       const target = preview.scrollHeight - preview.clientHeight
-      const remaining = target - preview.scrollTop
+      const top = preview.scrollTop
+      const remaining = target - top
       if (remaining <= 0.5) {
-        preview.scrollTop = target
         previousTime = 0
         return
       }
       const elapsed = previousTime ? Math.min(time - previousTime, 50) : 16
       previousTime = time
-      preview.scrollTop += remaining * (1 - Math.exp(-elapsed / 70))
+      preview.scrollTop = top + remaining * (1 - Math.exp(-elapsed / 70))
+      if (preview.scrollTop === top) {
+        preview.scrollTop = target
+        previousTime = 0
+        return
+      }
       frame = requestAnimationFrame(follow)
     }
     const update = () => {

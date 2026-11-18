@@ -3,58 +3,68 @@ import { android } from '../../app/android.js'
 import { closeMobileSider, openMobileSider, useMobileSider } from './mobileSiderState.js'
 
 const clamp = (value: number) => Math.max(0, Math.min(1, value))
-const slop = 8
+const touchSlop = 8
+const velocityWindow = 60
+const maxFlingPause = 56
+const minFlingVelocity = 0.33
+
+type Sample = { x: number; time: number }
 
 type Gesture = {
   id: number
   x: number
   y: number
-  edge: number
   startedOpen: boolean
-  start: number
+  canScrollVertically: boolean
+  edge: number
+  start: number | null
   current: number
-  captured: boolean
-  previousX: number
-  previousTime: number
-  velocity: number
+  samples: Sample[]
+}
+
+function recordSample(samples: Sample[], x: number, time: number) {
+  if (time <= samples[samples.length - 1].time) {
+    return
+  }
+  samples.push({ x, time })
+  while (samples.length > 1 && time - samples[0].time > velocityWindow) {
+    samples.shift()
+  }
+}
+
+function releaseVelocity(samples: Sample[], time: number) {
+  const first = samples[0]
+  const last = samples[samples.length - 1]
+  // 用最近一段位移估速，采样停顿以后按静止处理。
+  return first !== last && time - last.time < maxFlingPause
+    ? (last.x - first.x) / (last.time - first.time)
+    : 0
 }
 
 export const useAndroidDrawerGesture = () => {
   const gesture = useRef<Gesture | null>(null)
 
   const onPointerDownCapture = (event: PointerEvent<HTMLDivElement>) => {
+    const target = event.target instanceof Element ? event.target : null
     if (
       !android ||
       !event.isPrimary ||
       event.pointerType === 'mouse' ||
       document.documentElement.hasAttribute('data-keyboard') ||
-      (event.target instanceof Element &&
-        event.target.closest('input, textarea, [data-drawer-gesture-ignore]'))
+      target?.closest('input, textarea, [data-drawer-gesture-ignore]')
     ) {
       return
     }
-    const frame = event.currentTarget
-    const drawer = frame.querySelector<HTMLElement>('[data-android-drawer]')
-    const main = frame.querySelector('main')
-    if (!drawer || !main) {
-      return
-    }
-    const edge = drawer.offsetWidth
-    const start = clamp(
-      (main.getBoundingClientRect().left - frame.getBoundingClientRect().left) / edge
-    )
     gesture.current = {
       id: event.pointerId,
       x: event.clientX,
       y: event.clientY,
-      edge,
       startedOpen: useMobileSider.getState().open,
-      start,
-      current: start,
-      captured: false,
-      previousX: event.clientX,
-      previousTime: event.timeStamp,
-      velocity: 0,
+      canScrollVertically: !target?.closest('[data-drawer-free-pan]'),
+      edge: 0,
+      start: null,
+      current: 0,
+      samples: [{ x: event.clientX, time: event.timeStamp }],
     }
   }
 
@@ -65,27 +75,52 @@ export const useAndroidDrawerGesture = () => {
     }
     const frame = event.currentTarget
     const dx = event.clientX - drag.x
-    if (!drag.captured) {
+    const horizontal = Math.abs(dx)
+    for (const sample of event.nativeEvent.getCoalescedEvents?.() ?? []) {
+      recordSample(drag.samples, sample.clientX, sample.timeStamp)
+    }
+    recordSample(drag.samples, event.clientX, event.timeStamp)
+    let start = drag.start
+    if (start === null) {
       const dy = Math.abs(event.clientY - drag.y)
-      if (dy > slop && dy >= Math.abs(dx)) {
+      if (drag.canScrollVertically && dy >= touchSlop && dy > horizontal) {
         gesture.current = null
         return
       }
-      if (Math.abs(dx) < slop || (drag.start === 0 && dx < 0) || (drag.start === 1 && dx > 0)) {
+      if (horizontal <= touchSlop || (drag.canScrollVertically && horizontal < dy)) {
         return
       }
-      drag.captured = true
+      const horizontalScroller =
+        event.target instanceof Element
+          ? event.target.closest(
+              'pre, .markdown-table-wrapper, .ds-markdown-math, .md-mermaid-diagram'
+            )
+          : null
+      if (horizontalScroller && horizontalScroller.scrollWidth > horizontalScroller.clientWidth) {
+        gesture.current = null
+        return
+      }
+      const drawer = frame.querySelector<HTMLElement>('[data-android-drawer]')
+      const main = frame.querySelector('main')
+      const edge = drawer?.getBoundingClientRect().width ?? 0
+      if (!main || edge === 0) {
+        gesture.current = null
+        return
+      }
+      // 动画未结束时，从手指接管这一刻的实际位置继续。
+      start = clamp((main.getBoundingClientRect().left - frame.getBoundingClientRect().left) / edge)
+      if ((start <= 0.001 && dx < 0) || (start >= 0.999 && dx > 0)) {
+        return
+      }
+      drag.start = start
+      drag.edge = edge
       frame.dataset.drawerDragging = ''
       frame.setPointerCapture(event.pointerId)
     }
-    const distance = dx > 0 ? Math.max(0, dx - slop) : Math.min(0, dx + slop)
-    drag.current = clamp(drag.start + (1.031 * distance) / drag.edge)
+    const distance = Math.sign(dx) * Math.max(0, horizontal - touchSlop)
+    drag.current = clamp(start + (1.031 * distance) / drag.edge)
+    // Pointer events 已按绘制帧合并，当帧直接更新位置。
     frame.style.setProperty('--drawer-progress', String(drag.current))
-    if (event.timeStamp > drag.previousTime) {
-      drag.velocity = (event.clientX - drag.previousX) / (event.timeStamp - drag.previousTime)
-    }
-    drag.previousX = event.clientX
-    drag.previousTime = event.timeStamp
   }
 
   const settle = (event: PointerEvent<HTMLDivElement>, cancelled: boolean) => {
@@ -94,12 +129,13 @@ export const useAndroidDrawerGesture = () => {
       return
     }
     gesture.current = null
-    if (!drag.captured) {
+    if (drag.start === null) {
       return
     }
     const frame = event.currentTarget
-    const flick = event.timeStamp - drag.previousTime < 100 && Math.abs(drag.velocity) > 0.55
-    const open = cancelled ? drag.startedOpen : flick ? drag.velocity > 0 : drag.current >= 0.5
+    const velocity = releaseVelocity(drag.samples, event.timeStamp)
+    const flick = Math.abs(velocity) >= minFlingVelocity
+    const open = cancelled ? drag.startedOpen : flick ? velocity > 0 : drag.current >= 0.5
     frame.dataset.drawerOpen = String(open)
     delete frame.dataset.drawerDragging
     // Let the transition start at the last rendered drag position.

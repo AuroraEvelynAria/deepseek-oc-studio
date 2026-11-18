@@ -70,11 +70,6 @@ export const MessageList = ({
   const stopFollowing = useCallback(() => {
     stickyRef.current = false
   }, [])
-  const scrollControls = useMemo(
-    () => ({ scrollToBottom, stopFollowing }),
-    [scrollToBottom, stopFollowing]
-  )
-
   // 内容、键盘和输入框高度变化时，继续遵循当前跟随状态。
   useLayoutEffect(() => {
     const content = contentRef.current
@@ -149,7 +144,7 @@ export const MessageList = ({
   const lastIndex = messages.length - 1
   const uploadRetryId = getUploadRetryId(messages, streaming)
   return (
-    <ScrollToBottomContext.Provider value={scrollControls}>
+    <ScrollToBottomContext.Provider value={stopFollowing}>
       <div ref={isMobile ? undefined : scrollRef} className={styles.container}>
         <div ref={isMobile ? scrollRef : undefined} className={styles.scroll}>
           <div ref={contentRef} className={styles.column}>

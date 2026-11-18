@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { memo, useEffect } from 'react'
 import { android } from './android.js'
 import { useTranslate } from '../i18n/index.js'
 import { useSettings } from '../services/settings.js'
@@ -30,6 +30,70 @@ import { MobileSider, Sider } from '../components/sider/Sider.js'
 import { useAndroidDrawerGesture } from '../components/sider/useAndroidDrawerGesture.js'
 import styles from './App.module.css'
 
+const ChatContent = memo(function ChatContent({
+  isMobile,
+  siderCollapsed,
+}: {
+  isMobile: boolean
+  siderCollapsed: boolean
+}) {
+  const t = useTranslate()
+  const ready = useChatStore((state) => state.ready)
+  const initError = useChatStore((state) => state.initError)
+  const activeId = useChatStore((state) => state.activeId)
+  const session = useChatStore((state) =>
+    state.activeId !== null && Object.hasOwn(state.sessionCache, state.activeId)
+      ? state.sessionCache[state.activeId]
+      : undefined
+  )
+  const sessionLoadError = useChatStore((state) =>
+    state.activeId === null ? false : state.sessionLoadErrors[state.activeId] === true
+  )
+  const streaming = useChatStore((state) =>
+    state.activeId === null ? false : Object.hasOwn(state.streaming, state.activeId)
+  )
+
+  if (!ready || (activeId !== null && !session)) {
+    const loadFailed = !ready ? initError : sessionLoadError
+    return (
+      <div className={styles.loadingView}>
+        {isMobile ? <MobileHeader /> : null}
+        <div className={styles.loadingState} role="status" aria-live="polite">
+          <span>
+            {t(
+              loadFailed
+                ? !ready
+                  ? 'sessionListLoadFailed'
+                  : 'sessionLoadFailed'
+                : 'sessionLoading'
+            )}
+          </span>
+          {loadFailed ? (
+            <Button
+              variant="outlined"
+              size="m"
+              onClick={() => {
+                if (!ready) {
+                  void initChat()
+                } else if (activeId !== null) {
+                  selectSession(activeId)
+                }
+              }}
+            >
+              {t('retry')}
+            </Button>
+          ) : null}
+        </div>
+      </div>
+    )
+  }
+  return session ? (
+    <SessionView session={session} streaming={streaming} siderCollapsed={siderCollapsed} />
+  ) : (
+    <Welcome />
+  )
+})
+
 export const App = () => {
   const t = useTranslate()
   const isMobile = useIsMobile()
@@ -40,25 +104,13 @@ export const App = () => {
   const fontSize = useSettings((state) => state.fontSize)
   // 移动端侧边栏以独立抽屉管理开合状态
   const siderCollapsed = useSettings((state) => state.siderCollapsed) && !isMobile
-  const ready = useChatStore((state) => state.ready)
-  const initError = useChatStore((state) => state.initError)
-  const saveError = useChatStore((state) => Object.values(state.sessionSaveErrors).some(Boolean))
+  const saveErrors = useChatStore((state) => state.sessionSaveErrors)
+  const saveError = Object.values(saveErrors).some(Boolean)
   const importingHistory = useChatStore((state) => state.importingHistory)
-  const session = useChatStore((state) =>
-    state.activeId !== null && Object.hasOwn(state.sessionCache, state.activeId)
-      ? state.sessionCache[state.activeId]
-      : undefined
-  )
-  const sessionLoadError = useChatStore((state) =>
-    state.activeId === null ? false : state.sessionLoadErrors[state.activeId] === true
-  )
   const frameRef = useMobileViewport(isMobile)
-  const streaming = useChatStore((state) =>
-    state.activeId === null ? false : Object.hasOwn(state.streaming, state.activeId)
-  )
   const activeId = useChatStore((state) => state.activeId)
 
-  usePreventPageScroll(isMobile)
+  usePreventPageScroll(isMobile && !android)
 
   useEffect(() => {
     document.documentElement.lang = locale
@@ -123,7 +175,7 @@ export const App = () => {
         ref={frameRef}
         className={styles.frame}
         data-drawer-open={drawerOpen}
-        {...(android ? drawerGesture : {})}
+        {...(android && isMobile ? drawerGesture : {})}
       >
         {isMobile ? <MobileSider /> : siderCollapsed ? null : <Sider />}
         <main className={styles.main}>
@@ -142,41 +194,7 @@ export const App = () => {
           ) : null}
           <div className={styles.content}>
             {siderCollapsed ? <CollapsedSider /> : null}
-            {!ready || (activeId !== null && !session) ? (
-              <div className={styles.loadingView}>
-                {isMobile ? <MobileHeader /> : null}
-                <div className={styles.loadingState} role="status" aria-live="polite">
-                  <span>
-                    {(!ready ? initError : sessionLoadError)
-                      ? t(!ready ? 'sessionListLoadFailed' : 'sessionLoadFailed')
-                      : t('sessionLoading')}
-                  </span>
-                  {(!ready ? initError : sessionLoadError) ? (
-                    <Button
-                      variant="outlined"
-                      size="m"
-                      onClick={() => {
-                        if (!ready) {
-                          void initChat()
-                        } else if (activeId !== null) {
-                          selectSession(activeId)
-                        }
-                      }}
-                    >
-                      {t('retry')}
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-            ) : session ? (
-              <SessionView
-                session={session}
-                streaming={streaming}
-                siderCollapsed={siderCollapsed}
-              />
-            ) : (
-              <Welcome />
-            )}
+            <ChatContent isMobile={isMobile} siderCollapsed={siderCollapsed} />
           </div>
         </main>
         <SearchPanel />

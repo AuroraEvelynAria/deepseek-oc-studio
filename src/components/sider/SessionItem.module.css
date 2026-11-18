@@ -46,6 +46,7 @@
 }
 
 [data-android] .item {
+  content-visibility: auto;
   padding-inline: 7px 4px;
   height: 48px;
   user-select: none;

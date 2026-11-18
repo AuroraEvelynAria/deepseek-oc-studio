@@ -46,8 +46,16 @@ export const createConfig = ({
   devtool: dev ? 'cheap-module-source-map' : false,
   // 开发模式预编译异步模块，保持首次加载代码高亮和公式时的页面状态
   lazyCompilation: false,
+  optimization: {
+    splitChunks: {
+      // Android 的本地资源拦截不覆盖 worker 内的 importScripts。
+      chunks: (chunk) => !chunk.canBeInitial() && chunk.name !== 'markdown-parser',
+    },
+  },
   resolve: {
     extensions: ['.tsx', '.ts', '.js'],
+    // Markdown 的字符实体解码需要同时在页面和无 DOM 的 worker 中运行。
+    conditionNames: ['worker', '...'],
     // 将 .js 导入路径解析到同名 .ts、.tsx 或 .js 文件
     extensionAlias: { '.js': ['.ts', '.tsx', '.js'] },
   },
