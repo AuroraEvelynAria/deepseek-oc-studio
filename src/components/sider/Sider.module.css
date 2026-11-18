@@ -104,6 +104,14 @@
   }
 }
 
+.pinnedSection::after {
+  content: '';
+  display: block;
+  height: 1px;
+  margin: 28px 7px 0;
+  background: var(--dsw-alias-border-l2);
+}
+
 .sectionHeader {
   position: sticky;
   top: 0;
@@ -338,6 +346,8 @@
   align-items: center;
   height: 48px;
   flex-shrink: 0;
+  font-size: 20px;
+  font-weight: 500;
 
   button {
     background: var(--dsw-alias-bg-base);
@@ -362,6 +372,10 @@
     color: inherit;
     font: inherit;
     font-size: 15px;
+
+    &[data-danger] {
+      color: var(--dsw-alias-state-error-primary);
+    }
 
     &:disabled {
       opacity: 0.35;

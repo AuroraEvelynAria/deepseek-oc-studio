@@ -213,6 +213,28 @@ export const IconPanelLeftOutline16 = () => (
   </svg>
 )
 
+export const IconPinOutline16 = () => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M5.278 1.657 7.165.768l8.067 8.067-0.889 1.887-1.19-1.19-2.222 2.222.36 2.588-1.278 1.278-3.583-3.583-3.786 3.786-1.021-1.021 3.786-3.786L1.243 7.43l1.278-1.278 2.588.36 2.222-2.222-1.19-1.19-0.863.557Z"
+      fill="currentColor"
+    />
+  </svg>
+)
+
+export const IconMultiSelectOutline16 = () => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="3.1" cy="4" r="1.4" fill="currentColor" />
+    <circle cx="3.1" cy="12" r="1.4" fill="currentColor" />
+    <path
+      d="M6.4 4h8M6.4 12h8"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+    />
+  </svg>
+)
+
 export const IconPaperclipOutline16 = () => (
   <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path
