@@ -1,7 +1,11 @@
 import type { zh } from './zh.js'
 
+export const androidWelcomeMessages = [
+  "Hello, let's start chatting",
+  'Hi. What can I do for you?',
+] as const
+
 export const en = {
-  androidWelcome: 'Hi, what can I help you with?',
   androidMessageHint: 'Send a message',
   androidHoldHint: 'Send a message or hold to talk',
   androidHoldToTalk: 'Hold to talk',

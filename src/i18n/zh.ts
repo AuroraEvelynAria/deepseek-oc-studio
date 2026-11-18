@@ -1,6 +1,11 @@
+export const androidWelcomeMessages = [
+  '你好，有什么我能帮你的吗？',
+  '你好，让我们开始聊天吧',
+  '欢迎回来，想从哪里开始？',
+] as const
+
 export const zh = {
   welcomeMessageChat250808: '今天有什么可以帮到你？',
-  androidWelcome: '你好，有什么我能帮你的吗？',
   androidMessageHint: '发消息',
   androidHoldHint: '发消息或按住说话',
   androidHoldToTalk: '按住说话',
