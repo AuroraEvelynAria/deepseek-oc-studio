@@ -32,6 +32,7 @@ export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean 
   const pinnedIds = useSettings((state) => state.pinnedSessions)
   const androidDrawer = Boolean(mobile && android)
   const [query, setQuery] = useState('')
+  const [searchFocused, setSearchFocused] = useState(false)
   const matches = useSessionSearch(query, sessions)
   const [now, setNow] = useState(Date.now)
   const [selecting, setSelecting] = useState(false)
@@ -122,14 +123,40 @@ export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean 
           />
         </div>
       ) : androidDrawer ? (
-        <label className={styles.search}>
+        <label
+          className={styles.search}
+          data-android-a11y={android ? 'sidebar-search' : undefined}
+          data-android-a11y-label=""
+          data-android-a11y-checkable="false"
+          data-android-a11y-long-clickable="true"
+          data-android-a11y-role="editText"
+          data-android-a11y-label-kind="none"
+          data-android-a11y-keep-interactive="true"
+          data-android-a11y-touch-through="true"
+        >
           <IconSearchOutline16 />
+          {android && !query && !searchFocused ? (
+            <span
+              className={styles.searchPlaceholder}
+              data-android-a11y="sidebar-search-placeholder"
+              data-android-a11y-label={t('androidSearchChats')}
+              data-android-a11y-checkable="false"
+              data-android-a11y-clickable="false"
+              data-android-a11y-focusable="false"
+              data-android-a11y-label-kind="text"
+            >
+              {t('androidSearchChats')}
+            </span>
+          ) : null}
           <input
             type="search"
-            placeholder={t('androidSearchChats')}
-            aria-label={t('androidSearchChats')}
+            placeholder={android ? '' : t('androidSearchChats')}
+            aria-label={android ? undefined : t('androidSearchChats')}
+            data-android-a11y-focus-target={android ? '' : undefined}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
           />
         </label>
       ) : (
@@ -178,16 +205,42 @@ export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean 
               </svg>
             }
             aria-label={t('androidMultiSelect')}
+            data-android-a11y={android ? 'sidebar-multiselect' : undefined}
+            data-android-a11y-label={t('androidMultiSelect')}
+            data-android-a11y-checkable="false"
+            data-android-a11y-label-kind="description"
+            data-android-a11y-touch-through="true"
             onClick={() => setSelecting(true)}
           />
         ) : null}
-        <div className={styles.list}>
+        <div
+          className={styles.list}
+          data-android-a11y={android ? 'sidebar-list' : undefined}
+          data-android-a11y-label=""
+          data-android-a11y-checkable="false"
+          data-android-a11y-clickable="false"
+          data-android-a11y-focusable="false"
+          data-android-a11y-scrollable="true"
+          data-android-a11y-label-kind="none"
+          data-android-a11y-touch-through="true"
+        >
           {groups.map((group) => (
             <div
               key={group.key}
               className={clsx(styles.section, group.key === 'pinned' && styles.pinnedSection)}
             >
-              <div className={styles.sectionHeader}>{group.label}</div>
+              <div
+                className={styles.sectionHeader}
+                data-android-a11y={android ? `sidebar-group-${group.key}` : undefined}
+                data-android-a11y-label={group.label}
+                data-android-a11y-checkable="false"
+                data-android-a11y-clickable="false"
+                data-android-a11y-focusable="false"
+                data-android-a11y-role="textView"
+                data-android-a11y-label-kind="selfText"
+              >
+                {group.label}
+              </div>
               {group.sessions.map((session) => (
                 <SessionItem
                   key={session.id}
@@ -376,6 +429,12 @@ export const MobileSider = memo(function MobileSider() {
           className={styles.drawerMask}
           role="button"
           aria-label={t('closeSiderbarButton')}
+          data-android-a11y={android ? 'sidebar-mask' : undefined}
+          data-android-a11y-label={t('closeSiderbarButton')}
+          data-android-a11y-checkable="false"
+          data-android-a11y-focusable="false"
+          data-android-a11y-label-kind="none"
+          data-android-a11y-touch-through="true"
           onClick={closeMobileSider}
         />
       ) : null}

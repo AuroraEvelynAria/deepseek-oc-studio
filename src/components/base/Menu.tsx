@@ -16,9 +16,11 @@ export type MenuOption = {
 export const Menu = ({
   options,
   children,
+  androidA11yPrefix,
 }: {
   options: MenuOption[]
   children: (props: { open: boolean; toggle: () => void }) => ReactNode
+  androidA11yPrefix?: string
 }) => {
   const [open, setOpen] = useState(false)
   const close = () => setOpen(false)
@@ -47,13 +49,22 @@ export const Menu = ({
                   key={option.key}
                   role="menuitem"
                   className={clsx(styles.option, option.danger && styles.danger)}
+                  data-android-a11y={
+                    androidA11yPrefix ? `${androidA11yPrefix}-${option.key}` : undefined
+                  }
+                  data-android-a11y-label={option.label}
+                  data-android-a11y-checkable="false"
+                  data-android-a11y-label-kind="text"
+                  data-android-a11y-touch-through={
+                    androidA11yPrefix ? 'true' : undefined
+                  }
                   onClick={() => {
                     setOpen(false)
                     option.onSelect()
                   }}
                 >
                   <span className={styles.icon}>{option.icon}</span>
-                  {option.label}
+                  <span data-android-a11y-label-node="">{option.label}</span>
                 </div>
               ))}
             </div>,

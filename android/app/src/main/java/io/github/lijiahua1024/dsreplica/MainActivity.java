@@ -170,7 +170,10 @@ public final class MainActivity extends Activity {
                     item.optString("role", "view"),
                     item.optBoolean("checkable", true),
                     item.optBoolean("clickable", true),
+                    item.optBoolean("longClickable"),
+                    item.optBoolean("scrollable"),
                     item.optBoolean("focusable", true),
+                    item.optBoolean("touchThrough"),
                     item.optBoolean("extraButton")
                 );
                 live.add(key);
@@ -193,6 +196,22 @@ public final class MainActivity extends Activity {
         );
     }
 
+    private void forwardA11yLongClick(String key) {
+        webView.evaluateJavascript(
+            "window.dispatchEvent(new CustomEvent('android-a11y-long-click', {detail: "
+                + JSONObject.quote(key) + "}))",
+            null
+        );
+    }
+
+    private void forwardA11yScroll(String key, int direction) {
+        webView.evaluateJavascript(
+            "window.dispatchEvent(new CustomEvent('android-a11y-scroll', {detail: {key: "
+                + JSONObject.quote(key) + ", direction: " + direction + "}}))",
+            null
+        );
+    }
+
     private final class A11yProxy extends FrameLayout {
         private final String key;
         private View label;
@@ -206,8 +225,12 @@ public final class MainActivity extends Activity {
         private boolean checked;
         private boolean checkable = true;
         private boolean clickable = true;
+        private boolean longClickable;
+        private boolean scrollable;
         private boolean focusable = true;
+        private boolean touchThrough;
         private boolean selfDescription;
+        private boolean selfText;
         private boolean enabled = true;
 
         A11yProxy(String key) {
@@ -222,10 +245,13 @@ public final class MainActivity extends Activity {
                 @Override
                 public void onInitializeAccessibilityNodeInfo(View host, AccessibilityNodeInfo info) {
                     super.onInitializeAccessibilityNodeInfo(host, info);
-                    info.setClassName("editText".equals(A11yProxy.this.role)
-                        ? "android.widget.EditText"
-                        : "android.view.View");
-                    info.setText("");
+                    info.setClassName(
+                        "editText".equals(A11yProxy.this.role)
+                            ? "android.widget.EditText"
+                            : "textView".equals(A11yProxy.this.role)
+                                ? "android.widget.TextView"
+                                : "android.view.View");
+                    info.setText(A11yProxy.this.selfText ? A11yProxy.this.description : "");
                     info.setContentDescription(
                         A11yProxy.this.selfDescription ? A11yProxy.this.description : "");
                     info.setCheckable(A11yProxy.this.checkable);
@@ -234,11 +260,22 @@ public final class MainActivity extends Activity {
                     info.setEnabled(A11yProxy.this.enabled);
                     info.setClickable(
                         A11yProxy.this.enabled && A11yProxy.this.clickable);
+                    info.setLongClickable(
+                        A11yProxy.this.enabled && A11yProxy.this.longClickable);
+                    info.setScrollable(
+                        A11yProxy.this.enabled && A11yProxy.this.scrollable);
                     info.setFocusable(
                         A11yProxy.this.enabled && A11yProxy.this.focusable);
                     info.setVisibleToUser(true);
                     if (A11yProxy.this.enabled && A11yProxy.this.clickable) {
                         info.addAction(AccessibilityNodeInfo.ACTION_CLICK);
+                    }
+                    if (A11yProxy.this.enabled && A11yProxy.this.longClickable) {
+                        info.addAction(AccessibilityNodeInfo.ACTION_LONG_CLICK);
+                    }
+                    if (A11yProxy.this.enabled && A11yProxy.this.scrollable) {
+                        info.addAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
+                        info.addAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD);
                     }
                 }
 
@@ -250,6 +287,24 @@ public final class MainActivity extends Activity {
                         forwardA11yClick(A11yProxy.this.key);
                         return true;
                     }
+                    if (action == AccessibilityNodeInfo.ACTION_LONG_CLICK
+                        && A11yProxy.this.enabled
+                        && A11yProxy.this.longClickable) {
+                        forwardA11yLongClick(A11yProxy.this.key);
+                        return true;
+                    }
+                    if (action == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
+                        && A11yProxy.this.enabled
+                        && A11yProxy.this.scrollable) {
+                        forwardA11yScroll(A11yProxy.this.key, 1);
+                        return true;
+                    }
+                    if (action == AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+                        && A11yProxy.this.enabled
+                        && A11yProxy.this.scrollable) {
+                        forwardA11yScroll(A11yProxy.this.key, -1);
+                        return true;
+                    }
                     return super.performAccessibilityAction(host, action, arguments);
                 }
             });
@@ -259,17 +314,24 @@ public final class MainActivity extends Activity {
                     int left, int top, int right, int bottom,
                     JSONArray labelBounds, String labelKind, String nextRole,
                     boolean nextCheckable, boolean nextClickable,
-                    boolean nextFocusable, boolean nextExtraButton) {
+                    boolean nextLongClickable, boolean nextScrollable,
+                    boolean nextFocusable, boolean nextTouchThrough,
+                    boolean nextExtraButton) {
             checked = isChecked;
             enabled = isEnabled;
             description = text;
             role = nextRole;
             checkable = nextCheckable;
             clickable = nextClickable;
+            longClickable = nextLongClickable;
+            scrollable = nextScrollable;
             focusable = nextFocusable;
+            touchThrough = nextTouchThrough;
             selfDescription = "none".equals(labelKind);
-            setClickable(nextClickable);
-            setFocusable(nextFocusable);
+            selfText = "selfText".equals(labelKind);
+            setClickable(nextClickable && !nextTouchThrough);
+            setLongClickable(nextLongClickable && !nextTouchThrough);
+            setFocusable(nextFocusable && !nextTouchThrough);
 
             String shape = role + "|" + labelKind + "|" + nextExtraButton;
             if (!shape.equals(childrenShape)) {
@@ -303,7 +365,7 @@ public final class MainActivity extends Activity {
                 }
                 if ("hint".equals(labelKind)) {
                     buildHintLabel();
-                } else if (!selfDescription) {
+                } else if (!selfDescription && !selfText) {
                     buildLabel(textLabel);
                 }
             }

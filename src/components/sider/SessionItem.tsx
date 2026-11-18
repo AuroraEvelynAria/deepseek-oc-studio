@@ -77,9 +77,12 @@ export const SessionItem = memo(function SessionItem({
     <>
       <div
         className={clsx(styles.item, active && styles.active)}
-        role={android ? 'link' : undefined}
-        tabIndex={android ? 0 : undefined}
-        aria-label={android ? displayTitle : undefined}
+        data-android-a11y={android ? `sidebar-session-${session.id}` : undefined}
+        data-android-a11y-label={displayTitle}
+        data-android-a11y-checkable="false"
+        data-android-a11y-long-clickable="true"
+        data-android-a11y-label-kind="text"
+        data-android-a11y-touch-through="true"
         onContextMenu={(event) => {
           if (android) {
             event.preventDefault()
@@ -94,9 +97,12 @@ export const SessionItem = memo(function SessionItem({
           }
         }}
       >
-        <div className={styles.title}>{displayTitle}</div>
+        <div className={styles.title} data-android-a11y-label-node="">
+          {displayTitle}
+        </div>
         <div ref={actionsRef} className={styles.action} onClick={(event) => event.stopPropagation()}>
           <Menu
+            androidA11yPrefix={android ? 'sidebar-session-menu' : undefined}
             options={[
               {
                 key: 'rename',

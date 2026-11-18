@@ -7,13 +7,16 @@ type Target = {
   disabled: boolean
   checkable: boolean
   clickable: boolean
+  longClickable: boolean
+  scrollable: boolean
   focusable: boolean
-  role: 'view' | 'editText'
+  touchThrough: boolean
+  role: 'view' | 'editText' | 'textView'
   extraButton: boolean
   keepInteractive: boolean
   bounds: [number, number, number, number]
   labelBounds: [number, number, number, number] | null
-  labelKind: 'description' | 'text' | 'hint' | 'none'
+  labelKind: 'description' | 'text' | 'hint' | 'selfText' | 'none'
 }
 
 const targetSelector = '[data-android-a11y]'
@@ -68,12 +71,12 @@ const collectTargets = () => {
     .filter(
       (element) =>
         element.dataset.androidA11yKeepInteractive !== 'true' ||
-        document.activeElement !== element
+        !element.contains(document.activeElement)
     )
     .map((element): Target | null => {
       const key = element.getAttribute('data-android-a11y')
-      const label = element.dataset.androidA11yLabel
-      if (!key || !label) {
+      const label = element.dataset.androidA11yLabel ?? ''
+      if (key === null) {
         return null
       }
       const labelNode = labelElement(element)
@@ -88,15 +91,26 @@ const collectTargets = () => {
           element.matches(':disabled') || element.querySelector(':disabled') !== null,
         checkable: element.dataset.androidA11yCheckable !== 'false',
         clickable: element.dataset.androidA11yClickable !== 'false',
+        longClickable: element.dataset.androidA11yLongClickable === 'true',
+        scrollable: element.dataset.androidA11yScrollable === 'true',
         focusable: element.dataset.androidA11yFocusable !== 'false',
-        role: element.dataset.androidA11yRole === 'editText' ? 'editText' : 'view',
+        touchThrough: element.dataset.androidA11yTouchThrough === 'true',
+        role:
+          element.dataset.androidA11yRole === 'editText'
+            ? 'editText'
+            : element.dataset.androidA11yRole === 'textView'
+              ? 'textView'
+              : 'view',
         extraButton: element.dataset.androidA11yExtraButton === 'true',
         keepInteractive: element.dataset.androidA11yKeepInteractive === 'true',
         bounds: physicalBounds(element.getBoundingClientRect(), scale),
         labelBounds: labelBounds ? physicalBounds(labelBounds, scale) : null,
         labelKind: (() => {
           const kind = element.dataset.androidA11yLabelKind
-          return kind === 'description' || kind === 'hint' || kind === 'none'
+          return kind === 'description' ||
+            kind === 'hint' ||
+            kind === 'selfText' ||
+            kind === 'none'
             ? kind
             : 'text'
         })(),
@@ -129,8 +143,23 @@ export const scheduleAndroidA11ySync = () => {
   }
   const active = enabled()
   for (const element of document.querySelectorAll<HTMLElement>(targetSelector)) {
+    const touchThrough = element.dataset.androidA11yTouchThrough === 'true'
+    const interactive =
+      element.dataset.androidA11yKeepInteractive === 'true' &&
+      element.contains(document.activeElement)
     element.inert =
-      active && element.dataset.androidA11yKeepInteractive !== 'true'
+      active &&
+      element.dataset.androidA11yKeepInteractive !== 'true' &&
+      !touchThrough
+    if (touchThrough) {
+      if (active && !interactive) {
+        if (element.getAttribute('aria-hidden') !== 'true') {
+          element.setAttribute('aria-hidden', 'true')
+        }
+      } else if (element.hasAttribute('aria-hidden')) {
+        element.removeAttribute('aria-hidden')
+      }
+    }
   }
   if (!active) {
     android.setA11yTargets('[]')
@@ -173,10 +202,30 @@ export const startAndroidA11ySync = () => {
       (element) => element.getAttribute('data-android-a11y') === key
     )
     if (target?.dataset.androidA11yKeepInteractive === 'true') {
-      target.focus()
+      const focusTarget = target.querySelector<HTMLElement>(
+        '[data-android-a11y-focus-target]'
+      )
+      ;(focusTarget ?? target).focus()
     } else {
       target?.click()
     }
+  })
+  window.addEventListener('android-a11y-long-click', (event) => {
+    const key = (event as CustomEvent<string>).detail
+    const target = [...document.querySelectorAll<HTMLElement>(targetSelector)].find(
+      (element) => element.getAttribute('data-android-a11y') === key
+    )
+    target?.dispatchEvent(
+      new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    )
+  })
+  window.addEventListener('android-a11y-scroll', (event) => {
+    const { key, direction } = (event as CustomEvent<{ key: string; direction: number }>)
+      .detail
+    const target = [...document.querySelectorAll<HTMLElement>(targetSelector)].find(
+      (element) => element.getAttribute('data-android-a11y') === key
+    )
+    target?.scrollBy({ top: direction * target.clientHeight * 0.8, behavior: 'smooth' })
   })
   scheduleAndroidA11ySync()
 }
