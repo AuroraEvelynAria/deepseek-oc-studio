@@ -98,6 +98,7 @@ export const App = () => {
   const t = useTranslate()
   const isMobile = useIsMobile()
   const apiKey = useSettings((state) => state.apiKey)
+  const needsApiKey = Boolean(android && !apiKey)
   const drawerOpen = useMobileSider((state) => state.open)
   const drawerGesture = useAndroidDrawerGesture()
   const locale = useSettings((state) => state.locale)
@@ -107,7 +108,7 @@ export const App = () => {
   const saveErrors = useChatStore((state) => state.sessionSaveErrors)
   const saveError = Object.values(saveErrors).some(Boolean)
   const importingHistory = useChatStore((state) => state.importingHistory)
-  const frameRef = useMobileViewport(isMobile)
+  const frameRef = useMobileViewport(isMobile && !needsApiKey)
   const activeId = useChatStore((state) => state.activeId)
 
   usePreventPageScroll(isMobile && !android)
@@ -165,7 +166,7 @@ export const App = () => {
     return () => window.removeEventListener('android-back', onBack)
   }, [])
 
-  if (android && !apiKey) {
+  if (needsApiKey) {
     return <ApiKeyScreen />
   }
 
