@@ -72,8 +72,42 @@
     pointer-events: auto;
   }
 
+  .actionActive {
+    top: 0;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  &.active .title {
+    margin-right: 44.8px;
+  }
+
   &:active {
     background: var(--dsw-alias-bg-skeleton);
+  }
+}
+
+.activeTrigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44.8px;
+  height: 44.8px;
+  color: rgb(142 144 148);
+}
+
+.activeTriggerIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18.84px;
+  height: 18.84px;
+
+  > svg {
+    display: block;
+    flex-shrink: 0;
+    width: 21.33px;
+    height: 21.33px;
   }
 }
 
@@ -151,5 +185,4 @@
   .title {
     line-height: 22px;
   }
-
 }

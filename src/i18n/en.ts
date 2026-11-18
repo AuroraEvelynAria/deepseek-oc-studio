@@ -69,6 +69,7 @@ export const en = {
   renameSessionTitle: 'Rename chat',
   renameSessionConfirm: 'Confirm',
   sessionItemMenuRenameOption: 'Rename',
+  androidShowMenu: 'Show menu',
   more: 'More',
   close: 'Close',
   openInBrowser: 'Open in browser',

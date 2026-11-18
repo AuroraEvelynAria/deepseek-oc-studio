@@ -66,6 +66,7 @@ export const zh = {
   renameSessionTitle: '重命名对话',
   renameSessionConfirm: '确认',
   sessionItemMenuRenameOption: '重命名',
+  androidShowMenu: '显示菜单',
   more: '更多',
   close: '关闭',
   openInBrowser: '在浏览器中打开',

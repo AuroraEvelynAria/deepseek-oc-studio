@@ -100,7 +100,11 @@ export const SessionItem = memo(function SessionItem({
         <div className={styles.title} data-android-a11y-label-node="">
           {displayTitle}
         </div>
-        <div ref={actionsRef} className={styles.action} onClick={(event) => event.stopPropagation()}>
+        <div
+          ref={actionsRef}
+          className={clsx(styles.action, active && styles.actionActive)}
+          onClick={(event) => event.stopPropagation()}
+        >
           <Menu
             androidA11yPrefix={android ? 'sidebar-session-menu' : undefined}
             options={[
@@ -133,13 +137,33 @@ export const SessionItem = memo(function SessionItem({
           >
             {({ toggle }) =>
               android ? (
-                <button
-                  type="button"
-                  className={styles.actionTrigger}
-                  aria-hidden="true"
-                  tabIndex={-1}
-                  onClick={toggle}
-                />
+                active ? (
+                  <button
+                    type="button"
+                    className={clsx(styles.actionTrigger, styles.activeTrigger)}
+                    aria-hidden="true"
+                    tabIndex={-1}
+                    data-android-a11y={`sidebar-session-more-${session.id}`}
+                    data-android-a11y-label={t('androidShowMenu')}
+                    data-android-a11y-checkable="false"
+                    data-android-a11y-label-kind="description"
+                    data-android-a11y-touch-through="true"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={toggle}
+                  >
+                    <span className={styles.activeTriggerIcon} data-android-a11y-label-node="">
+                      <IconEllipsisOutline16 />
+                    </span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className={styles.actionTrigger}
+                    aria-hidden="true"
+                    tabIndex={-1}
+                    onClick={toggle}
+                  />
+                )
               ) : (
                 <IconButton
                   icon={<IconEllipsisOutline16 />}
