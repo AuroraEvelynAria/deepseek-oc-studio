@@ -5,6 +5,8 @@ export const androidWelcomeMessages = [
   'Hi. What can I do for you?',
 ] as const
 
+export const androidColdStartGreeting = 'Welcome back, start chatting whenever you like'
+
 export const en = {
   androidMessageHint: 'Send a message',
   androidHoldHint: 'Send a message or hold to talk',

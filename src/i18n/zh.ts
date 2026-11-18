@@ -5,6 +5,8 @@ export const androidWelcomeMessages = [
   '嗨！今天想聊些什么？',
 ] as const
 
+export const androidColdStartGreeting = '欢迎回来，随时开始吧'
+
 export const zh = {
   welcomeMessageChat250808: '今天有什么可以帮到你？',
   androidMessageHint: '发消息',
