@@ -2,6 +2,12 @@ plugins {
     id 'com.android.application' version '9.4.0'
 }
 
+def releaseSigning = new Properties()
+def releaseSigningFile = rootProject.file('keystore.properties')
+if (releaseSigningFile.isFile()) {
+    releaseSigningFile.withInputStream { releaseSigning.load(it) }
+}
+
 android {
     namespace = 'io.github.lijiahua1024.dsreplica'
     compileSdk = 37
@@ -21,9 +27,9 @@ android {
     signingConfigs {
         release {
             storeFile file('release.jks')
-            storePassword 'deepseek-replica'
+            storePassword = releaseSigning.getProperty('storePassword')
             keyAlias 'dsreplica'
-            keyPassword 'deepseek-replica'
+            keyPassword = releaseSigning.getProperty('keyPassword')
         }
     }
 
