@@ -1,7 +1,7 @@
 import { translate } from '../i18n/index.js'
 import { android } from './android.js'
 
-export const openAndroidPage = (url: string) => {
+export const openAndroidPage = (url: string, { showBrowserAction = true } = {}) => {
   if (!android || !/^https?:\/\//i.test(url)) {
     return false
   }
@@ -10,7 +10,7 @@ export const openAndroidPage = (url: string) => {
     url,
     document.body.hasAttribute('data-ds-dark-theme'),
     translate('close'),
-    translate('openInBrowser')
+    showBrowserAction ? translate('openInBrowser') : ''
   )
   return true
 }

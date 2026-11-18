@@ -85,18 +85,21 @@ public final class SourceBrowserActivity extends Activity {
         close.setOnClickListener(view -> finish());
         toolbar.addView(close, new FrameLayout.LayoutParams(dp(48), -1, Gravity.START));
 
-        ToolbarIcon external = new ToolbarIcon(this, true, foreground);
-        external.setContentDescription(getIntent().getStringExtra("browserLabel"));
-        external.setOnClickListener(view -> {
-            Uri current = webUri(page.getUrl());
-            if (current == null) return;
-            try {
-                startActivity(new Intent(Intent.ACTION_VIEW, current));
-            } catch (ActivityNotFoundException ignored) {
-                // No browser is available on this device.
-            }
-        });
-        toolbar.addView(external, new FrameLayout.LayoutParams(dp(48), -1, Gravity.END));
+        String browserLabel = getIntent().getStringExtra("browserLabel");
+        if (!TextUtils.isEmpty(browserLabel)) {
+            ToolbarIcon external = new ToolbarIcon(this, true, foreground);
+            external.setContentDescription(browserLabel);
+            external.setOnClickListener(view -> {
+                Uri current = webUri(page.getUrl());
+                if (current == null) return;
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, current));
+                } catch (ActivityNotFoundException ignored) {
+                    // No browser is available on this device.
+                }
+            });
+            toolbar.addView(external, new FrameLayout.LayoutParams(dp(48), -1, Gravity.END));
+        }
         View divider = new View(this);
         divider.setBackgroundColor(Color.parseColor(dark ? "#373737" : "#E5E5E5"));
         root.addView(divider, new LinearLayout.LayoutParams(-1, dp(1)));

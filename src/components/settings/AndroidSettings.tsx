@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { android, saveAndroidHistory } from '../../app/android.js'
+import { openAndroidPage } from '../../app/openAndroidPage.js'
 import { useTranslate, type LinkedMessage } from '../../i18n/index.js'
 import type { TtsVoice } from '../../services/api/speech.js'
 import {
@@ -38,16 +39,11 @@ import styles from './AndroidSettings.module.css'
 const appVersion = document.querySelector<HTMLMetaElement>(
   'meta[name="application-version"]'
 )?.content
+const policiesUrl = 'https://cdn.deepseek.com/policies'
+const chinesePoliciesUrl = `${policiesUrl}/zh-CN`
+const faqUrl = 'https://static.deepseek.com/faq/index.html'
 
-type Page =
-  | 'root'
-  | 'account'
-  | 'data'
-  | 'export'
-  | 'font'
-  | 'personalization'
-  | 'agreements'
-  | 'help'
+type Page = 'root' | 'account' | 'data' | 'export' | 'font' | 'personalization' | 'agreements'
 type Popup = 'locale' | 'theme' | 'voice' | 'logout' | 'delete' | 'import'
 
 const Profile = () => (
@@ -241,8 +237,7 @@ const Settings = ({ start }: { start: Page }) => {
     export: t('exportAllLabel'),
     font: tr('字体大小', 'Text size'),
     personalization: tr('个性化', 'Personalization'),
-    agreements: tr('服务协议', 'Terms and policies'),
-    help: tr('帮助与反馈', 'Help and feedback'),
+    agreements: tr('服务协议', 'Service agreement'),
   }
   const language = tr('语言', 'Language')
   const appearance = tr('外观', 'Appearance')
@@ -276,7 +271,7 @@ const Settings = ({ start }: { start: Page }) => {
   const currentTone = tones.find((item) => item.id === tone) ?? tones[0]
   const languageLabel = languages.find((item) => item.id === locale)?.label
   const themeLabel = themes.find((item) => item.id === themePreference)?.label
-  const policyBase = 'https://cdn.deepseek.com/policies/zh-CN/'
+  const localizedPoliciesUrl = `${policiesUrl}/${locale}`
 
   const back = () => {
     if (busy) {
@@ -426,7 +421,11 @@ const Settings = ({ start }: { start: Page }) => {
               />
             </Group>
             <Group spaced>
-              <Row label={labels.help} icon={<Info glyph="?" />} onClick={() => setPage('help')} />
+              <Row
+                label={tr('帮助与反馈', 'Help & Feedback')}
+                icon={<Info glyph="?" />}
+                onClick={() => openAndroidPage(faqUrl, { showBrowserAction: false })}
+              />
             </Group>
             <Group spaced>
               <Row label={logout} danger arrow={false} onClick={() => setPopup('logout')} />
@@ -451,15 +450,23 @@ const Settings = ({ start }: { start: Page }) => {
               label={tr('开放平台', 'Open platform')}
               href="https://platform.deepseek.com/api_keys"
             />
+            <Row
+              label={tr('开放平台帮助', 'API help')}
+              href="https://api-docs.deepseek.com/zh-cn/"
+            />
           </Group>
         ) : null}
         {page === 'data' ? (
           <>
             <p className={styles.caption}>
               {tr(
-                '历史对话保存在此设备。API 数据处理适用 DeepSeek 开放平台隐私政策。',
-                'Chat history is stored on this device. API usage is subject to the DeepSeek Open Platform Privacy Policy.'
+                '历史对话保存在此设备。API 数据处理适用 ',
+                'Chat history is stored on this device. API usage is subject to the '
               )}
+              <a href={`${chinesePoliciesUrl}/deepseek-open-platform-privacy-policy.html`}>
+                {tr('DeepSeek 开放平台隐私政策', 'DeepSeek Open Platform Privacy Policy')}
+              </a>
+              {tr('。', '.')}
             </p>
             <Group>
               <Row label={labels.export} disabled={busy} onClick={() => setPage('export')} />
@@ -582,28 +589,30 @@ const Settings = ({ start }: { start: Page }) => {
         {page === 'agreements' ? (
           <Group>
             <Row
-              label={tr('用户协议', 'Terms of use')}
-              href={policyBase + 'deepseek-terms-of-use.html'}
+              label={tr('用户协议', 'Terms of Use')}
+              onClick={() => openAndroidPage(`${localizedPoliciesUrl}/deepseek-terms-of-use.html`)}
             />
             <Row
-              label={tr('隐私政策', 'Privacy policy')}
-              href={policyBase + 'deepseek-open-platform-privacy-policy.html'}
+              label={tr('隐私政策', 'Privacy Policy')}
+              onClick={() =>
+                openAndroidPage(`${localizedPoliciesUrl}/deepseek-privacy-policy.html`)
+              }
             />
             <Row
-              label={tr('个人信息收集清单', 'Personal information collected')}
-              href={policyBase + 'collected-personal-information.html'}
+              label={tr('第三方信息共享清单', 'SDK Sharing List')}
+              onClick={() =>
+                openAndroidPage(`${chinesePoliciesUrl}/third-party-info-sharing-list.html`)
+              }
             />
             <Row
-              label={tr('应用权限', 'App permissions')}
+              label={tr('个人信息收集清单', 'Collected Personal Information')}
+              onClick={() =>
+                openAndroidPage(`${chinesePoliciesUrl}/collected-personal-information.html`)
+              }
+            />
+            <Row
+              label={tr('应用权限', 'App Permissions')}
               onClick={() => android?.openAppPermissions()}
-            />
-          </Group>
-        ) : null}
-        {page === 'help' ? (
-          <Group>
-            <Row
-              label={tr('开放平台帮助', 'API help')}
-              href="https://api-docs.deepseek.com/zh-cn/"
             />
           </Group>
         ) : null}

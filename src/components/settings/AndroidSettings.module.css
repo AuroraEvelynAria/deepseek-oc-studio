@@ -200,6 +200,11 @@ a.row:active,
   color: var(--settings-muted);
   font-size: 13px;
   line-height: 21px;
+
+  a {
+    color: inherit;
+    text-decoration: underline;
+  }
 }
 
 .credentials {
