@@ -1,5 +1,6 @@
 import type { Image, Link as LinkNode } from 'mdast'
-import { memo, type ReactNode } from 'react'
+import { memo, type MouseEvent, type ReactNode } from 'react'
+import { openAndroidPage } from '../../app/openAndroidPage.js'
 
 const sanitizeUrl = (url: string) => {
   // 如果URL没有协议，添加默认的https协议
@@ -15,6 +16,12 @@ const sanitizeUrl = (url: string) => {
     return undefined
   } catch {
     return undefined
+  }
+}
+
+const openInApp = (event: MouseEvent<HTMLAnchorElement>) => {
+  if (openAndroidPage(event.currentTarget.href)) {
+    event.preventDefault()
   }
 }
 
@@ -39,7 +46,13 @@ export const Link = memo(function Link({
   const href = sanitizeUrl(node.url)
 
   return (
-    <a href={href} title={node.title || undefined} target="_blank" rel="noreferrer">
+    <a
+      href={href}
+      title={node.title || undefined}
+      target="_blank"
+      rel="noreferrer"
+      onClick={openInApp}
+    >
       {children}
     </a>
   )
@@ -49,7 +62,7 @@ export const Link = memo(function Link({
 export function ImageAsLink({ node }: { node: Image }) {
   const url = sanitizeUrl(node.url)
   return (
-    <a href={url} title={node.title ?? ''} target="_blank" rel="noreferrer">
+    <a href={url} title={node.title ?? ''} target="_blank" rel="noreferrer" onClick={openInApp}>
       {url}
     </a>
   )

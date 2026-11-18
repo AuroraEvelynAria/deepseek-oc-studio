@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { android } from '../../app/android.js'
+import { openAndroidPage } from '../../app/openAndroidPage.js'
 import { useTranslate } from '../../i18n/index.js'
 import type { Source } from '../../services/chat/view.js'
 import { formatDate } from '../../utils/format.js'
@@ -12,21 +12,9 @@ const TRANSITION_MS = 240
 type DisplayedResults = { entry: string; sources: Source[] }
 
 const AndroidSource = ({ source, single }: { source: Source; single: boolean }) => {
-  const t = useTranslate()
   const date = source.publishedAt ? (formatDate(source.publishedAt, '/') ?? source.publishedAt) : ''
   return (
-    <button
-      type="button"
-      className={styles.result}
-      onClick={() => {
-        android?.openSourcePage(
-          source.url,
-          document.body.hasAttribute('data-ds-dark-theme'),
-          t('close'),
-          t('openInBrowser')
-        )
-      }}
-    >
+    <button type="button" className={styles.result} onClick={() => openAndroidPage(source.url)}>
       <div className={styles.meta}>
         <SiteLogo url={source.siteIcon} className={styles.logo} />
         <span className={styles.siteName}>{source.siteName}</span>

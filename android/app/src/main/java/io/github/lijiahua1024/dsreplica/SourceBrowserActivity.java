@@ -12,16 +12,20 @@ import android.graphics.Path;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
+import android.webkit.WebBackForwardList;
+import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.window.OnBackInvokedDispatcher;
 
 /** A separate WebView keeps external pages away from the application's JavaScript bridge. */
@@ -66,6 +70,16 @@ public final class SourceBrowserActivity extends Activity {
         toolbar.setBackgroundColor(background);
         root.addView(toolbar, new LinearLayout.LayoutParams(-1, dp(52)));
 
+        TextView title = new TextView(this);
+        title.setTextColor(foreground);
+        title.setTextSize(16);
+        title.setGravity(Gravity.CENTER);
+        title.setSingleLine(true);
+        title.setEllipsize(TextUtils.TruncateAt.END);
+        FrameLayout.LayoutParams titleLayout = new FrameLayout.LayoutParams(-1, -1);
+        titleLayout.setMargins(dp(56), 0, dp(56), 0);
+        toolbar.addView(title, titleLayout);
+
         ToolbarIcon close = new ToolbarIcon(this, false, foreground);
         close.setContentDescription(getIntent().getStringExtra("closeLabel"));
         close.setOnClickListener(view -> finish());
@@ -96,6 +110,12 @@ public final class SourceBrowserActivity extends Activity {
         settings.setAllowContentAccess(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setTextZoom(100);
+        page.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onReceivedTitle(WebView view, String pageTitle) {
+                title.setText(pageTitle);
+            }
+        });
         page.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -112,8 +132,11 @@ public final class SourceBrowserActivity extends Activity {
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
                 OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::goBack);
         }
-        if (state == null || page.restoreState(state) == null) {
+        WebBackForwardList history = state == null ? null : page.restoreState(state);
+        if (history == null) {
             page.loadUrl(initial.toString());
+        } else if (history.getCurrentItem() != null) {
+            title.setText(history.getCurrentItem().getTitle());
         }
     }
 
