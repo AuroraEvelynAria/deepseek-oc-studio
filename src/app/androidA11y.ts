@@ -5,9 +5,15 @@ type Target = {
   label: string
   checked: boolean
   disabled: boolean
+  checkable: boolean
+  clickable: boolean
+  focusable: boolean
+  role: 'view' | 'editText'
+  extraButton: boolean
+  keepInteractive: boolean
   bounds: [number, number, number, number]
   labelBounds: [number, number, number, number] | null
-  labelKind: 'description' | 'text'
+  labelKind: 'description' | 'text' | 'hint' | 'none'
 }
 
 const targetSelector = '[data-android-a11y]'
@@ -59,6 +65,11 @@ const collectTargets = () => {
   const scale = devicePixelRatio || 1
   return [...document.querySelectorAll<HTMLElement>(targetSelector)]
     .filter(visible)
+    .filter(
+      (element) =>
+        element.dataset.androidA11yKeepInteractive !== 'true' ||
+        document.activeElement !== element
+    )
     .map((element): Target | null => {
       const key = element.getAttribute('data-android-a11y')
       const label = element.dataset.androidA11yLabel
@@ -75,10 +86,20 @@ const collectTargets = () => {
         checked: element.dataset.androidA11yChecked === 'true',
         disabled:
           element.matches(':disabled') || element.querySelector(':disabled') !== null,
+        checkable: element.dataset.androidA11yCheckable !== 'false',
+        clickable: element.dataset.androidA11yClickable !== 'false',
+        focusable: element.dataset.androidA11yFocusable !== 'false',
+        role: element.dataset.androidA11yRole === 'editText' ? 'editText' : 'view',
+        extraButton: element.dataset.androidA11yExtraButton === 'true',
+        keepInteractive: element.dataset.androidA11yKeepInteractive === 'true',
         bounds: physicalBounds(element.getBoundingClientRect(), scale),
         labelBounds: labelBounds ? physicalBounds(labelBounds, scale) : null,
-        labelKind:
-          element.dataset.androidA11yLabelKind === 'description' ? 'description' : 'text',
+        labelKind: (() => {
+          const kind = element.dataset.androidA11yLabelKind
+          return kind === 'description' || kind === 'hint' || kind === 'none'
+            ? kind
+            : 'text'
+        })(),
       }
     })
     .filter((target): target is Target => target !== null)
@@ -108,7 +129,8 @@ export const scheduleAndroidA11ySync = () => {
   }
   const active = enabled()
   for (const element of document.querySelectorAll<HTMLElement>(targetSelector)) {
-    element.inert = active
+    element.inert =
+      active && element.dataset.androidA11yKeepInteractive !== 'true'
   }
   if (!active) {
     android.setA11yTargets('[]')
@@ -142,13 +164,19 @@ export const startAndroidA11ySync = () => {
   })
   window.addEventListener('resize', scheduleAndroidA11ySync)
   window.addEventListener('scroll', scheduleAndroidA11ySync, true)
+  document.addEventListener('focusin', scheduleAndroidA11ySync)
+  document.addEventListener('focusout', scheduleAndroidA11ySync)
   window.addEventListener('android-a11y-state', scheduleAndroidA11ySync)
   window.addEventListener('android-a11y-click', (event) => {
     const key = (event as CustomEvent<string>).detail
     const target = [...document.querySelectorAll<HTMLElement>(targetSelector)].find(
       (element) => element.getAttribute('data-android-a11y') === key
     )
-    target?.click()
+    if (target?.dataset.androidA11yKeepInteractive === 'true') {
+      target.focus()
+    } else {
+      target?.click()
+    }
   })
   scheduleAndroidA11ySync()
 }

@@ -16,6 +16,7 @@ export const MessageFeedbackSheet = ({ onClose }: { onClose: () => void }) => {
   const t = useTranslate()
   const [reason, setReason] = useState<string | null>(null)
   const [detail, setDetail] = useState('')
+  const [inputFocused, setInputFocused] = useState(false)
 
   useEffect(() => {
     const app = document.querySelector<HTMLElement>('[data-drawer-open]')
@@ -42,15 +43,31 @@ export const MessageFeedbackSheet = ({ onClose }: { onClose: () => void }) => {
       className={styles.overlay}
       onMouseDown={(event) => event.target === event.currentTarget && onClose()}
     >
+      <div
+        className={styles.mask}
+        data-android-a11y={android ? 'feedback-close-mask' : undefined}
+        data-android-a11y-label={t('close')}
+        data-android-a11y-checkable="false"
+        data-android-a11y-focusable="false"
+        data-android-a11y-label-kind="none"
+        onClick={onClose}
+      />
       <section
         className={styles.sheet}
-        role="dialog"
-        aria-modal="true"
-        aria-label={t('feedback')}
       >
         <header className={styles.header}>
           <h2 className={styles.title}>{t('feedback')}</h2>
-          <button type="button" className={styles.close} aria-label={t('close')} onClick={onClose}>
+          <button
+            type="button"
+            className={styles.close}
+            aria-label={t('close')}
+            data-android-a11y={android ? 'feedback-close' : undefined}
+            data-android-a11y-label={t('close')}
+            data-android-a11y-checkable="false"
+            data-android-a11y-label-kind="description"
+            data-android-a11y-extra-button="true"
+            onClick={onClose}
+          >
             <IconCloseOutline16 />
           </button>
         </header>
@@ -63,6 +80,7 @@ export const MessageFeedbackSheet = ({ onClose }: { onClose: () => void }) => {
               aria-checked={reason === item.id}
               data-android-a11y={android ? `feedback-${item.id}` : undefined}
               data-android-a11y-label={t(item.label)}
+              data-android-a11y-checkable="true"
               data-android-a11y-checked={reason === item.id ? 'true' : 'false'}
               onClick={() => setReason(reason === item.id ? null : item.id)}
             >
@@ -75,9 +93,27 @@ export const MessageFeedbackSheet = ({ onClose }: { onClose: () => void }) => {
           value={detail}
           placeholder={t('feedbackPlaceholder')}
           aria-label={t('feedbackPlaceholder')}
+          aria-hidden={android && !inputFocused ? true : undefined}
+          data-android-a11y={android ? 'feedback-detail' : undefined}
+          data-android-a11y-label={t('feedbackPlaceholder')}
+          data-android-a11y-checkable="false"
+          data-android-a11y-role="editText"
+          data-android-a11y-label-kind="hint"
+          data-android-a11y-keep-interactive="true"
           onChange={(event) => setDetail(event.target.value)}
+          onFocus={() => setInputFocused(true)}
+          onBlur={() => setInputFocused(false)}
         />
-        <button type="button" className={styles.submit} onClick={onClose}>
+        <button
+          type="button"
+          className={styles.submit}
+          data-android-a11y={android ? 'feedback-submit' : undefined}
+          data-android-a11y-label={t('submit')}
+          data-android-a11y-checkable="false"
+          data-android-a11y-label-kind="text"
+          data-android-a11y-extra-button="true"
+          onClick={onClose}
+        >
           {t('submit')}
         </button>
       </section>

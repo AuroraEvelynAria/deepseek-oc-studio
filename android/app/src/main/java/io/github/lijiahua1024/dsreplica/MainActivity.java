@@ -37,6 +37,7 @@ import android.widget.TextView;
 import android.window.OnBackInvokedDispatcher;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -165,7 +166,12 @@ public final class MainActivity extends Activity {
                     bounds.getInt(2),
                     bounds.getInt(3),
                     labelBounds,
-                    item.optString("labelKind")
+                    item.optString("labelKind"),
+                    item.optString("role", "view"),
+                    item.optBoolean("checkable", true),
+                    item.optBoolean("clickable", true),
+                    item.optBoolean("focusable", true),
+                    item.optBoolean("extraButton")
                 );
                 live.add(key);
             }
@@ -190,8 +196,18 @@ public final class MainActivity extends Activity {
     private final class A11yProxy extends FrameLayout {
         private final String key;
         private View label;
+        private FrameLayout hintContainer;
+        private TextView hintText;
+        private TextView extraButton;
+        private String childrenShape = "";
+        private String description = "";
+        private String role = "view";
         private boolean textLabel;
         private boolean checked;
+        private boolean checkable = true;
+        private boolean clickable = true;
+        private boolean focusable = true;
+        private boolean selfDescription;
         private boolean enabled = true;
 
         A11yProxy(String key) {
@@ -206,23 +222,31 @@ public final class MainActivity extends Activity {
                 @Override
                 public void onInitializeAccessibilityNodeInfo(View host, AccessibilityNodeInfo info) {
                     super.onInitializeAccessibilityNodeInfo(host, info);
-                    info.setClassName("android.view.View");
+                    info.setClassName("editText".equals(A11yProxy.this.role)
+                        ? "android.widget.EditText"
+                        : "android.view.View");
                     info.setText("");
-                    info.setContentDescription("");
-                    info.setCheckable(true);
-                    info.setChecked(A11yProxy.this.checked);
+                    info.setContentDescription(
+                        A11yProxy.this.selfDescription ? A11yProxy.this.description : "");
+                    info.setCheckable(A11yProxy.this.checkable);
+                    info.setChecked(
+                        A11yProxy.this.checkable && A11yProxy.this.checked);
                     info.setEnabled(A11yProxy.this.enabled);
-                    info.setClickable(A11yProxy.this.enabled);
-                    info.setFocusable(A11yProxy.this.enabled);
+                    info.setClickable(
+                        A11yProxy.this.enabled && A11yProxy.this.clickable);
+                    info.setFocusable(
+                        A11yProxy.this.enabled && A11yProxy.this.focusable);
                     info.setVisibleToUser(true);
-                    if (A11yProxy.this.enabled) {
+                    if (A11yProxy.this.enabled && A11yProxy.this.clickable) {
                         info.addAction(AccessibilityNodeInfo.ACTION_CLICK);
                     }
                 }
 
                 @Override
                 public boolean performAccessibilityAction(View host, int action, Bundle arguments) {
-                    if (action == AccessibilityNodeInfo.ACTION_CLICK && A11yProxy.this.enabled) {
+                    if (action == AccessibilityNodeInfo.ACTION_CLICK
+                        && A11yProxy.this.enabled
+                        && A11yProxy.this.clickable) {
                         forwardA11yClick(A11yProxy.this.key);
                         return true;
                     }
@@ -233,30 +257,61 @@ public final class MainActivity extends Activity {
 
         void update(String text, boolean isChecked, boolean isEnabled,
                     int left, int top, int right, int bottom,
-                    JSONArray labelBounds, String labelKind) {
+                    JSONArray labelBounds, String labelKind, String nextRole,
+                    boolean nextCheckable, boolean nextClickable,
+                    boolean nextFocusable, boolean nextExtraButton) {
             checked = isChecked;
             enabled = isEnabled;
-            boolean wantsText = "text".equals(labelKind);
-            if (label == null || wantsText != textLabel) {
-                if (label != null) {
-                    removeView(label);
+            description = text;
+            role = nextRole;
+            checkable = nextCheckable;
+            clickable = nextClickable;
+            focusable = nextFocusable;
+            selfDescription = "none".equals(labelKind);
+            setClickable(nextClickable);
+            setFocusable(nextFocusable);
+
+            String shape = role + "|" + labelKind + "|" + nextExtraButton;
+            if (!shape.equals(childrenShape)) {
+                removeAllViews();
+                label = null;
+                hintContainer = null;
+                hintText = null;
+                extraButton = null;
+                textLabel = "text".equals(labelKind);
+                childrenShape = shape;
+                if (nextExtraButton) {
+                    extraButton = new TextView(MainActivity.this);
+                    extraButton.setTextColor(Color.TRANSPARENT);
+                    extraButton.setImportantForAccessibility(
+                        View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+                    extraButton.setClickable(false);
+                    extraButton.setFocusable(false);
+                    extraButton.setAccessibilityDelegate(new AccessibilityDelegate() {
+                        @Override
+                        public void onInitializeAccessibilityNodeInfo(
+                            View host, AccessibilityNodeInfo info) {
+                            super.onInitializeAccessibilityNodeInfo(host, info);
+                            info.setClassName("android.widget.Button");
+                            info.setText("");
+                            info.setContentDescription("");
+                            info.setClickable(false);
+                            info.setFocusable(false);
+                        }
+                    });
+                    addView(extraButton);
                 }
-                textLabel = wantsText;
-                if (wantsText) {
-                    TextView content = new TextView(MainActivity.this);
-                    content.setTextColor(Color.TRANSPARENT);
-                    label = content;
-                } else {
-                    label = new View(MainActivity.this);
+                if ("hint".equals(labelKind)) {
+                    buildHintLabel();
+                } else if (!selfDescription) {
+                    buildLabel(textLabel);
                 }
-                label.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
-                label.setClickable(false);
-                label.setFocusable(false);
-                addView(label);
             }
-            if (label instanceof TextView) {
+            if (hintText != null) {
+                hintText.setText(text);
+            } else if (label instanceof TextView) {
                 ((TextView) label).setText(text);
-            } else {
+            } else if (label != null) {
                 label.setContentDescription(text);
             }
             FrameLayout.LayoutParams params =
@@ -274,14 +329,107 @@ public final class MainActivity extends Activity {
                 labelRight = labelBounds.optInt(2, right);
                 labelBottom = labelBounds.optInt(3, bottom);
             }
-            label.setLayoutParams(new FrameLayout.LayoutParams(
-                Math.max(1, labelRight - labelLeft),
-                Math.max(1, labelBottom - labelTop)
-            ));
-            ((FrameLayout.LayoutParams) label.getLayoutParams()).leftMargin = labelLeft - left;
-            ((FrameLayout.LayoutParams) label.getLayoutParams()).topMargin = labelTop - top;
+            if (label != null) {
+                label.setLayoutParams(new FrameLayout.LayoutParams(
+                    Math.max(1, labelRight - labelLeft),
+                    Math.max(1, labelBottom - labelTop)
+                ));
+                ((FrameLayout.LayoutParams) label.getLayoutParams()).leftMargin =
+                    labelLeft - left;
+                ((FrameLayout.LayoutParams) label.getLayoutParams()).topMargin =
+                    labelTop - top;
+            }
+            if (hintContainer != null) {
+                int inset = Math.min(42, Math.max(0, (right - left) / 4));
+                int vertical = Math.min(32, Math.max(0, (bottom - top) / 4));
+                FrameLayout.LayoutParams hintParams = new FrameLayout.LayoutParams(
+                    Math.max(1, right - left - inset * 2),
+                    Math.max(1, bottom - top - vertical * 2)
+                );
+                hintParams.leftMargin = inset;
+                hintParams.topMargin = vertical;
+                hintContainer.setLayoutParams(hintParams);
+                int hintHeight = Math.min(116, hintParams.height);
+                hintText.setLayoutParams(
+                    new FrameLayout.LayoutParams(hintParams.width, hintHeight));
+                View marker = hintContainer.getChildAt(1);
+                marker.setLayoutParams(new FrameLayout.LayoutParams(
+                    Math.min(294, hintParams.width),
+                    Math.min(58, hintParams.height)
+                ));
+            }
+            if (extraButton != null) {
+                if ("description".equals(labelKind)) {
+                    int size = 79;
+                    FrameLayout.LayoutParams extraParams =
+                        new FrameLayout.LayoutParams(size, size);
+                    extraParams.leftMargin = Math.max(0, (right - left - size) / 2);
+                    extraParams.topMargin = Math.max(0, (bottom - top - size) / 2);
+                    extraButton.setLayoutParams(extraParams);
+                } else {
+                    extraButton.setLayoutParams(
+                        new FrameLayout.LayoutParams(right - left, bottom - top));
+                }
+            }
             requestLayout();
             invalidate();
+        }
+
+        private void buildLabel(boolean wantsText) {
+            if (wantsText) {
+                TextView content = new TextView(MainActivity.this);
+                content.setTextColor(Color.TRANSPARENT);
+                label = content;
+            } else {
+                label = new View(MainActivity.this);
+            }
+            label.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+            label.setClickable(false);
+            label.setFocusable(false);
+            addView(label);
+        }
+
+        private void buildHintLabel() {
+            hintContainer = new FrameLayout(MainActivity.this);
+            hintContainer.setImportantForAccessibility(
+                View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+            hintContainer.setClickable(false);
+            hintContainer.setFocusable(false);
+            hintContainer.setAccessibilityDelegate(new AccessibilityDelegate() {
+                @Override
+                public void onInitializeAccessibilityNodeInfo(
+                    View host, AccessibilityNodeInfo info) {
+                    super.onInitializeAccessibilityNodeInfo(host, info);
+                    info.setClassName("android.view.View");
+                    info.setText("");
+                    info.setContentDescription("");
+                    info.setClickable(false);
+                    info.setFocusable(false);
+                }
+            });
+            hintText = new TextView(MainActivity.this);
+            hintText.setTextColor(Color.TRANSPARENT);
+            hintText.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+            hintText.setClickable(false);
+            hintText.setFocusable(false);
+            hintContainer.addView(hintText);
+            View marker = new View(MainActivity.this);
+            marker.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+            marker.setClickable(false);
+            marker.setFocusable(false);
+            hintContainer.addView(marker);
+            label = hintContainer;
+            addView(hintContainer);
+        }
+
+        @Override
+        public void addChildrenForAccessibility(ArrayList<View> children) {
+            if (label != null) {
+                children.add(label);
+            }
+            if (extraButton != null) {
+                children.add(extraButton);
+            }
         }
     }
 
