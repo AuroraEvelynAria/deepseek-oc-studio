@@ -62,10 +62,10 @@ export const MessageShareView = ({
   const [selected, setSelected] = useState(() => new Set(messages.map((message) => message.id)))
 
   useEffect(() => {
-    const root = document.getElementById('root')
-    const wasInert = root?.inert ?? false
-    if (root) {
-      root.inert = true
+    const app = document.querySelector<HTMLElement>('[data-drawer-open]')
+    const wasInert = app?.inert ?? false
+    if (app) {
+      app.inert = true
     }
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -75,8 +75,8 @@ export const MessageShareView = ({
     document.addEventListener('keydown', onKeyDown)
     return () => {
       document.removeEventListener('keydown', onKeyDown)
-      if (root) {
-        root.inert = wasInert
+      if (app) {
+        app.inert = wasInert
       }
     }
   }, [onClose])
@@ -183,6 +183,6 @@ export const MessageShareView = ({
         </div>
       </footer>
     </section>,
-    document.body
+    document.getElementById('android-overlays') ?? document.body
   )
 }
