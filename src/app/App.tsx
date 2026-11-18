@@ -1,4 +1,4 @@
-import { memo, useEffect } from 'react'
+import { memo, useEffect, useRef } from 'react'
 import { android } from './android.js'
 import { useTranslate } from '../i18n/index.js'
 import { useSettings } from '../services/settings.js'
@@ -101,6 +101,7 @@ export const App = () => {
   const needsApiKey = Boolean(android && !apiKey)
   const drawerOpen = useMobileSider((state) => state.open)
   const drawerGesture = useAndroidDrawerGesture()
+  const mainRef = useRef<HTMLElement>(null)
   const locale = useSettings((state) => state.locale)
   const fontSize = useSettings((state) => state.fontSize)
   // 移动端侧边栏以独立抽屉管理开合状态
@@ -123,6 +124,12 @@ export const App = () => {
       document.documentElement.style.setProperty('--android-chat-font-scale', String(size))
     }
   }, [fontSize])
+
+  useEffect(() => {
+    if (mainRef.current) {
+      mainRef.current.inert = Boolean(android && isMobile && drawerOpen)
+    }
+  }, [drawerOpen, isMobile])
 
   // 文件数、存储空间达到上限时，附件上只显示「上传失败」，原因用 toast 说明
   useEffect(() => onUploadNotice(showToast), [])
@@ -179,7 +186,7 @@ export const App = () => {
         {...(android && isMobile ? drawerGesture : {})}
       >
         {isMobile ? <MobileSider /> : siderCollapsed ? null : <Sider />}
-        <main className={styles.main}>
+        <main ref={mainRef} className={styles.main}>
           {saveError ? (
             <div className={styles.saveError} role="alert">
               <span>{t('sessionSaveFailed')}</span>

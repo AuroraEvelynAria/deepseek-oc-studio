@@ -163,7 +163,7 @@ export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean 
                 <path d="M8 5h7M8 13h7" strokeWidth="1.2" />
               </svg>
             }
-            aria-label={t('androidSelectChats')}
+            aria-label={t('androidMultiSelect')}
             onClick={() => setSelecting(true)}
           />
         ) : null}
@@ -348,6 +348,7 @@ export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean 
 
 /** 移动端抽屉：浮在页面上方，点空白区域关闭。 */
 export const MobileSider = memo(function MobileSider() {
+  const t = useTranslate()
   const open = useMobileSider((state) => state.open)
   const drawer = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -360,7 +361,14 @@ export const MobileSider = memo(function MobileSider() {
   }
   return (
     <>
-      {open ? <div className={styles.drawerMask} onClick={closeMobileSider} /> : null}
+      {open ? (
+        <div
+          className={styles.drawerMask}
+          role="button"
+          aria-label={t('closeSiderbarButton')}
+          onClick={closeMobileSider}
+        />
+      ) : null}
       <div className={styles.drawer} ref={drawer} data-android-drawer={android ? '' : undefined}>
         <Sider mobile />
       </div>
