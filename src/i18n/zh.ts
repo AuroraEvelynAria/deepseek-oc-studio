@@ -2,6 +2,7 @@ export const androidWelcomeMessages = [
   '你好，有什么我能帮你的吗？',
   '你好，让我们开始聊天吧',
   '欢迎回来，想从哪里开始？',
+  '嗨！今天想聊些什么？',
 ] as const
 
 export const zh = {
