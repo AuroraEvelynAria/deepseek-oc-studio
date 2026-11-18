@@ -14,6 +14,7 @@ export const en = {
   androidSlideToCancel: 'Release to send, swipe up to cancel',
   androidReleaseToCancel: 'Release to cancel',
   androidTextMode: 'Switch to keyboard',
+  androidVoiceMode: 'Switch to voice',
   androidMicPermissionDenied: 'Allow microphone access in your phone settings.',
   androidAutoRead: 'Read replies aloud automatically',
   androidAutoReadEnabled: 'Automatic read aloud on',

@@ -74,6 +74,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   const voiceMode = useVoiceMode((state) => state.enabled)
   const [showAttachments, setShowAttachments] = useState(false)
   const [typing, setTyping] = useState(false)
+  const [androidPristine, setAndroidPristine] = useState(true)
   const sendSpoken = useRef(false)
 
   useLayoutEffect(() => {
@@ -189,6 +190,43 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     return () => window.removeEventListener('android-back', closeOnBack)
   }, [showAttachments])
 
+  useEffect(() => {
+    if (!android) {
+      return
+    }
+    const root = document.documentElement
+    const observer = new MutationObserver(() => {
+      const textarea = textareaRef.current
+      if (!root.hasAttribute('data-keyboard') && document.activeElement === textarea) {
+        textarea?.blur()
+      }
+    })
+    observer.observe(root, { attributes: true, attributeFilter: ['data-keyboard'] })
+    return () => observer.disconnect()
+  }, [])
+
+  useLayoutEffect(() => {
+    if (!android || !typing) {
+      return
+    }
+    const textarea = textareaRef.current
+    textarea?.focus({ preventScroll: true })
+    if (androidPristine && !getDraft(sessionId).text) {
+      textarea?.setSelectionRange(0, 0)
+    }
+  }, [androidPristine, sessionId, t, typing])
+
+  const focusComposer = () => {
+    if (android) {
+      setTyping(true)
+      if (!getDraft(sessionId).text) {
+        setAndroidPristine(true)
+      }
+    } else {
+      textareaRef.current?.focus({ preventScroll: true })
+    }
+  }
+
   const send = () => {
     if (
       useChatStore.getState().importingHistory ||
@@ -210,6 +248,10 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     }
   }
 
+  const androidPlaceholder = android && !voiceMode && !typing && !text.trim()
+  const textareaValue =
+    android && typing && androidPristine && !text ? t('androidMessageHint') : text
+
   return (
     <div className={styles.composer}>
       <div
@@ -221,7 +263,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
         )}
         onClick={(event) => {
           if (event.target === event.currentTarget) {
-            textareaRef.current?.focus({ preventScroll: true })
+            focusComposer()
           }
         }}
       >
@@ -244,7 +286,14 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
         ) : (
           <DraftAttachments items={attachments} onRetry={retryFile} onRemove={removeFile} />
         )}
-        <div className={styles.textareaWrapper}>
+        <div
+          className={styles.textareaWrapper}
+          onClick={(event) => {
+            if (android && event.target === event.currentTarget) {
+              focusComposer()
+            }
+          }}
+        >
           {android && voiceMode ? (
             <button
               type="button"
@@ -264,7 +313,13 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
           ) : (
             <textarea
               ref={textareaRef}
-              className={clsx(styles.textarea, recording && isMobile && styles.textareaHidden)}
+              className={clsx(
+                styles.textarea,
+                android && styles.androidTextarea,
+                android && androidPristine && styles.androidPristine,
+                androidPlaceholder && styles.androidTextareaHidden,
+                recording && isMobile && styles.textareaHidden
+              )}
               placeholder={t(
                 android
                   ? typing
@@ -276,13 +331,31 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
               // 移动端不自动聚焦，避免一打开就弹出键盘
               autoFocus={!isMobile}
               disabled={importingHistory}
-              value={text}
-              onChange={(event) => setText(event.target.value)}
+              value={textareaValue}
+              onChange={(event) => {
+                let value = event.target.value
+                if (android && androidPristine) {
+                  const prompt = t('androidMessageHint')
+                  setAndroidPristine(false)
+                  if (value.includes(prompt)) {
+                    value = value.replaceAll(prompt, '')
+                  }
+                }
+                setText(value)
+              }}
               onFocus={() => {
                 setTyping(true)
+                if (android && !getDraft(sessionId).text) {
+                  setAndroidPristine(true)
+                }
                 setShowAttachments(false)
               }}
-              onBlur={() => setTyping(false)}
+              onBlur={() => {
+                setTyping(false)
+                if (android) {
+                  setAndroidPristine(!getDraft(sessionId).text)
+                }
+              }}
               {...(android ? hold.delayed : {})}
               onPointerDown={(event) => {
                 if (android && !text && !typing) {
@@ -320,6 +393,9 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
               }}
             />
           )}
+          {androidPlaceholder ? (
+            <div className={styles.androidPlaceholder}>{t('androidHoldHint')}</div>
+          ) : null}
           {recording && isMobile && !android ? <Spectrum getAnalyser={voice.getAnalyser} /> : null}
           {voiceMode ? null : (
             <div className={styles.mirror} aria-hidden>
@@ -374,8 +450,9 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
                   <IconButton
                     size="xl"
                     tone="primary"
+                    role="link"
                     icon={<AndroidCircle icon={voiceMode ? 'keys' : 'voice'} />}
-                    aria-label={t(voiceMode ? 'androidTextMode' : 'voiceInput')}
+                    aria-label={t(voiceMode ? 'androidTextMode' : 'androidVoiceMode')}
                     aria-pressed={voiceMode}
                     onClick={() => {
                       voice.cancel()

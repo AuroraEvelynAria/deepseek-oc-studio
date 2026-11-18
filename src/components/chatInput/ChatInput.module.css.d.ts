@@ -19,6 +19,10 @@ declare const styles: {
   readonly failed: string
   readonly textareaWrapper: string
   readonly textarea: string
+  readonly androidTextarea: string
+  readonly androidTextareaHidden: string
+  readonly androidPristine: string
+  readonly androidPlaceholder: string
   readonly mirror: string
   readonly functionRow: string
   readonly toggles: string

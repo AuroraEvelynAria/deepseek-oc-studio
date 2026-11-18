@@ -19,6 +19,7 @@ export const MobileHeader = ({ title }: { title?: string }) => {
       <IconButton
         size="xl"
         tone="primary"
+        role="link"
         className={styles.menu}
         icon={<IconMenuOutline20 />}
         aria-label={t('expandSiderbarButton')}

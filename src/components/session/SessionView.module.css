@@ -59,6 +59,10 @@
   user-select: none;
 }
 
+.caveatSlot {
+  display: contents;
+}
+
 [data-android] .inputContainer {
   max-width: calc(100% - 24px);
   padding-bottom: var(--android-composer-bottom);
@@ -70,9 +74,25 @@
 
 [data-android] .caveat {
   color: color-mix(in srgb, var(--dsw-alias-label-tertiary) 26%, var(--dsw-alias-bg-base));
+  position: absolute;
+  left: 50%;
+  bottom: 10.31px;
+  width: 100vw;
+  height: 9.6px;
+  padding: 0;
+  line-height: 11.38px;
+  transform: translateX(-50%);
 }
 
-[data-android][data-keyboard] .caveat {
+[data-android] .caveatSlot {
+  display: block;
+  position: relative;
+  flex: 0 0 28px;
+  width: 100%;
+  height: 28px;
+}
+
+[data-android][data-keyboard] .caveatSlot {
   display: none;
 }
 
