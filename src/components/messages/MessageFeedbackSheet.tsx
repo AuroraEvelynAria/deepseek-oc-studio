@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { android } from '../../app/android.js'
 import { useTranslate, type TranslationKey } from '../../i18n/index.js'
 import { IconCloseOutline16 } from '../base/icons.js'
 import styles from './MessageFeedbackSheet.module.css'
@@ -60,6 +61,9 @@ export const MessageFeedbackSheet = ({ onClose }: { onClose: () => void }) => {
               type="button"
               role="checkbox"
               aria-checked={reason === item.id}
+              data-android-a11y={android ? `feedback-${item.id}` : undefined}
+              data-android-a11y-label={t(item.label)}
+              data-android-a11y-checked={reason === item.id ? 'true' : 'false'}
               onClick={() => setReason(reason === item.id ? null : item.id)}
             >
               {t(item.label)}

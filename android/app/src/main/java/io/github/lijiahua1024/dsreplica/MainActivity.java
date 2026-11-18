@@ -33,13 +33,19 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
+import android.widget.TextView;
 import android.window.OnBackInvokedDispatcher;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 public final class MainActivity extends Activity {
     private static final String ASSET_HOST = "appassets.androidplatform.net";
@@ -61,12 +67,17 @@ public final class MainActivity extends Activity {
     private FileExport historyExport;
     private ImageSave imageSave;
     private NativeRecorder recorder;
+    private final Map<String, A11yProxy> a11yProxies = new LinkedHashMap<>();
     private final ExecutorService photoExecutor = Executors.newSingleThreadExecutor();
     private final Handler ui = new Handler(Looper.getMainLooper());
     private AccessibilityManager accessibility;
     private final AccessibilityManager.AccessibilityStateChangeListener accessibilityState =
         enabled -> {
-            if (enabled) ui.post(this::primeAccessibility);
+            ui.post(() -> {
+                if (enabled) primeAccessibility();
+                webView.evaluateJavascript(
+                    "window.dispatchEvent(new Event('android-a11y-state'))", null);
+            });
         };
 
     @Override
@@ -130,6 +141,150 @@ public final class MainActivity extends Activity {
         if (host != null) host.recycle();
     }
 
+    private void updateA11yTargets(String payload) {
+        try {
+            JSONArray items = new JSONArray(payload);
+            Set<String> live = new HashSet<>();
+            for (int index = 0; index < items.length(); index++) {
+                JSONObject item = items.getJSONObject(index);
+                String key = item.getString("key");
+                JSONArray bounds = item.getJSONArray("bounds");
+                JSONArray labelBounds = item.optJSONArray("labelBounds");
+                A11yProxy proxy = a11yProxies.get(key);
+                if (proxy == null) {
+                    proxy = new A11yProxy(key);
+                    a11yProxies.put(key, proxy);
+                    frame.addView(proxy);
+                }
+                proxy.update(
+                    item.getString("label"),
+                    item.optBoolean("checked"),
+                    !item.optBoolean("disabled"),
+                    bounds.getInt(0),
+                    bounds.getInt(1),
+                    bounds.getInt(2),
+                    bounds.getInt(3),
+                    labelBounds,
+                    item.optString("labelKind")
+                );
+                live.add(key);
+            }
+            for (String key : new HashSet<>(a11yProxies.keySet())) {
+                if (!live.contains(key)) {
+                    frame.removeView(a11yProxies.remove(key));
+                }
+            }
+        } catch (Exception ignored) {
+            // A malformed bridge payload must not affect the rendered page.
+        }
+    }
+
+    private void forwardA11yClick(String key) {
+        webView.evaluateJavascript(
+            "window.dispatchEvent(new CustomEvent('android-a11y-click', {detail: "
+                + JSONObject.quote(key) + "}))",
+            null
+        );
+    }
+
+    private final class A11yProxy extends FrameLayout {
+        private final String key;
+        private View label;
+        private boolean textLabel;
+        private boolean checked;
+        private boolean enabled = true;
+
+        A11yProxy(String key) {
+            super(MainActivity.this);
+            this.key = key;
+            setWillNotDraw(true);
+            setClickable(true);
+            setFocusable(false);
+            setOnClickListener(ignored -> forwardA11yClick(key));
+            setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+            setAccessibilityDelegate(new AccessibilityDelegate() {
+                @Override
+                public void onInitializeAccessibilityNodeInfo(View host, AccessibilityNodeInfo info) {
+                    super.onInitializeAccessibilityNodeInfo(host, info);
+                    info.setClassName("android.view.View");
+                    info.setText("");
+                    info.setContentDescription("");
+                    info.setCheckable(true);
+                    info.setChecked(A11yProxy.this.checked);
+                    info.setEnabled(A11yProxy.this.enabled);
+                    info.setClickable(A11yProxy.this.enabled);
+                    info.setFocusable(A11yProxy.this.enabled);
+                    info.setVisibleToUser(true);
+                    if (A11yProxy.this.enabled) {
+                        info.addAction(AccessibilityNodeInfo.ACTION_CLICK);
+                    }
+                }
+
+                @Override
+                public boolean performAccessibilityAction(View host, int action, Bundle arguments) {
+                    if (action == AccessibilityNodeInfo.ACTION_CLICK && A11yProxy.this.enabled) {
+                        forwardA11yClick(A11yProxy.this.key);
+                        return true;
+                    }
+                    return super.performAccessibilityAction(host, action, arguments);
+                }
+            });
+        }
+
+        void update(String text, boolean isChecked, boolean isEnabled,
+                    int left, int top, int right, int bottom,
+                    JSONArray labelBounds, String labelKind) {
+            checked = isChecked;
+            enabled = isEnabled;
+            boolean wantsText = "text".equals(labelKind);
+            if (label == null || wantsText != textLabel) {
+                if (label != null) {
+                    removeView(label);
+                }
+                textLabel = wantsText;
+                if (wantsText) {
+                    TextView content = new TextView(MainActivity.this);
+                    content.setTextColor(Color.TRANSPARENT);
+                    label = content;
+                } else {
+                    label = new View(MainActivity.this);
+                }
+                label.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+                label.setClickable(false);
+                label.setFocusable(false);
+                addView(label);
+            }
+            if (label instanceof TextView) {
+                ((TextView) label).setText(text);
+            } else {
+                label.setContentDescription(text);
+            }
+            FrameLayout.LayoutParams params =
+                new FrameLayout.LayoutParams(right - left, bottom - top);
+            params.leftMargin = left;
+            params.topMargin = top;
+            setLayoutParams(params);
+            int labelLeft = left;
+            int labelTop = top;
+            int labelRight = right;
+            int labelBottom = bottom;
+            if (labelBounds != null) {
+                labelLeft = labelBounds.optInt(0, left);
+                labelTop = labelBounds.optInt(1, top);
+                labelRight = labelBounds.optInt(2, right);
+                labelBottom = labelBounds.optInt(3, bottom);
+            }
+            label.setLayoutParams(new FrameLayout.LayoutParams(
+                Math.max(1, labelRight - labelLeft),
+                Math.max(1, labelBottom - labelTop)
+            ));
+            ((FrameLayout.LayoutParams) label.getLayoutParams()).leftMargin = labelLeft - left;
+            ((FrameLayout.LayoutParams) label.getLayoutParams()).topMargin = labelTop - top;
+            requestLayout();
+            invalidate();
+        }
+    }
+
     @Override
     @SuppressWarnings("deprecation")
     @SuppressLint("GestureBackNavigation") // API 33+ back gestures use the registered callback.
@@ -161,7 +316,11 @@ public final class MainActivity extends Activity {
         @Override
         public void onPageFinished(WebView view, String url) {
             super.onPageFinished(view, url);
-            if (accessibility != null && accessibility.isEnabled()) primeAccessibility();
+            if (accessibility != null && accessibility.isEnabled()) {
+                primeAccessibility();
+                view.evaluateJavascript(
+                    "window.dispatchEvent(new Event('android-a11y-state'))", null);
+            }
         }
 
         @Override
@@ -380,6 +539,10 @@ public final class MainActivity extends Activity {
         recorder.finish(false);
         historyExport.close();
         imageSave.finish(false);
+        for (A11yProxy proxy : a11yProxies.values()) {
+            frame.removeView(proxy);
+        }
+        a11yProxies.clear();
         frame.removeView(webView);
         webView.destroy();
         super.onDestroy();
@@ -482,5 +645,15 @@ public final class MainActivity extends Activity {
 
         @JavascriptInterface
         public double recordingLevel() { return recorder.level(); }
+
+        @JavascriptInterface
+        public boolean a11yEnabled() {
+            return accessibility != null && accessibility.isEnabled();
+        }
+
+        @JavascriptInterface
+        public void setA11yTargets(String payload) {
+            runOnUiThread(() -> updateA11yTargets(payload));
+        }
     }
 }

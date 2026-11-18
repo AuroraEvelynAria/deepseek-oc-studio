@@ -17,6 +17,8 @@ type AndroidBridge = {
   requestRecording: () => void
   finishRecording: (keep: boolean) => boolean
   recordingLevel: () => number
+  setA11yTargets: (payload: string) => void
+  a11yEnabled: () => boolean
 }
 
 export const android = (window as Window & { DeepSeekAndroid?: AndroidBridge }).DeepSeekAndroid

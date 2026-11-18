@@ -191,6 +191,10 @@ export const AssistantMessage = memo(function AssistantMessage({
                 className={styles.reaction}
                 data-checked={liked}
                 data-disabled={busy}
+                data-android-a11y={android ? `reply-like-${message.id}` : undefined}
+                data-android-a11y-label={t('like')}
+                data-android-a11y-checked={liked ? 'true' : 'false'}
+                data-android-a11y-label-kind="description"
               >
                 <input
                   type="checkbox"
@@ -208,6 +212,10 @@ export const AssistantMessage = memo(function AssistantMessage({
                 tooltip={t('dislike')}
                 tooltipPlacement="bottom"
                 disabled={busy}
+                data-android-a11y={android ? `reply-dislike-${message.id}` : undefined}
+                data-android-a11y-label={t('dislike')}
+                data-android-a11y-checked="false"
+                data-android-a11y-label-kind="description"
                 onClick={() => setFeedbackOpen(true)}
               />
             ) : null}
