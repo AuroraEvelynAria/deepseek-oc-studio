@@ -9,6 +9,7 @@ import './app/android.css'
 
 ensureKatex()
 if (android) {
+  document.title = ''
   document.documentElement.dataset.android = ''
   document.documentElement.style.setProperty('--android-status-inset', `${android.statusInset()}px`)
 }
