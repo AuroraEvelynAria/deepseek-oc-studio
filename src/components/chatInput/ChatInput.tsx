@@ -537,9 +537,12 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
             }
             onRecentFile={(file, photoId) => acceptFiles([file], photoId)}
             onRemove={removeFile}
-            onFiles={(files) => {
+            onFiles={(files, source) => {
               setShowAttachments(false)
               acceptFiles(files)
+              if (source === 'gallery') {
+                focusComposer()
+              }
             }}
           />
           <AndroidVoiceOverlay
