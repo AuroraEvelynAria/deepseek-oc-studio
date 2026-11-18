@@ -14,10 +14,15 @@ import android.graphics.Insets;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.MediaStore;
 import android.provider.Settings;
+import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
+import android.view.accessibility.AccessibilityManager;
+import android.view.accessibility.AccessibilityNodeInfo;
 import android.webkit.JavascriptInterface;
 import android.webkit.MimeTypeMap;
 import android.webkit.ValueCallback;
@@ -57,6 +62,12 @@ public final class MainActivity extends Activity {
     private ImageSave imageSave;
     private NativeRecorder recorder;
     private final ExecutorService photoExecutor = Executors.newSingleThreadExecutor();
+    private final Handler ui = new Handler(Looper.getMainLooper());
+    private AccessibilityManager accessibility;
+    private final AccessibilityManager.AccessibilityStateChangeListener accessibilityState =
+        enabled -> {
+            if (enabled) ui.post(this::primeAccessibility);
+        };
 
     @Override
     public void onCreate(Bundle state) {
@@ -88,6 +99,8 @@ public final class MainActivity extends Activity {
             return WindowInsets.CONSUMED;
         });
         setContentView(frame);
+        accessibility = getSystemService(AccessibilityManager.class);
+        accessibility.addAccessibilityStateChangeListener(accessibilityState);
         setBars((getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
             == Configuration.UI_MODE_NIGHT_YES);
         WebView.setWebContentsDebuggingEnabled(
@@ -108,6 +121,13 @@ public final class MainActivity extends Activity {
                 OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::handleBack);
         }
         webView.loadUrl(HOME);
+    }
+
+    private void primeAccessibility() {
+        if (webView == null) return;
+        webView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+        AccessibilityNodeInfo host = webView.createAccessibilityNodeInfo();
+        if (host != null) host.recycle();
     }
 
     @Override
@@ -138,6 +158,12 @@ public final class MainActivity extends Activity {
     }
 
     private final class AppPage extends WebViewClient {
+        @Override
+        public void onPageFinished(WebView view, String url) {
+            super.onPageFinished(view, url);
+            if (accessibility != null && accessibility.isEnabled()) primeAccessibility();
+        }
+
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
             if (isBundled(request.getUrl())) {
@@ -346,6 +372,9 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (accessibility != null) {
+            accessibility.removeAccessibilityStateChangeListener(accessibilityState);
+        }
         photoExecutor.shutdownNow();
         if (fileCallback != null) fileCallback.onReceiveValue(null);
         recorder.finish(false);
