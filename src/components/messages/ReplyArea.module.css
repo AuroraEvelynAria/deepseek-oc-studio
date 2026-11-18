@@ -289,8 +289,12 @@
   align-items: center;
   max-width: 100%;
   height: 34px;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-markdown-small);
+  text-align: start;
 
   &.clickable {
     width: fit-content;

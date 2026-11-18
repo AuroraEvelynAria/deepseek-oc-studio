@@ -52,7 +52,7 @@ export type PageItem = {
   status: ToolStatus
 }
 
-export type OpenStep = { type: 'open'; pages: PageItem[] }
+export type OpenStep = { type: 'open'; pages: PageItem[]; results: Source[] }
 
 export type FindStep = {
   type: 'find'
@@ -108,6 +108,10 @@ const mergeStatus = (statuses: ToolStatus[]): ToolStatus =>
 class SourceRegistry {
   readonly list: Source[] = []
   private byUrl = new Map<string, Source>()
+
+  get(url: string) {
+    return this.byUrl.get(url)
+  }
 
   add(
     url: string,
@@ -206,7 +210,7 @@ export const buildReplyView = (reply: AssistantMessage, streaming: boolean): Rep
     } else if (
       result?.type === 'web_fetch_tool_result' &&
       result.content.type === 'web_fetch_result' &&
-      block.kind === 'deep_search'
+      (block.kind === 'deep_search' || block.input.action === 'open_page')
     ) {
       registry.add(result.content.url, result.content.content.title, result.content.published_at)
     }
@@ -322,10 +326,15 @@ export const buildReplyView = (reply: AssistantMessage, streaming: boolean): Rep
         steps.push({ type: 'read_link', links: [page] })
       }
     } else if (input.action === 'open_page') {
-      if (last?.type === 'open') {
-        last.pages.push(page)
-      } else {
-        steps.push({ type: 'open', pages: [page] })
+      const step: OpenStep = last?.type === 'open' ? last : { type: 'open', pages: [], results: [] }
+      if (step !== last) {
+        steps.push(step)
+      }
+      step.pages.push(page)
+      const source =
+        fetched?.type === 'web_fetch_result' && fetched.url && registry.get(fetched.url)
+      if (source && !step.results.includes(source)) {
+        step.results.push(source)
       }
     } else {
       const item = { id: block.id, pattern: input.pattern, status }

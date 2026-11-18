@@ -304,7 +304,11 @@ const StepItem = ({
     case 'search':
       return <SearchRow step={step} message={message} streaming={streaming} isLast={isLast} />
     case 'open':
-      return <OpenRow step={step} sources={sources} isLast={isLast} />
+      return android ? (
+        <AndroidOpenRow step={step} messageId={message.id} isLast={isLast} />
+      ) : (
+        <OpenRow step={step} sources={sources} isLast={isLast} />
+      )
     case 'find':
       return <FindRow step={step} isLast={isLast} />
     case 'read_link':
@@ -445,6 +449,54 @@ const PageLink = ({ page, failedTip }: { page: PageItem; failedTip?: string }) =
     </span>
   </span>
 )
+
+const AndroidOpenRow = ({
+  step,
+  messageId,
+  isLast,
+}: {
+  step: OpenStep
+  messageId: string
+  isLast: boolean
+}) => {
+  const t = useTranslate()
+  const panelEntry = `${messageId}-open-${step.pages[0]?.id}`
+  const active = useSearchPanel((state) => state.entry === panelEntry)
+  const reading = step.pages.some((page) => page.status === 'wip')
+  const count = step.results.length
+  const failed = !reading && count === 0
+  const clickable = !reading && count > 0
+  const Row = clickable ? 'button' : 'div'
+  const label = reading
+    ? t('androidToolOpening')
+    : failed
+      ? t('toolOpenFail')
+      : t(count === 1 ? 'androidToolOpenOne' : 'androidToolOpenMany', { count })
+
+  return (
+    <Row
+      type={clickable ? 'button' : undefined}
+      className={clsx(
+        styles.row,
+        !isLast && styles.withLine,
+        clickable && styles.clickable,
+        active && styles.active
+      )}
+      aria-expanded={clickable ? active : undefined}
+      onClick={
+        clickable
+          ? () => toggleSearchPanel(panelEntry, step.results, 'browsedSearchResult')
+          : undefined
+      }
+    >
+      <span className={styles.rowIcon}>
+        {failed ? <IconBrowseWarningOutline16 /> : <IconBrowseOutline16 />}
+      </span>
+      <span className={styles.summary}>{label}</span>
+      {clickable ? <SiteThumbnails sources={step.results} /> : null}
+    </Row>
+  )
+}
 
 /** 边想边搜打开的网页：「浏览 N 个页面」+ 最多 5 个页面 */
 const OpenRow = ({

@@ -3,15 +3,23 @@ import { openAndroidPage } from '../../app/openAndroidPage.js'
 import { useTranslate } from '../../i18n/index.js'
 import type { Source } from '../../services/chat/view.js'
 import { formatDate } from '../../utils/format.js'
-import { closeSearchPanel, useSearchPanel } from './searchPanelState.js'
+import { closeSearchPanel, useSearchPanel, type SearchPanelTitle } from './searchPanelState.js'
 import { SiteLogo } from './SiteLogo.js'
 import styles from './AndroidSearchPanel.module.css'
 
 const TRANSITION_MS = 240
 
-type DisplayedResults = { entry: string; sources: Source[] }
+type DisplayedResults = { entry: string; sources: Source[]; title: SearchPanelTitle }
 
-const AndroidSource = ({ source, single }: { source: Source; single: boolean }) => {
+const AndroidSource = ({
+  source,
+  single,
+  numbered,
+}: {
+  source: Source
+  single: boolean
+  numbered: boolean
+}) => {
   const date = source.publishedAt ? (formatDate(source.publishedAt, '/') ?? source.publishedAt) : ''
   return (
     <button type="button" className={styles.result} onClick={() => openAndroidPage(source.url)}>
@@ -19,7 +27,7 @@ const AndroidSource = ({ source, single }: { source: Source; single: boolean }) 
         <SiteLogo url={source.siteIcon} className={styles.logo} />
         <span className={styles.siteName}>{source.siteName}</span>
         {date ? <span className={styles.date}>{date}</span> : null}
-        <span className={styles.number}>{source.index}</span>
+        {numbered ? <span className={styles.number}>{source.index}</span> : null}
       </div>
       <span className={styles.resultTitle}>{source.title}</span>
       {source.snippet ? (
@@ -36,6 +44,7 @@ export const AndroidSearchPanel = () => {
   const t = useTranslate()
   const entry = useSearchPanel((state) => state.entry)
   const sources = useSearchPanel((state) => state.sources)
+  const title = useSearchPanel((state) => state.title)
   const [displayed, setDisplayed] = useState<DisplayedResults | null>(null)
   const [open, setOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
@@ -47,7 +56,7 @@ export const AndroidSearchPanel = () => {
     if (entry) {
       overlayRef.current?.style.removeProperty('--result-drag-offset')
       overlayRef.current?.style.removeProperty('--result-scrim-opacity')
-      setDisplayed({ entry, sources })
+      setDisplayed({ entry, sources, title })
       setScrolled(false)
       const frame = requestAnimationFrame(() => setOpen(true))
       return () => cancelAnimationFrame(frame)
@@ -55,7 +64,7 @@ export const AndroidSearchPanel = () => {
     setOpen(false)
     const timer = setTimeout(() => setDisplayed(null), TRANSITION_MS)
     return () => clearTimeout(timer)
-  }, [entry, sources])
+  }, [entry, sources, title])
 
   useEffect(() => {
     if (!entry) {
@@ -188,10 +197,10 @@ export const AndroidSearchPanel = () => {
         className={styles.sheet}
         role="dialog"
         aria-modal="true"
-        aria-label={t('searchResult')}
+        aria-label={t(displayed.title)}
       >
         <div className={styles.header} data-scrolled={scrolled}>
-          <span>{t('searchResult')}</span>
+          <span>{t(displayed.title)}</span>
           <button
             className={styles.close}
             type="button"
@@ -215,6 +224,7 @@ export const AndroidSearchPanel = () => {
               key={source.url}
               source={source}
               single={displayed.sources.length === 1}
+              numbered={displayed.title === 'searchResult'}
             />
           ))}
         </div>
