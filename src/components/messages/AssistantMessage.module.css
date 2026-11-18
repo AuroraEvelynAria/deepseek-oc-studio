@@ -99,6 +99,7 @@
 .actions {
   display: flex;
   align-items: center;
+  flex: 1;
   gap: 10px;
   opacity: 0;
   transition: opacity var(--ds-transition-duration) var(--ds-ease-in-out);
@@ -106,6 +107,55 @@
 
 .alwaysShow {
   opacity: 1;
+}
+
+[data-android] .actions > button,
+[data-android] .actions > .reaction {
+  color: #8e9094;
+}
+
+[data-android] .actions > button:disabled {
+  color: var(--dsw-alias-label-caption);
+}
+
+.reaction {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--ds-control-height-xs);
+  height: var(--ds-control-height-xs);
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  transition: background-color var(--ds-transition-duration) var(--ds-ease-in-out);
+
+  &[data-checked='true'] {
+    color: #8e9094;
+  }
+
+  &[data-disabled='true'] {
+    color: var(--dsw-alias-label-caption);
+    cursor: not-allowed;
+  }
+
+  input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+  }
+
+  &:active:not([data-disabled='true']) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    border-radius: 50%;
+  }
+}
+
+.regenerate {
+  margin-left: auto;
 }
 
 .continueButton {

@@ -1,8 +1,14 @@
 import { useTranslate } from '../../i18n/index.js'
 import clsx from 'clsx'
-import { memo, useEffect, useRef } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { android } from '../../app/android.js'
-import { IconRefreshOutline16, IconWarningOutline16 } from '../base/icons.js'
+import {
+  IconRefreshOutline16,
+  IconShareOutline16,
+  IconThumbDown16,
+  IconThumbUp16,
+  IconWarningOutline16,
+} from '../base/icons.js'
 import { describeReply } from '../../services/chat/describe.js'
 import { canContinueReply } from '../../services/chat/reply.js'
 import { continueReply, regenerateReply } from '../../services/chat/store.js'
@@ -22,6 +28,7 @@ import { SiteThumbnails } from '../search/SiteLogo.js'
 import { toggleSearchPanel, useSearchPanel } from '../search/searchPanelState.js'
 import { ReadAloudButton } from './ReadAloudButton.js'
 import { CopyButton } from './CopyButton.js'
+import { MessageFeedbackSheet } from './MessageFeedbackSheet.js'
 import { ReplyArea } from './ReplyArea.js'
 import { useReplyView } from './useReplyView.js'
 import {
@@ -41,6 +48,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   busy,
   versions,
   onSelectVersion,
+  onShare,
 }: {
   sessionId: string
   message: AssistantMessageType
@@ -49,6 +57,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   busy: boolean
   versions: MessageVersions
   onSelectVersion: SelectMessageVersion
+  onShare: () => void
 }) {
   const t = useTranslate()
   const view = useReplyView(message, streaming)
@@ -61,6 +70,8 @@ export const AssistantMessage = memo(function AssistantMessage({
     .filter(Boolean)
     .join('\n\n')
   const copyText = responseText || notice?.text
+  const [liked, setLiked] = useState(false)
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
   const wasStreaming = useRef(streaming)
   useEffect(() => {
     if (
@@ -176,9 +187,44 @@ export const AssistantMessage = memo(function AssistantMessage({
           <div className={clsx(styles.actions, isLast && styles.alwaysShow)}>
             {copyText ? <CopyButton text={copyText} /> : null}
             {responseText && !refused ? (
+              <label
+                className={styles.reaction}
+                data-checked={liked}
+                data-disabled={busy}
+              >
+                <input
+                  type="checkbox"
+                  checked={liked}
+                  disabled={busy}
+                  aria-label={t('like')}
+                  onChange={() => setLiked((value) => !value)}
+                />
+                <IconThumbUp16 filled={liked} />
+              </label>
+            ) : null}
+            {responseText && !refused ? (
+              <IconButton
+                icon={<IconThumbDown16 />}
+                tooltip={t('dislike')}
+                tooltipPlacement="bottom"
+                disabled={busy}
+                onClick={() => setFeedbackOpen(true)}
+              />
+            ) : null}
+            {responseText && !refused ? (
               <ReadAloudButton messageId={message.id} text={responseText} />
             ) : null}
+            {responseText && !refused ? (
+              <IconButton
+                icon={<IconShareOutline16 />}
+                tooltip={t('share')}
+                tooltipPlacement="bottom"
+                disabled={busy}
+                onClick={onShare}
+              />
+            ) : null}
             <IconButton
+              className={styles.regenerate}
               icon={<IconRefreshOutline16 />}
               tooltip={t('regenerate')}
               tooltipPlacement="bottom"
@@ -205,6 +251,7 @@ export const AssistantMessage = memo(function AssistantMessage({
           ) : null}
         </div>
       )}
+      {feedbackOpen ? <MessageFeedbackSheet onClose={() => setFeedbackOpen(false)} /> : null}
     </div>
   )
 })

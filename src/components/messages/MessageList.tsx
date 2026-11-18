@@ -11,6 +11,7 @@ import { closeSearchPanel } from '../search/searchPanelState.js'
 import { AssistantMessage } from './AssistantMessage.js'
 import { ScrollToBottomContext } from './scrollContext.js'
 import { UserMessage } from './UserMessage.js'
+import { MessageShareView } from './MessageShareView.js'
 import type { Message } from '../../services/chat/types.js'
 
 /**
@@ -52,6 +53,7 @@ export const MessageList = ({
   const [previousVersions, setPreviousVersions] = useState(() =>
     buildMessageVersions(session, new Map())
   )
+  const [sharing, setSharing] = useState(false)
   const versions = useMemo(
     () => buildMessageVersions(session, previousVersions),
     [session, previousVersions]
@@ -102,6 +104,7 @@ export const MessageList = ({
   }, [session.id, lastMessageId, scrollToBottom])
 
   useEffect(closeSearchPanel, [session.id, lastMessageId])
+  useEffect(() => setSharing(false), [session.id])
 
   const selectVersion = useCallback(
     (messageId: string, anchorTop: number) => {
@@ -171,6 +174,7 @@ export const MessageList = ({
                   busy={streaming}
                   versions={versions.get(message.id) ?? EMPTY_VERSIONS}
                   onSelectVersion={selectVersion}
+                  onShare={() => setSharing(true)}
                 />
               )
             )}
@@ -178,6 +182,7 @@ export const MessageList = ({
         </div>
         {footer}
       </div>
+      {sharing ? <MessageShareView session={session} onClose={() => setSharing(false)} /> : null}
     </ScrollToBottomContext.Provider>
   )
 }

@@ -56,6 +56,39 @@ export const IconCopyOutline16 = () => (
   </svg>
 )
 
+export const IconThumbUp16 = ({ filled = false }: { filled?: boolean }) => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M4.7 7.3V14H2.5a.8.8 0 0 1-.8-.8V8.1a.8.8 0 0 1 .8-.8h2.2Zm1.3 6.2h4.2c.6 0 1.2-.4 1.4-1l1.2-3.6c.2-.6-.2-1.2-.8-1.2H9.3l.6-2.7c.1-.5 0-1-.4-1.4l-.5-.5L6 7.2v6.3Z"
+      fill={filled ? 'currentColor' : 'none'}
+      stroke="currentColor"
+      strokeWidth="1.25"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
+
+export const IconThumbDown16 = ({ filled = false }: { filled?: boolean }) => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M4.7 8.7V2H2.5a.8.8 0 0 0-.8.8v5.1c0 .5.3.8.8.8h2.2ZM6 2.5h4.2c.6 0 1.2.4 1.4 1l1.2 3.6c.2.6-.2 1.2-.8 1.2H9.3l.6 2.7c.1.5 0 1-.4 1.4l-.5.5L6 8.8V2.5Z"
+      fill={filled ? 'currentColor' : 'none'}
+      stroke="currentColor"
+      strokeWidth="1.25"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
+
+export const IconShareOutline16 = () => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M7.1 2.2 14 8l-6.9 5.8v-3.4C3.9 10.2 2.1 11.4 1 14c.4-4.8 2.5-7.2 7.1-7.6V3.2c0-.7-.6-1.2-1-1Z"
+      fill="currentColor"
+    />
+  </svg>
+)
+
 export const IconDarkOutline16 = () => (
   <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path
