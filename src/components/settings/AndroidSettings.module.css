@@ -415,34 +415,48 @@ a.row:active,
   margin-bottom: 8px;
   border-radius: 60px;
   background:
-    radial-gradient(ellipse at 14% 82%, #e7f8fb 0%, transparent 63%),
-    radial-gradient(ellipse at 72% 18%, #ecfaff 18%, transparent 59%),
-    linear-gradient(130deg, #bde6fb, #97bce2, #6587c4);
+    radial-gradient(ellipse at 18% 22%, #f7fdff 0%, transparent 58%),
+    radial-gradient(ellipse at 76% 72%, #b5cff2 6%, transparent 53%),
+    linear-gradient(130deg, #d9f2ff, #e2edff 38%, #a8c4ef 74%, #d9f7ff);
+
+  &[data-tone='wave'] {
+    background:
+      radial-gradient(ellipse at 12% 42%, #f0f3ff 0%, transparent 46%),
+      radial-gradient(ellipse at 80% 66%, #8fa5df 7%, transparent 54%),
+      linear-gradient(112deg, #c7d1ff, #a6b9f5 42%, #7897dc 71%, #e0e5ff);
+  }
+
+  &[data-tone='stella'] {
+    background:
+      radial-gradient(ellipse at 12% 44%, #ffd27a 0%, transparent 45%),
+      radial-gradient(ellipse at 84% 70%, #f5e4c9 4%, transparent 58%),
+      linear-gradient(118deg, #fff8ee, #ffe6a9 54%, #fff9f1);
+  }
 
   &[data-tone='tide'] {
     background:
-      radial-gradient(ellipse at 20% 15%, #d0edff 8%, transparent 57%),
-      radial-gradient(ellipse at 80% 84%, #96a1ed 6%, transparent 71%),
-      linear-gradient(135deg, #768fd4, #51649c, #83bbde);
+      radial-gradient(ellipse at 12% 52%, #91adb7 0%, transparent 35%),
+      radial-gradient(ellipse at 78% 30%, #e6ffff 8%, transparent 57%),
+      linear-gradient(125deg, #b4d3d9, #efffff 50%, #8faeb8);
   }
 }
 
 .dots {
   display: flex;
+  align-items: center;
+  gap: 4.3333px;
   margin-top: 18px;
+}
 
-  button {
-    width: 22px;
-    height: 22px;
-    padding: 7px;
-    border: 0;
-    border-radius: 50%;
-    background: #ccc content-box;
-  }
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #ccc;
+}
 
-  button[aria-checked='true'] {
-    background-color: var(--dsw-alias-brand-text);
-  }
+.dot[data-selected='true'] {
+  background-color: var(--dsw-alias-brand-text);
 }
 
 .primary {

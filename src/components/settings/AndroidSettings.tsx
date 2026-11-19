@@ -258,17 +258,34 @@ const Settings = ({ start }: { start: Page }) => {
   ]
   const tones: { id: TtsVoice; label: string; description: string }[] = [
     {
+      id: 'shell',
+      label: t('settingsTtsVoiceShell'),
+      description: t('settingsTtsVoiceShellDescription'),
+    },
+    {
+      id: 'wave',
+      label: t('settingsTtsVoiceWave'),
+      description: t('settingsTtsVoiceWaveDescription'),
+    },
+    {
       id: 'stella',
       label: t('settingsTtsVoiceStella'),
-      description: tr('清晰明亮', 'Clear and bright'),
+      description: t('settingsTtsVoiceStellaDescription'),
     },
     {
       id: 'tide',
       label: t('settingsTtsVoiceTide'),
-      description: tr('沉稳自然', 'Calm and natural'),
+      description: t('settingsTtsVoiceTideDescription'),
     },
   ]
   const currentTone = tones.find((item) => item.id === tone) ?? tones[0]
+  const selectTone = (direction: -1 | 1) => {
+    const index = Math.max(
+      0,
+      tones.findIndex((item) => item.id === tone)
+    )
+    setTone(tones[Math.max(0, Math.min(tones.length - 1, index + direction))].id)
+  }
   const languageLabel = languages.find((item) => item.id === locale)?.label
   const themeLabel = themes.find((item) => item.id === themePreference)?.label
   const localizedPoliciesUrl = `${policiesUrl}/${locale}`
@@ -698,22 +715,19 @@ const Settings = ({ start }: { start: Page }) => {
                 const dx =
                   event.changedTouches[0].clientX - Number(event.currentTarget.dataset.swipeX)
                 if (Math.abs(dx) > 32) {
-                  setTone(dx > 0 ? 'stella' : 'tide')
+                  selectTone(dx > 0 ? -1 : 1)
                 }
               }}
             >
               <div className={styles.voiceArt} data-tone={tone} aria-hidden="true" />
               <div>{currentTone.label}</div>
               <small>{currentTone.description}</small>
-              <div className={styles.dots} role="radiogroup" aria-label={voice}>
+              <div className={styles.dots} aria-hidden="true">
                 {tones.map((item) => (
-                  <button
+                  <span
                     key={item.id}
-                    type="button"
-                    role="radio"
-                    aria-label={item.label}
-                    aria-checked={tone === item.id}
-                    onClick={() => setTone(item.id)}
+                    className={styles.dot}
+                    data-selected={tone === item.id ? 'true' : undefined}
                   />
                 ))}
               </div>
@@ -726,7 +740,7 @@ const Settings = ({ start }: { start: Page }) => {
                 setPopup(null)
               }}
             >
-              {t('confirm')}
+              {tr('确认', 'Confirm')}
             </button>
           </section>
         </div>
