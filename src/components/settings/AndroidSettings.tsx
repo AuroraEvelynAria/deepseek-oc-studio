@@ -21,24 +21,18 @@ import {
   type LocalePreference,
   type ThemePreference,
 } from '../../services/settings.js'
-import { AndroidSound } from '../base/AndroidIcons.js'
 import {
   IconChevronRightOutline14,
   IconCloseOutline16,
   IconDataOutline16,
   IconGlobeLanguageOutline14,
   IconLightOutline16,
-  IconLinkOutline16,
-  IconSettingsOutline16,
 } from '../base/icons.js'
 import { showToast } from '../base/toastState.js'
 import { ApiKeyConfirm, ApiKeyField, useApiKeyEditor } from './ApiKeyField.js'
 import { closeSettings, useSettingsDialog } from './settingsDialogState.js'
 import styles from './AndroidSettings.module.css'
 
-const appVersion = document.querySelector<HTMLMetaElement>(
-  'meta[name="application-version"]'
-)?.content
 const policiesUrl = 'https://cdn.deepseek.com/policies'
 const chinesePoliciesUrl = `${policiesUrl}/zh-CN`
 const faqUrl = 'https://static.deepseek.com/faq/index.html'
@@ -57,6 +51,73 @@ const Profile = () => (
   >
     <circle cx="12" cy="8" r="4" />
     <path d="M4.5 21a7.5 6 0 0 1 15 0" />
+  </svg>
+)
+
+const PersonalizationIcon = () => (
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 18 18"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M8.47 2.27c.29-.87 1.52-.88 1.82 0l1.1 3.24 3.34.06c.93.01 1.3 1.17.6 1.74l-2.65 2.11 1 3.29c.28.9-.67 1.64-1.45 1.13l-2.74-1.77-2.88 1.72c-.81.48-1.72-.32-1.39-1.21l1.03-3.33-2.65-2.08c-.71-.56-.34-1.72.59-1.74l3.37-.09 1.14-3.23Z" />
+    <path d="m13.8 12.9 2.2 2.2" />
+  </svg>
+)
+
+const PolicyIcon = () => (
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 18 18"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M4.4 2.75h6.8c.8 0 1.4.6 1.4 1.4v5.9" />
+    <path d="M4.4 2.75c-.8 0-1.4.6-1.4 1.4v9.1c0 .8.6 1.4 1.4 1.4h2.9" />
+    <path d="M6 5.8h5M6 8.5h3.3" />
+    <path d="m10.1 13.3 3.65-3.65 1.55 1.55-3.65 3.65-2.05.5.5-2.05Z" />
+  </svg>
+)
+
+const LogoutIcon = () => (
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 18 18"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M8.2 3H5.6A1.6 1.6 0 0 0 4 4.6v8.8A1.6 1.6 0 0 0 5.6 15h2.6" />
+    <path d="M10.7 5.7 14 9l-3.3 3.3M7.5 9H14" />
+  </svg>
+)
+
+const VoiceIcon = () => (
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 18 18"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M3.2 7.2h2.1l3.1-2.5v8.6L5.3 10.8H3.2V7.2Z" />
+    <path d="M11 6.1c1.55 1.6 1.55 4.2 0 5.8" />
+    <path d="M12.6 4.5c2 2.5 2 6.5 0 9" />
   </svg>
 )
 
@@ -286,7 +347,8 @@ const Settings = ({ start }: { start: Page }) => {
     )
     setTone(tones[Math.max(0, Math.min(tones.length - 1, index + direction))].id)
   }
-  const languageLabel = languages.find((item) => item.id === locale)?.label
+  const languageLabel =
+    locale === 'zh-CN' ? '中文 (简体中文)' : languages.find((item) => item.id === locale)?.label
   const themeLabel = themes.find((item) => item.id === themePreference)?.label
   const localizedPoliciesUrl = `${policiesUrl}/${locale}`
   const checkForUpdates = () => {
@@ -417,14 +479,14 @@ const Settings = ({ start }: { start: Page }) => {
               />
               <Row
                 label={labels.personalization}
-                icon={<IconSettingsOutline16 />}
+                icon={<PersonalizationIcon />}
                 onClick={() => setPage('personalization')}
               />
             </Group>
             <Group label={tr('语音', 'Voice')}>
               <Row
                 label={voice}
-                icon={<AndroidSound muted={false} />}
+                icon={<VoiceIcon />}
                 arrow={false}
                 onClick={() => {
                   setTone(ttsVoice)
@@ -434,15 +496,14 @@ const Settings = ({ start }: { start: Page }) => {
             </Group>
             <Group label={tr('关于', 'About')}>
               <Row
-                label={tr('版本信息', 'Version')}
-                value={appVersion}
+                label={tr('检查更新', 'Check for updates')}
+                value="2.8.0(297)"
                 icon={<Info />}
                 onClick={checkForUpdates}
-                arrow={false}
               />
               <Row
                 label={labels.agreements}
-                icon={<IconLinkOutline16 />}
+                icon={<PolicyIcon />}
                 onClick={() => setPage('agreements')}
               />
             </Group>
@@ -454,8 +515,19 @@ const Settings = ({ start }: { start: Page }) => {
               />
             </Group>
             <Group spaced>
-              <Row label={logout} danger arrow={false} onClick={() => setPopup('logout')} />
+              <Row
+                label={logout}
+                icon={<LogoutIcon />}
+                arrow={false}
+                onClick={() => setPopup('logout')}
+              />
             </Group>
+            <p className={styles.legal}>
+              {`模型名称：Deepseek Chat
+备案号：Beijing-DeepseekChat-202404280016
+浙ICP备2023025841号-3A
+内容由 AI 生成，请仔细甄别，并合法使用`}
+            </p>
           </>
         ) : null}
         {page === 'account' ? (

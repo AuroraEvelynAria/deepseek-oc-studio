@@ -207,6 +207,15 @@ a.row:active,
   }
 }
 
+.legal {
+  margin: 24px 16px 0;
+  color: var(--settings-muted);
+  font-size: 13px;
+  line-height: 21px;
+  text-align: center;
+  white-space: pre-line;
+}
+
 .credentials {
   padding: 0 16px 12px;
 }
