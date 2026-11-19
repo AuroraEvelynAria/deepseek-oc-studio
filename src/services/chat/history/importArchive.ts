@@ -1,4 +1,5 @@
-import * as db from '../db.js'
+import type { HistoryStaging, StoredFile } from '../db.js'
+import type { Session } from '../types.js'
 import { BackupError, fail } from './errors.js'
 import type { SessionIndexEntry } from './format.js'
 import { INDEX_PATH, MANIFEST_PATH, USER_PATH, parseSessionPath, sessionFilesDir } from './paths.js'
@@ -41,10 +42,13 @@ const imageType = (bytes: Uint8Array): string => {
   return ''
 }
 
-const readJson = async (entry: ArchiveEntry): Promise<unknown> => {
-  const text = await (await readEntry(entry)).text()
+const readJson = async (entry: ArchiveEntry, decoder: TextDecoder): Promise<unknown> => {
+  let text = ''
+  for await (const chunk of entry.stream) {
+    text += decoder.decode(chunk, { stream: true })
+  }
   try {
-    return JSON.parse(text)
+    return JSON.parse(text + decoder.decode())
   } catch {
     return fail('backupInvalidJson')
   }
@@ -53,10 +57,13 @@ const readJson = async (entry: ArchiveEntry): Promise<unknown> => {
 /**
  * 流式导入：manifest → user（不导入）→ 全部会话 JSON → index → 全部图片。
  * 也支持会话与图片交错排列、index 位于末尾的条目顺序。
- * 会话读完立即暂存，只保留图片路径映射；图片全部读完后逐会话回填 MIME，不改变图片身份。
- * 写入导入暂存存储；调用方负责先清空暂存，成功后替换正式数据，失败时清理暂存。
+ * 批量暂存会话和图片；图片全部读完后只读取可能需要回填 MIME 的会话。
  */
-export const importArchive = async (file: File): Promise<void> => {
+export const importArchive = async (
+  file: File,
+  staging: HistoryStaging,
+  onProgress: (progress: { bytes: number; total: number; count: number } | null) => void
+): Promise<void> => {
   if (!(await isZipFile(file))) {
     fail('backupUnrecognized')
   }
@@ -64,36 +71,71 @@ export const importArchive = async (file: File): Promise<void> => {
   const images = new Map<string, string>()
   /** 已保存的原件：文件 ID → MIME。同一图片出现在多个会话目录时只保存一次。 */
   const stored = new Map<string, string>()
+  const sessionsWithFiles: { id: string; size: number }[] = []
+  let sessions: Session[] = []
+  let files: StoredFile[] = []
+  let sessionBytes = 0
+  let fileBytes = 0
+  let lastProgress = 0
   let manifest = false
   let index: SessionIndexEntry[] | undefined
   let currentSessionId: string | undefined
+  const decoder = new TextDecoder()
+
+  const flushSessions = async () => {
+    if (sessions.length) {
+      await staging.addSessions(sessions)
+    }
+    sessions = []
+    sessionBytes = 0
+  }
+  const flushFiles = async () => {
+    if (files.length) {
+      await staging.addFiles(files)
+    }
+    files = []
+    fileBytes = 0
+  }
+  const reportRead = (bytes: number, total: number) => {
+    const now = performance.now()
+    if (lastProgress && now - lastProgress < 200) {
+      return
+    }
+    lastProgress = now
+    onProgress({ bytes, total, count: imported.size })
+    // 缓存命中时 ZIP 条目之间不一定有浏览器任务边界，留出绘制进度的机会。
+    return new Promise<void>((resolve) => setTimeout(resolve, 0))
+  }
 
   const saveImage = async (entry: ArchiveEntry, id: string) => {
     if (stored.has(id)) {
       await skipEntry(entry)
       return
     }
-    const data = await readEntry(entry)
-    const type = imageType(new Uint8Array(await data.slice(0, 16).arrayBuffer()))
-    await db.saveStagingFiles([{ id, blob: new Blob([data], { type }) }])
-    stored.set(id, type)
+    const blob = await readEntry(entry, imageType)
+    files.push({ id, blob })
+    fileBytes += blob.size
+    stored.set(id, blob.type)
+    if (files.length >= 32 || fileBytes >= 8 * 1024 * 1024) {
+      await flushFiles()
+    }
   }
 
   try {
-    for await (const entry of readArchive(file)) {
+    for await (const entry of readArchive(file, reportRead)) {
       const { path } = entry
       const sessionId = parseSessionPath(path)
       if (!manifest) {
         if (path !== MANIFEST_PATH) {
           fail('backupUnrecognized')
         }
-        checkManifest(await readJson(entry))
+        checkManifest(await readJson(entry, decoder))
         manifest = true
       } else if (path === USER_PATH && !index && imported.size === 0) {
         // 账号信息（已脱敏）不导入；文件可能缺失。
         await skipEntry(entry)
       } else if (sessionId !== null && !index) {
-        const local = toLocalSession(readSessionFile(await readJson(entry)))
+        const local = toLocalSession(readSessionFile(await readJson(entry, decoder)))
         if (local.session.id !== sessionId || imported.has(sessionId)) {
           fail('backupIncomplete')
         }
@@ -102,9 +144,18 @@ export const importArchive = async (file: File): Promise<void> => {
         for (const [imagePath, id] of local.images) {
           images.set(imagePath, id)
         }
-        await db.addStagingSession(local.session)
+        if (
+          local.session.messages.some((message) => message.role === 'user' && message.files.length)
+        ) {
+          sessionsWithFiles.push({ id: sessionId, size: entry.size })
+        }
+        sessions.push(local.session)
+        sessionBytes += entry.size
+        if (sessions.length >= 128 || sessionBytes >= 4 * 1024 * 1024) {
+          await flushSessions()
+        }
       } else if (path === INDEX_PATH && !index) {
-        index = readSessionIndex(await readJson(entry))
+        index = readSessionIndex(await readJson(entry, decoder))
       } else if (
         index
           ? imported.has(/^chat_sessions\/([^/]+)_files\//.exec(path)?.[1] ?? '')
@@ -133,5 +184,23 @@ export const importArchive = async (file: File): Promise<void> => {
   ) {
     fail('backupIncomplete')
   }
-  await db.updateStagingFileTypes(stored)
+  onProgress(null)
+  await flushSessions()
+  await flushFiles()
+  if (stored.size) {
+    let ids: string[] = []
+    let bytes = 0
+    for (const item of sessionsWithFiles) {
+      ids.push(item.id)
+      bytes += item.size
+      if (ids.length >= 64 || bytes >= 4 * 1024 * 1024) {
+        await staging.updateFileTypes(ids, stored)
+        ids = []
+        bytes = 0
+      }
+    }
+    if (ids.length) {
+      await staging.updateFileTypes(ids, stored)
+    }
+  }
 }

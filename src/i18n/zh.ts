@@ -154,6 +154,13 @@ export const zh = {
   historyImportConfirmDescription: '上传的历史对话会覆盖当前所有对话记录，是否确认导入？',
   historyImportDescription: '导入历史对话会覆盖全部本地对话和附件，支持 DeepSeek 导出的 ZIP 文件。',
   historyImporting: '正在导入历史对话…',
+  historyImportProgress: '正在导入历史对话… {percent}% · 已处理 {count} 个对话',
+  historyImportProgressEta:
+    '正在导入历史对话… {percent}% · 已处理 {count} 个对话 · 预计读取还需约 {eta}',
+  historyImportEtaSeconds: '{seconds} 秒',
+  historyImportEtaMinutes: '{minutes} 分钟',
+  historyImportFinishing: '正在导入历史对话… 正在整理附件',
+  historyImportReplacing: '正在导入历史对话… 正在替换本地记录',
   historyImportedOne: '已导入 1 个对话',
   historyImported: '已导入 {count} 个对话',
   historyImportFailed:

@@ -1,4 +1,5 @@
 import { formatDate } from '../../utils/format.js'
+import { translate, type TranslationMessage } from '../../i18n/index.js'
 import * as db from './db.js'
 import { replaceHistory, useChatStore } from './store.js'
 import type { Session } from './types.js'
@@ -43,10 +44,42 @@ export const exportHistory = (): Promise<{ name: string; blob: Blob }> =>
  * 确认覆盖后调用：流式校验 ZIP 并写入暂存，成功后才停止生成并替换原有历史。
  * 返回导入的会话数。
  */
-export const importHistory = (file: File): Promise<number> =>
+export const importHistory = (
+  file: File,
+  onProgress?: (status: TranslationMessage) => void
+): Promise<number> =>
   enqueueBackup(async () => {
+    onProgress?.({ key: 'historyImporting' })
     const { importArchive } = await import('./history/importArchive.js')
-    return replaceHistory(() => importArchive(file))
+    const started = performance.now()
+    return replaceHistory(
+      (staging) =>
+        importArchive(file, staging, (progress) => {
+          if (!onProgress) {
+            return
+          }
+          if (!progress) {
+            onProgress({ key: 'historyImportFinishing' })
+            return
+          }
+          const { bytes, total, count } = progress
+          const fraction = total > 0 ? bytes / total : 0
+          const percent = Math.min(99, Math.floor(fraction * 100))
+          const elapsed = performance.now() - started
+          const params = { percent, count }
+          if (elapsed < 4000 || fraction < 0.03 || fraction >= 1) {
+            onProgress({ key: 'historyImportProgress', params })
+            return
+          }
+          const seconds = Math.ceil((elapsed * (1 - fraction)) / fraction / 1000)
+          const eta =
+            seconds < 60
+              ? translate('historyImportEtaSeconds', { seconds })
+              : translate('historyImportEtaMinutes', { minutes: Math.ceil(seconds / 60) })
+          onProgress({ key: 'historyImportProgressEta', params: { ...params, eta } })
+        }),
+      { onCommit: () => onProgress?.({ key: 'historyImportReplacing' }), clearInBackground: true }
+    )
   })
 
 /** 确认删除后调用：以空历史原子替换全部本地会话与附件，保留 API Key 和其他设置。 */

@@ -155,6 +155,13 @@ export const en = {
   historyImport: 'Import chat history',
   historyImportConfirm: 'Import',
   historyImporting: 'Importing chat history…',
+  historyImportProgress: 'Importing chat history… {percent}% · {count} chats processed',
+  historyImportProgressEta:
+    'Importing chat history… {percent}% · {count} chats processed · about {eta} left to read',
+  historyImportEtaSeconds: '{seconds} sec',
+  historyImportEtaMinutes: '{minutes} min',
+  historyImportFinishing: 'Importing chat history… Processing attachments',
+  historyImportReplacing: 'Importing chat history… Replacing local history',
   historyImportConfirmTitle: 'Import chat history?',
   historyImportConfirmDescription:
     'The uploaded chat history will replace all your current chats. Import anyway?',

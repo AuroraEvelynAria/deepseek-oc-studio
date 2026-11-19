@@ -1,6 +1,7 @@
 import { Inflate } from 'fflate'
 
 const READ_CHUNK_BYTES = 256 * 1024
+const READ_AHEAD_BYTES = 2 * 1024 * 1024
 // 控制每轮同步解压的工作量；输出交给调用方保存后才继续读取。
 const INFLATE_CHUNK_BYTES = 8 * 1024
 
@@ -44,7 +45,7 @@ const createReader = (file: File) => {
       return buffer.subarray(0, 0)
     }
     if (start < offset || start + length > offset + buffer.length) {
-      const end = Math.min(file.size, start + Math.max(READ_CHUNK_BYTES, length))
+      const end = Math.min(file.size, start + Math.max(READ_AHEAD_BYTES, length))
       buffer = new Uint8Array(await file.slice(start, end).arrayBuffer())
       if (buffer.length !== end - start) {
         invalid()
@@ -72,12 +73,13 @@ const checkExtra = (bytes: Uint8Array) => {
   }
 }
 
+const pathDecoder = new TextDecoder('utf-8', { fatal: true })
 const decodePath = (bytes: Uint8Array, flags: number) => {
   // 非 UTF-8 编码的 ZIP 文件名仅接受 ASCII，确保附件路径解码准确。
   if (!(flags & 0x800) && bytes.some((byte) => byte > 0x7f)) {
     invalid()
   }
-  const path = new TextDecoder('utf-8', { fatal: true }).decode(bytes).normalize('NFC')
+  const path = pathDecoder.decode(bytes).normalize('NFC')
   if (!path || path.includes('\\') || path.includes('\0') || /^[A-Za-z]:/.test(path)) {
     invalid()
   }
@@ -255,7 +257,10 @@ export type ArchiveEntry = {
  * 按条目在文件中的物理顺序逐条、逐块解压，跳过目录条目。
  * 调用方必须消费完当前条目的数据，再请求下一个条目。
  */
-export async function* readArchive(file: File): AsyncGenerator<ArchiveEntry> {
+export async function* readArchive(
+  file: File,
+  onRead?: (bytes: number, total: number) => Promise<void> | undefined
+): AsyncGenerator<ArchiveEntry> {
   const readBytes = createReader(file)
   const directory = await readDirectory(file.size, readBytes)
   for (const [index, entry] of directory.entries.entries()) {
@@ -274,8 +279,8 @@ export async function* readArchive(file: File): AsyncGenerator<ArchiveEntry> {
         if (written > entry.size) {
           invalid()
         }
-        for (const byte of chunk) {
-          crc = (crc >>> 8) ^ crcTable[(crc ^ byte) & 0xff]
+        for (let index = 0; index < chunk.length; index++) {
+          crc = (crc >>> 8) ^ crcTable[(crc ^ chunk[index]) & 0xff]
         }
         if (chunk.length) {
           pending.push(chunk)
@@ -290,13 +295,17 @@ export async function* readArchive(file: File): AsyncGenerator<ArchiveEntry> {
         if (!inflate) {
           append(chunk)
           yield* pending.splice(0)
-          continue
+        } else {
+          for (let cursor = 0; cursor < chunk.length; cursor += INFLATE_CHUNK_BYTES) {
+            const end = Math.min(cursor + INFLATE_CHUNK_BYTES, chunk.length)
+            inflate.push(chunk.subarray(cursor, end), offset + end === entry.compressedSize)
+            // yield 暂停解压，等待调用方完成异步写入；不缓存整个条目。
+            yield* pending.splice(0)
+          }
         }
-        for (let cursor = 0; cursor < chunk.length; cursor += INFLATE_CHUNK_BYTES) {
-          const end = Math.min(cursor + INFLATE_CHUNK_BYTES, chunk.length)
-          inflate.push(chunk.subarray(cursor, end), offset + end === entry.compressedSize)
-          // yield 暂停解压，等待调用方完成异步写入；不缓存整个条目。
-          yield* pending.splice(0)
+        const repaint = onRead?.(start + offset + chunk.length, directory.offset)
+        if (repaint) {
+          await repaint
         }
       }
       if (inflate && entry.compressedSize === 0) {
@@ -315,13 +324,31 @@ export async function* readArchive(file: File): AsyncGenerator<ArchiveEntry> {
   }
 }
 
-/** 读出整个条目：会话 JSON 需要完整解析，图片需要识别类型后整张保存。 */
-export const readEntry = async (entry: ArchiveEntry): Promise<Blob> => {
+/** 读取图片原件并用头部识别 MIME，分段交给 Blob 存储以限制 JS 缓冲区大小。 */
+export const readEntry = async (
+  entry: ArchiveEntry,
+  imageType: (header: Uint8Array) => string
+): Promise<Blob> => {
+  const header = new Uint8Array(Math.min(entry.size, 16))
   const parts: Blob[] = []
+  let chunks: Uint8Array<ArrayBuffer>[] = []
+  let partSize = 0
+  let headerSize = 0
   for await (const chunk of entry.stream) {
-    parts.push(new Blob([chunk as Uint8Array<ArrayBuffer>]))
+    if (headerSize < header.length) {
+      const prefix = chunk.subarray(0, header.length - headerSize)
+      header.set(prefix, headerSize)
+      headerSize += prefix.length
+    }
+    chunks.push(chunk as Uint8Array<ArrayBuffer>)
+    partSize += chunk.length
+    if (partSize >= READ_AHEAD_BYTES) {
+      parts.push(new Blob(chunks))
+      chunks = []
+      partSize = 0
+    }
   }
-  return new Blob(parts)
+  return new Blob([...parts, ...chunks], { type: imageType(header) })
 }
 
 /** 不需要的条目也要读完，以校验大小与 CRC。 */

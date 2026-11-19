@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { android } from '../../app/android.js'
 import { useTranslate } from '../../i18n/index.js'
 import {
@@ -24,6 +24,8 @@ import { closeMobileSider, useMobileSider } from './mobileSiderState.js'
 import { SessionItem } from './SessionItem.js'
 import { useSessionSearch } from './useSessionSearch.js'
 import styles from './Sider.module.css'
+
+const ROW_OVERSCAN = 8
 
 /** 展开的侧边栏：名称与收起按钮、开启新对话、按时间分组的会话列表、底部设置；移动端放在抽屉里，收起按钮关闭抽屉 */
 export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean }) {
@@ -53,6 +55,39 @@ export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean 
       ? [{ key: 'pinned', label: t('androidPinned'), sessions: pinned }, ...rest]
       : rest
   }, [androidDrawer, matches, now, pinnedIds, t])
+  const listRef = useRef<HTMLDivElement>(null)
+  const [viewport, setViewport] = useState({ top: 0, height: 720 })
+  const rowHeight = androidDrawer ? 48 : mobile ? 44 : 40
+  const positionedGroups = useMemo(() => {
+    let end = 0
+    return groups.map((group, index) => {
+      // 与分组的 margin、padding、标题行高和会话行高相同，保留原生粘性标题。
+      const top = end + (index ? (androidDrawer ? 7 : 16) : 0) + 4 + (mobile ? 29 : 22)
+      end = top + group.sessions.length * rowHeight
+      return { ...group, top }
+    })
+  }, [androidDrawer, groups, mobile, rowHeight])
+  useLayoutEffect(() => {
+    const list = listRef.current
+    if (!list) {
+      return
+    }
+    const update = () => {
+      const top = list.scrollTop
+      const height = list.clientHeight
+      setViewport((previous) =>
+        previous.top === top && previous.height === height ? previous : { top, height }
+      )
+    }
+    const observer = new ResizeObserver(update)
+    observer.observe(list)
+    list.addEventListener('scroll', update, { passive: true })
+    update()
+    return () => {
+      observer.disconnect()
+      list.removeEventListener('scroll', update)
+    }
+  }, [])
   const [deleting, setDeleting] = useState<SessionSummary[]>([])
   const deleteOne = useCallback((session: SessionSummary) => setDeleting([session]), [])
   const [deletePending, setDeletePending] = useState(false)
@@ -167,38 +202,56 @@ export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean 
             onClick={() => setSelecting(true)}
           />
         ) : null}
-        <div className={styles.list}>
-          {groups.map((group) => (
-            <div key={group.key} className={styles.section}>
-              <div className={styles.sectionHeader}>{group.label}</div>
-              {group.sessions.map((session) => (
-                <SessionItem
-                  key={session.id}
-                  session={session}
-                  active={session.id === activeId}
-                  onDelete={deleteOne}
-                  selection={
-                    selecting
-                      ? {
-                          checked: checked.has(session.id),
-                          toggle: () => {
-                            setChecked((previous) => {
-                              const next = new Set(previous)
-                              if (next.has(session.id)) {
-                                next.delete(session.id)
-                              } else {
-                                next.add(session.id)
-                              }
-                              return next
-                            })
-                          },
-                        }
-                      : undefined
-                  }
-                />
-              ))}
-            </div>
-          ))}
+        <div className={styles.list} ref={listRef}>
+          {positionedGroups.map((group) => {
+            const limit = group.sessions.length
+            const start = Math.min(
+              limit,
+              Math.max(0, Math.floor((viewport.top - group.top) / rowHeight) - ROW_OVERSCAN)
+            )
+            const end = Math.min(
+              limit,
+              Math.max(
+                start,
+                Math.ceil((viewport.top + viewport.height - group.top) / rowHeight) + ROW_OVERSCAN
+              )
+            )
+            return (
+              <div key={group.key} className={styles.section}>
+                <div className={styles.sectionHeader}>{group.label}</div>
+                {start ? <div aria-hidden="true" style={{ height: start * rowHeight }} /> : null}
+                {group.sessions.slice(start, end).map((session) => (
+                  <SessionItem
+                    key={session.id}
+                    session={session}
+                    active={session.id === activeId}
+                    onDelete={deleteOne}
+                    selection={
+                      selecting
+                        ? {
+                            checked: checked.has(session.id),
+                            toggle: () => {
+                              setChecked((previous) => {
+                                const next = new Set(previous)
+                                if (next.has(session.id)) {
+                                  next.delete(session.id)
+                                } else {
+                                  next.add(session.id)
+                                }
+                                return next
+                              })
+                            },
+                          }
+                        : undefined
+                    }
+                  />
+                ))}
+                {end < limit ? (
+                  <div aria-hidden="true" style={{ height: (limit - end) * rowHeight }} />
+                ) : null}
+              </div>
+            )
+          })}
         </div>
       </div>
       <div className={styles.bottom}>

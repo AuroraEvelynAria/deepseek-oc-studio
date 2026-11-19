@@ -32,6 +32,9 @@ import styles from './MessageList.module.css'
 /** 距底部小于该值时视为在底部，流式内容增长时跟随 */
 const STICKY_THRESHOLD = 40
 const EMPTY_VERSIONS: MessageVersions = { ids: [], index: -1 }
+const INITIAL_MESSAGES = 4
+const OLDER_MESSAGES = 8
+const OLDER_THRESHOLD = 320
 
 export const MessageList = ({
   session,
@@ -48,7 +51,17 @@ export const MessageList = ({
   const stickyRef = useRef(true)
   const scrollTopRef = useRef(0)
   const restoreScrollRef = useRef<{ messageId: string; top: number } | null>(null)
-  const messages = getVisibleMessages(session)
+  const messages = useMemo(() => getVisibleMessages(session), [session])
+  const latestStart = Math.max(0, messages.length - INITIAL_MESSAGES)
+  const [messageWindow, setMessageWindow] = useState({ sessionId: session.id, start: latestStart })
+  const start =
+    messageWindow.sessionId === session.id
+      ? Math.min(messageWindow.start, latestStart)
+      : latestStart
+  if (messageWindow.sessionId !== session.id || messageWindow.start !== start) {
+    setMessageWindow({ sessionId: session.id, start })
+  }
+  const prependAnchor = useRef<{ element: Element; top: number } | null>(null)
   const [previousVersions, setPreviousVersions] = useState(() =>
     buildMessageVersions(session, new Map())
   )
@@ -82,6 +95,52 @@ export const MessageList = ({
     observer.observe(scroll)
     return () => observer.disconnect()
   }, [isMobile, scrollToBottom])
+
+  // 首屏从最近几条消息开始。向上浏览时逐批补齐，保持原来的阅读位置。
+  useLayoutEffect(() => {
+    const scroll = scrollRef.current
+    const content = contentRef.current
+    if (!scroll || !content) {
+      return
+    }
+    const anchor = prependAnchor.current
+    prependAnchor.current = null
+    if (anchor?.element.isConnected && !stickyRef.current) {
+      scroll.scrollTop += anchor.element.getBoundingClientRect().top - anchor.top
+      scrollTopRef.current = scroll.scrollTop
+    }
+    if (!start) {
+      return
+    }
+
+    let frame = 0
+    const loadOlder = () => {
+      if (frame) {
+        return
+      }
+      frame = requestAnimationFrame(() => {
+        frame = 0
+        const fits = scroll.scrollHeight - scroll.clientHeight <= STICKY_THRESHOLD
+        if (!fits && (stickyRef.current || scroll.scrollTop > OLDER_THRESHOLD)) {
+          return
+        }
+        const element = content.firstElementChild
+        if (element) {
+          prependAnchor.current = { element, top: element.getBoundingClientRect().top }
+        }
+        setMessageWindow({ sessionId: session.id, start: Math.max(0, start - OLDER_MESSAGES) })
+      })
+    }
+    const observer = new ResizeObserver(loadOlder)
+    observer.observe(scroll)
+    observer.observe(content)
+    scroll.addEventListener('scroll', loadOlder, { passive: true })
+    return () => {
+      cancelAnimationFrame(frame)
+      observer.disconnect()
+      scroll.removeEventListener('scroll', loadOlder)
+    }
+  }, [isMobile, session.id, start])
 
   // 切换版本后将选择器留在原位置，避免回答长短变化导致操作区跳出视口。
   useLayoutEffect(() => {
@@ -148,8 +207,9 @@ export const MessageList = ({
       <div ref={isMobile ? undefined : scrollRef} className={styles.container}>
         <div ref={isMobile ? scrollRef : undefined} className={styles.scroll}>
           <div ref={contentRef} className={styles.column}>
-            {messages.map((message, index) =>
-              message.role === 'user' ? (
+            {messages.slice(start).map((message, offset) => {
+              const index = start + offset
+              return message.role === 'user' ? (
                 <UserMessage
                   key={message.id}
                   sessionId={session.id}
@@ -173,7 +233,7 @@ export const MessageList = ({
                   onSelectVersion={selectVersion}
                 />
               )
-            )}
+            })}
           </div>
         </div>
         {footer}

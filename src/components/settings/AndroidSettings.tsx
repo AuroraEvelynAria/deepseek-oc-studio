@@ -329,7 +329,7 @@ const Settings = ({ start }: { start: Page }) => {
         setPopup(null)
         setFile(null)
         setImportStatus({ key: 'historyImporting' })
-        const count = await importHistory(file)
+        const count = await importHistory(file, setImportStatus)
         setImportStatus({
           key: count === 1 ? 'historyImportedOne' : 'historyImported',
           params: { count },

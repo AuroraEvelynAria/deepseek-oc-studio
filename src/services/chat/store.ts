@@ -388,14 +388,22 @@ const waitForIdle = (sessionId?: string) =>
 let replacingHistory = false
 
 /** 先写入暂存。校验通过后暂停会话修改、停止生成，再原子替换历史。 */
-export const replaceHistory = async (write: () => Promise<void>): Promise<number> => {
+export const replaceHistory = async (
+  write: (staging: db.HistoryStaging) => Promise<void>,
+  {
+    onCommit,
+    clearInBackground = false,
+  }: { onCommit?: () => void; clearInBackground?: boolean } = {}
+): Promise<number> => {
   if (replacingHistory) {
     throw new Error('History replacement is already in progress')
   }
   replacingHistory = true
+  let staging: db.HistoryStaging | undefined
   try {
-    await db.clearStaging()
-    await write()
+    staging = await db.beginStaging()
+    await write(staging)
+    onCommit?.()
     set({ importingHistory: true })
     for (const controller of Object.values(get().streaming)) {
       controller.abort()
@@ -406,7 +414,7 @@ export const replaceHistory = async (write: () => Promise<void>): Promise<number
     initTask = undefined
     sessionLoads.clear()
     await waitForIdle()
-    const summaries = await db.commitStaging()
+    const summaries = await staging.commit(clearInBackground)
     sessionAccess.clear()
     unsavedSessions.clear()
     pendingFiles.clear()
@@ -422,7 +430,7 @@ export const replaceHistory = async (write: () => Promise<void>): Promise<number
     })
     return summaries.length
   } catch (error) {
-    await db.clearStaging().catch(db.reportStorageError('clear unfinished history replacement'))
+    await staging?.discard().catch(db.reportStorageError('clear unfinished history replacement'))
     throw error
   } finally {
     replacingHistory = false
