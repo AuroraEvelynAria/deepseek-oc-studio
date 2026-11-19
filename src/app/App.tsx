@@ -119,7 +119,7 @@ export const App = () => {
 
   useEffect(() => {
     if (android) {
-      const size = fontSize === null ? android.systemFontScale() : 1 + (fontSize - 3) * 0.09
+      const size = fontSize === null ? android.systemFontScale() : 1 + (fontSize - 2) * 0.1
       document.documentElement.style.setProperty('--android-chat-font-scale', String(size))
     }
   }, [fontSize])

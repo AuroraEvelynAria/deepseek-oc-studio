@@ -646,7 +646,7 @@ const Settings = ({ start }: { start: Page }) => {
           <div
             className={styles.preview}
             style={{
-              fontSize: `${16 * (fontSize === null ? (android?.systemFontScale() ?? 1) : 1 + (fontSize - 3) * 0.09)}px`,
+              fontSize: `${16 * (fontSize === null ? (android?.systemFontScale() ?? 1) : 1 + (fontSize - 2) * 0.1)}px`,
             }}
           >
             <span>{tr('预览文字大小', 'Preview text size')}</span>
@@ -722,7 +722,7 @@ const Settings = ({ start }: { start: Page }) => {
               <Switch
                 label={follow}
                 checked={fontSize === null}
-                toggle={() => setFontSize(fontSize === null ? 3 : null)}
+                toggle={() => setFontSize(fontSize === null ? 2 : null)}
               />
             }
           />
@@ -731,16 +731,22 @@ const Settings = ({ start }: { start: Page }) => {
             <span>{tr('标准', 'Standard')}</span>
             <strong>A</strong>
           </div>
-          <input
-            type="range"
-            aria-label={labels.font}
-            min="0"
-            max="6"
-            step="1"
-            value={fontSize ?? 3}
-            disabled={fontSize === null}
-            onChange={(event) => setFontSize(event.target.valueAsNumber)}
-          />
+          <div className={styles.rangeWrap}>
+            <div className={styles.rangeTicks} aria-hidden="true">
+              {Array.from({ length: 7 }, (_, step) => (
+                <span key={step} />
+              ))}
+            </div>
+            <input
+              type="range"
+              aria-label={labels.font}
+              min="0"
+              max="6"
+              step="1"
+              value={fontSize ?? 2}
+              onChange={(event) => setFontSize(event.target.valueAsNumber)}
+            />
+          </div>
         </div>
       ) : null}
       {popup === 'locale' ? (

@@ -78,10 +78,10 @@ const resolveLocale = (preference: LocalePreference): Locale =>
 
 const initialFontSize = () => {
   const saved = read(KEYS.fontSize)
-  if (saved === 'system') {
+  if (saved === null || saved === 'system') {
     return null
   }
-  return saved !== null && /^[0-6]$/.test(saved) ? Number(saved) : 3
+  return /^[0-6]$/.test(saved) ? Number(saved) : 2
 }
 
 const initialPinnedSessions = (): string[] => {
