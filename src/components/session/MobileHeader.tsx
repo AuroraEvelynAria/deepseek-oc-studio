@@ -27,26 +27,20 @@ export const MobileHeader = ({ title }: { title?: string }) => {
       />
       {title === undefined && !android ? null : (
         <>
-          <div
-            className={styles.title}
-            data-android-a11y={android && title !== undefined ? 'session-title' : undefined}
-            data-android-a11y-label={android && title !== undefined ? title : undefined}
-            data-android-a11y-label-kind={
-              android && title !== undefined ? 'selfText' : undefined
-            }
-            data-android-a11y-role={android && title !== undefined ? 'textView' : undefined}
-            data-android-a11y-checkable={
-              android && title !== undefined ? 'false' : undefined
-            }
-            data-android-a11y-clickable={
-              android && title !== undefined ? 'false' : undefined
-            }
-            data-android-a11y-focusable={
-              android && title !== undefined ? 'false' : undefined
-            }
-          >
-            <span className={styles.titleText}>{title}</span>
-          </div>
+          {title === undefined ? null : (
+            <div
+              className={styles.title}
+              data-android-a11y={android ? 'session-title' : undefined}
+              data-android-a11y-label={android ? title : undefined}
+              data-android-a11y-label-kind={android ? 'selfText' : undefined}
+              data-android-a11y-role={android ? 'textView' : undefined}
+              data-android-a11y-checkable={android ? 'false' : undefined}
+              data-android-a11y-clickable={android ? 'false' : undefined}
+              data-android-a11y-focusable={android ? 'false' : undefined}
+            >
+              <span className={styles.titleText}>{title}</span>
+            </div>
+          )}
           {android ? (
             <IconButton
               size="xl"
