@@ -36,6 +36,8 @@ export const ReadAloudButton = ({
       data-android-a11y-role={androidA11yKey ? 'button' : undefined}
       data-android-a11y-label-kind={androidA11yKey ? 'none' : undefined}
       data-android-a11y-touch-through={androidA11yKey ? 'true' : undefined}
+      tabIndex={androidA11yKey ? -1 : undefined}
+      onMouseDown={androidA11yKey ? (event) => event.preventDefault() : undefined}
       onClick={() =>
         toggleReadAloud(messageId, text, (error) => showToast(describeReadAloudError(error)))
       }

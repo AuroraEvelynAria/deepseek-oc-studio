@@ -198,6 +198,8 @@ export const AssistantMessage = memo(function AssistantMessage({
                         'data-android-a11y-checkable': 'false',
                         'data-android-a11y-label-kind': 'description',
                         'data-android-a11y-touch-through': 'true',
+                        tabIndex: -1,
+                        onMouseDown: (event) => event.preventDefault(),
                       }
                     : undefined
                 }
