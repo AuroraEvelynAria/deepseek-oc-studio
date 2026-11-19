@@ -14,6 +14,7 @@ type Target = {
   role: 'view' | 'editText' | 'textView'
   extraButton: boolean
   keepInteractive: boolean
+  labelDepth: number
   bounds: [number, number, number, number]
   labelBounds: [number, number, number, number] | null
   labelKind: 'description' | 'text' | 'hint' | 'selfText' | 'none'
@@ -103,6 +104,7 @@ const collectTargets = () => {
               : 'view',
         extraButton: element.dataset.androidA11yExtraButton === 'true',
         keepInteractive: element.dataset.androidA11yKeepInteractive === 'true',
+        labelDepth: element.dataset.androidA11yLabelDepth === '2' ? 2 : 1,
         bounds: physicalBounds(element.getBoundingClientRect(), scale),
         labelBounds: labelBounds ? physicalBounds(labelBounds, scale) : null,
         labelKind: (() => {
@@ -187,6 +189,7 @@ export const startAndroidA11ySync = () => {
       'data-android-a11y',
       'data-android-a11y-checked',
       'data-android-a11y-label',
+      'data-android-a11y-label-depth',
       'disabled',
       'style',
     ],

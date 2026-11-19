@@ -168,6 +168,7 @@ public final class MainActivity extends Activity {
                     labelBounds,
                     item.optString("labelKind"),
                     item.optString("role", "view"),
+                    item.optInt("labelDepth", 1),
                     item.optBoolean("checkable", true),
                     item.optBoolean("clickable", true),
                     item.optBoolean("longClickable"),
@@ -215,6 +216,7 @@ public final class MainActivity extends Activity {
     private final class A11yProxy extends FrameLayout {
         private final String key;
         private View label;
+        private View labelHost;
         private FrameLayout hintContainer;
         private TextView hintText;
         private TextView extraButton;
@@ -313,6 +315,7 @@ public final class MainActivity extends Activity {
         void update(String text, boolean isChecked, boolean isEnabled,
                     int left, int top, int right, int bottom,
                     JSONArray labelBounds, String labelKind, String nextRole,
+                    int nextLabelDepth,
                     boolean nextCheckable, boolean nextClickable,
                     boolean nextLongClickable, boolean nextScrollable,
                     boolean nextFocusable, boolean nextTouchThrough,
@@ -333,10 +336,12 @@ public final class MainActivity extends Activity {
             setLongClickable(nextLongClickable && !nextTouchThrough);
             setFocusable(nextFocusable && !nextTouchThrough);
 
-            String shape = role + "|" + labelKind + "|" + nextExtraButton;
+            String shape = role + "|" + labelKind + "|" + nextExtraButton + "|"
+                + nextLabelDepth;
             if (!shape.equals(childrenShape)) {
                 removeAllViews();
                 label = null;
+                labelHost = null;
                 hintContainer = null;
                 hintText = null;
                 extraButton = null;
@@ -366,7 +371,7 @@ public final class MainActivity extends Activity {
                 if ("hint".equals(labelKind)) {
                     buildHintLabel();
                 } else if (!selfDescription && !selfText) {
-                    buildLabel(textLabel);
+                    buildLabel(textLabel, nextLabelDepth);
                 }
             }
             if (hintText != null) {
@@ -437,7 +442,7 @@ public final class MainActivity extends Activity {
             invalidate();
         }
 
-        private void buildLabel(boolean wantsText) {
+        private void buildLabel(boolean wantsText, int depth) {
             if (wantsText) {
                 TextView content = new TextView(MainActivity.this);
                 content.setTextColor(Color.TRANSPARENT);
@@ -448,7 +453,31 @@ public final class MainActivity extends Activity {
             label.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
             label.setClickable(false);
             label.setFocusable(false);
-            addView(label);
+            if (depth > 1) {
+                FrameLayout container = new FrameLayout(MainActivity.this);
+                container.setImportantForAccessibility(
+                    View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+                container.setClickable(false);
+                container.setFocusable(false);
+                container.setAccessibilityDelegate(new AccessibilityDelegate() {
+                    @Override
+                    public void onInitializeAccessibilityNodeInfo(
+                        View host, AccessibilityNodeInfo info) {
+                        super.onInitializeAccessibilityNodeInfo(host, info);
+                        info.setClassName("android.view.View");
+                        info.setText("");
+                        info.setContentDescription("");
+                        info.setClickable(false);
+                        info.setFocusable(false);
+                    }
+                });
+                container.addView(label);
+                labelHost = container;
+                addView(container);
+            } else {
+                labelHost = label;
+                addView(label);
+            }
         }
 
         private void buildHintLabel() {
@@ -481,13 +510,14 @@ public final class MainActivity extends Activity {
             marker.setFocusable(false);
             hintContainer.addView(marker);
             label = hintContainer;
+            labelHost = hintContainer;
             addView(hintContainer);
         }
 
         @Override
         public void addChildrenForAccessibility(ArrayList<View> children) {
-            if (label != null) {
-                children.add(label);
+            if (labelHost != null) {
+                children.add(labelHost);
             }
             if (extraButton != null) {
                 children.add(extraButton);
