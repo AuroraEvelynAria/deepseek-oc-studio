@@ -573,7 +573,9 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
                   stopReply(sessionId)
                 }}
               >
-                <IconStopFill16 />
+                <span className={styles.androidSendVisual}>
+                  <IconStopFill16 />
+                </span>
               </button>
             ) : showSend ? (
               <button
