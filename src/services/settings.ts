@@ -9,9 +9,15 @@ export type LocalePreference = Locale | 'system'
 /** 主题偏好；默认跟随系统 */
 export type ThemePreference = 'light' | 'dark' | 'system'
 
-/** 本机设置，存 localStorage：API Key、语言、主题、位置、朗读音色、深度思考与智能搜索开关、侧边栏收起状态 */
+type AccountProfile = {
+  username: string
+  avatar: string | null
+}
+
+/** 本机设置，Android 上的 API Key 和账号资料交给原生层存储。 */
 type Settings = {
   apiKey: string | null
+  accountProfile: AccountProfile
   locale: Locale
   localePreference: LocalePreference
   themePreference: ThemePreference
@@ -28,6 +34,7 @@ type Settings = {
 
 const KEYS = {
   apiKey: 'chat-demo:api-key',
+  accountProfile: 'replica:account-profile',
   locale: 'chat-demo:locale',
   location: 'chat-demo:location',
   themePreference: 'chat-demo:theme-preference',
@@ -56,8 +63,26 @@ const write = (key: string, value: string | null) => {
     } else {
       localStorage.setItem(key, value)
     }
+    return true
   } catch {
-    // 存储不可用时只在内存中生效
+    return false
+  }
+}
+
+const initialAccountProfile = (): AccountProfile => {
+  try {
+    const value = android ? android.readAccountProfile() : read(KEYS.accountProfile)
+    const profile = JSON.parse(value ?? 'null') as Partial<AccountProfile> | null
+    return {
+      username: typeof profile?.username === 'string' ? profile.username : '',
+      avatar:
+        typeof profile?.avatar === 'string' &&
+        /^data:image\/(webp|png);base64,/.test(profile.avatar)
+          ? profile.avatar
+          : null,
+    }
+  } catch {
+    return { username: '', avatar: null }
   }
 }
 
@@ -120,6 +145,7 @@ const initialTtsVoice = (): TtsVoice => (read(KEYS.ttsVoice) === 'tide' ? 'tide'
 
 export const useSettings = create<Settings>(() => ({
   apiKey: android ? android.readApiKey() : read(KEYS.apiKey),
+  accountProfile: initialAccountProfile(),
   locale: resolveLocale(initialLocalePreference()),
   localePreference: initialLocalePreference(),
   location: initialLocation(),
@@ -133,6 +159,17 @@ export const useSettings = create<Settings>(() => ({
   foldThinking: read(KEYS.foldThinking) !== 'false',
   pinnedSessions: initialPinnedSessions(),
 }))
+
+export const setAccountProfile = (accountProfile: AccountProfile) => {
+  const { username, avatar } = accountProfile
+  const value = username || avatar ? JSON.stringify(accountProfile) : null
+  const persisted = android ? android.writeAccountProfile(value) : write(KEYS.accountProfile, value)
+  if (!persisted) {
+    return false
+  }
+  useSettings.setState({ accountProfile })
+  return true
+}
 
 export const setPinnedSessions = (pinnedSessions: string[]) => {
   write(KEYS.pinnedSessions, JSON.stringify(pinnedSessions))

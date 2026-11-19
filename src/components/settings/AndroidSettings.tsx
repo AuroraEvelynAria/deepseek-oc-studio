@@ -41,6 +41,8 @@ import { showToast } from '../base/toastState.js'
 import { closeMobileSider } from '../sider/mobileSiderState.js'
 import { ApiKeyConfirm, ApiKeyField, useApiKeyEditor } from './ApiKeyField.js'
 import { createSettingsPageMotion } from './androidSettingsMotion.js'
+import { ProfileIcon } from './ProfileAvatar.js'
+import { ProfileEditor } from './ProfileEditor.js'
 import { closeSettings, useSettingsDialog } from './settingsDialogState.js'
 import styles from './AndroidSettings.module.css'
 
@@ -81,20 +83,6 @@ const parentPage: Record<Page, Page | null> = {
   personalization: 'root',
   agreements: 'root',
 }
-
-const Profile = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-  >
-    <circle cx="12" cy="8" r="4" />
-    <path d="M4.5 21a7.5 6 0 0 1 15 0" />
-  </svg>
-)
 
 const Info = ({ glyph = 'i' }: { glyph?: string }) => <span className={styles.info}>{glyph}</span>
 
@@ -248,7 +236,11 @@ export const AndroidSettings = ({ chatFrame }: { chatFrame: RefObject<HTMLDivEle
   const open = useSettingsDialog((state) => state.open)
   const section = useSettingsDialog((state) => state.section)
   return open ? (
-    <Settings start={section === 'data' ? 'account' : 'root'} chatFrame={chatFrame} key={section} />
+    <Settings
+      start={section === 'general' ? 'root' : 'account'}
+      chatFrame={chatFrame}
+      key={section}
+    />
   ) : null
 }
 
@@ -301,7 +293,7 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
 
   const labels: Record<Page, string> = {
     root: t('settings'),
-    account: tr('账号管理', 'Account management'),
+    account: t('accountManagement'),
     data: tr('数据管理', 'Data management'),
     export: t('exportAllLabel'),
     font: tr('字体大小', 'Text size'),
@@ -526,7 +518,11 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
         {screen === 'root' ? (
           <>
             <Group label={tr('账户', 'Account')}>
-              <Row label={labels.account} icon={<Profile />} onClick={() => openPage('account')} />
+              <Row
+                label={labels.account}
+                icon={<ProfileIcon />}
+                onClick={() => openPage('account')}
+              />
               <Row
                 label={labels.data}
                 icon={<IconDataOutline16 />}
@@ -626,28 +622,33 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
           </>
         ) : null}
         {screen === 'account' ? (
-          <Group label={tr('账户', 'Account')}>
-            <Row
-              label="DeepSeek API Key"
-              icon={<Profile />}
-              value="••••••••"
-              onClick={() => editor.setEditing(true)}
-            />
-            {editor.editing ? (
-              <div className={styles.credentials}>
-                <ApiKeyField editor={editor} />
-                <ApiKeyConfirm editor={editor} />
-              </div>
-            ) : null}
-            <Row
-              label={tr('开放平台', 'Open platform')}
-              href="https://platform.deepseek.com/api_keys"
-            />
-            <Row
-              label={tr('开放平台帮助', 'API help')}
-              href="https://api-docs.deepseek.com/zh-cn/"
-            />
-          </Group>
+          <>
+            <Group>
+              <ProfileEditor />
+            </Group>
+            <Group label={tr('账户', 'Account')}>
+              <Row
+                label="DeepSeek API Key"
+                icon={<ProfileIcon />}
+                value="••••••••"
+                onClick={() => editor.setEditing(true)}
+              />
+              {editor.editing ? (
+                <div className={styles.credentials}>
+                  <ApiKeyField editor={editor} />
+                  <ApiKeyConfirm editor={editor} />
+                </div>
+              ) : null}
+              <Row
+                label={tr('开放平台', 'Open platform')}
+                href="https://platform.deepseek.com/api_keys"
+              />
+              <Row
+                label={tr('开放平台帮助', 'API help')}
+                href="https://api-docs.deepseek.com/zh-cn/"
+              />
+            </Group>
+          </>
         ) : null}
         {screen === 'data' ? (
           <>

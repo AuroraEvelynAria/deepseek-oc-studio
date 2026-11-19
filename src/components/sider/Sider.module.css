@@ -148,16 +148,6 @@
   }
 }
 
-.settingsIcon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  color: var(--dsw-alias-label-primary);
-}
-
 .settingsLabel {
   min-width: 0;
   margin-left: 4px;
@@ -227,16 +217,6 @@
 
   .settings {
     padding: 9px 10px;
-  }
-
-  .settingsIcon {
-    width: auto;
-    height: auto;
-
-    svg {
-      width: 20px;
-      height: 20px;
-    }
   }
 
   .settingsLabel {
@@ -310,15 +290,6 @@
 
   .settings {
     padding: 4px 0;
-  }
-
-  .settingsIcon {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: var(--dsw-alias-bg-skeleton);
-    color: #a2a5a8;
-    overflow: hidden;
   }
 
   .settingsLabel {
