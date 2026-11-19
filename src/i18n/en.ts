@@ -255,6 +255,7 @@ export const en = {
   ttsStop: 'Stop reading',
   ttsUnavailable: 'This answer cannot be read aloud right now',
   ttsFailed: 'Failed to read aloud. Please try again later.',
+  readAloudLowVolume: 'Volume is low. Please turn up your device volume.',
   retry: 'Retry',
   latestReminderLanguage: 'English',
   settingsLocaleZhCN: 'Simplified Chinese',

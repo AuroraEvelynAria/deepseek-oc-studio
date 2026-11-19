@@ -3,7 +3,7 @@ import { useTranslate } from '../../i18n/index.js'
 import { android } from '../../app/android.js'
 import { newChat, useChatStore } from '../../services/chat/store.js'
 import { setAutoRead, useSettings } from '../../services/settings.js'
-import { stopReadAloud } from '../../services/speech/readAloud.js'
+import { stopReadAloud, useReadAloud } from '../../services/speech/readAloud.js'
 import { AndroidSound } from '../base/AndroidIcons.js'
 import { IconButton } from '../base/IconButton.js'
 import { showToast, useToast } from '../base/toastState.js'
@@ -14,6 +14,8 @@ import styles from './MobileHeader.module.css'
 export const MobileHeader = ({ title }: { title?: string }) => {
   const t = useTranslate()
   const autoRead = useSettings((state) => state.autoRead)
+  const readStatus = useReadAloud((state) => state.status)
+  const reading = readStatus !== 'idle'
   const activeId = useChatStore((state) => state.activeId)
   return (
     <div className={styles.header}>
@@ -48,7 +50,8 @@ export const MobileHeader = ({ title }: { title?: string }) => {
               tone="primary"
               role="link"
               className={styles.sound}
-              icon={<AndroidSound muted={!autoRead} />}
+              data-read-state={reading ? readStatus : undefined}
+              icon={<AndroidSound muted={!autoRead && !reading} />}
               aria-label={t('androidAutoRead')}
               aria-pressed={autoRead}
               onClick={() => {

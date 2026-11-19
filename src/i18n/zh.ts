@@ -247,6 +247,7 @@ export const zh = {
   ttsStop: '停止朗读',
   ttsUnavailable: '这条回答暂时无法朗读',
   ttsFailed: '朗读失败，请稍后再试',
+  readAloudLowVolume: '当前音量较低，请调高设备音量',
   retry: '重试',
   latestReminderLanguage: '中文',
   settingsLocaleZhCN: '简体中文',

@@ -11,6 +11,7 @@ import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.Insets;
+import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -808,6 +809,12 @@ public final class MainActivity extends Activity {
 
         @JavascriptInterface
         public float systemFontScale() { return getResources().getConfiguration().fontScale; }
+
+        @JavascriptInterface
+        public int getMusicVolume() {
+            AudioManager audio = getSystemService(AudioManager.class);
+            return audio == null ? -1 : audio.getStreamVolume(AudioManager.STREAM_MUSIC);
+        }
 
         @JavascriptInterface
         public void openAppPermissions() {

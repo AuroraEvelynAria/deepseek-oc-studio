@@ -1,6 +1,7 @@
 type AndroidBridge = {
   statusInset: () => number
   systemFontScale: () => number
+  getMusicVolume?: () => number
   openAppPermissions: () => void
   openSourcePage: (url: string, dark: boolean, closeLabel: string, browserLabel: string) => void
   readApiKey: () => string | null

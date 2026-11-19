@@ -47,8 +47,22 @@
   margin-right: 4.5px;
 
   svg {
-    transform: translateX(-0.5px);
+    width: 20px;
+    height: 20px;
+    transform: translate(-0.9px, 0.9px);
   }
+
+  svg[data-sound-state='active'] {
+    transform: translate(-1.26px, 0.54px) scale(1.08, 1.13);
+  }
+}
+
+[data-android] .sound[data-read-state='loading'] {
+  color: #d4d4d4;
+}
+
+[data-android] .sound[data-read-state='playing'] {
+  color: #426efe;
 }
 
 [data-android] .newChat svg {
