@@ -20,9 +20,9 @@
 
 [data-android] .title {
   flex: 0 1 auto;
-  margin: 0 12px 0 8.5px;
+  margin: 0 12px 0 9.2111px;
   position: relative;
-  top: -1.645px;
+  top: 0.8444px;
   font: 500 15px/17.422px var(--dsw-font-family);
 }
 
