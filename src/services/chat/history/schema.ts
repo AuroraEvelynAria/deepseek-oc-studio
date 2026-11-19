@@ -34,7 +34,7 @@ const number: Read<number> = (value) =>
 const count: Read<number> = (value) =>
   Number.isSafeInteger(value) && (value as number) >= 0 ? (value as number) : invalid()
 
-const time: Read<string> = (value) => {
+const timestamp: Read<number> = (value) => {
   if (typeof value !== 'string') {
     return invalid()
   }
@@ -46,8 +46,13 @@ const time: Read<string> = (value) => {
   const milliseconds = `${match[1]}.${(match[2] ?? '').padEnd(3, '0').slice(0, 3)}Z`
   const parsed = new Date(milliseconds)
   return Number.isFinite(parsed.getTime()) && parsed.toISOString() === milliseconds
-    ? value
+    ? parsed.getTime()
     : invalid()
+}
+
+const time: Read<string> = (value) => {
+  timestamp(value)
+  return value as string
 }
 
 const nullable =
@@ -197,25 +202,36 @@ const fragment: Read<Fragment | null> = (value) => {
   }
 }
 
-const message: Read<ChatMessage> = (value) => {
+export type ParsedMessage = Omit<ChatMessage, 'inserted_at'> & { createdAt: number }
+export type ParsedSessionFile = Omit<SessionFile, 'inserted_at' | 'updated_at' | 'messages'> & {
+  createdAt: number
+  updatedAt: number
+  messages: ParsedMessage[]
+}
+
+const parentId = nullable(count)
+const role = oneOf('USER', 'ASSISTANT')
+const messageStatus = oneOf(
+  'WIP',
+  'FINISHED',
+  'CONTENT_FILTER',
+  'FAILED',
+  'INCOMPLETE',
+  'CONTEXT_LENGTH_EXCEEDED',
+  'TIMEOUT'
+)
+
+const message: Read<ParsedMessage> = (value) => {
   const item = record(value)
   return {
     id: count(item.id),
-    parent_id: nullable(count)(item.parent_id),
-    role: oneOf('USER', 'ASSISTANT')(item.role),
-    status: oneOf(
-      'WIP',
-      'FINISHED',
-      'CONTENT_FILTER',
-      'FAILED',
-      'INCOMPLETE',
-      'CONTEXT_LENGTH_EXCEEDED',
-      'TIMEOUT'
-    )(item.status),
+    parent_id: parentId(item.parent_id),
+    role: role(item.role),
+    status: messageStatus(item.status),
     thinking_enabled: boolean(item.thinking_enabled),
     search_enabled: boolean(item.search_enabled),
     accumulated_token_usage: count(item.accumulated_token_usage),
-    inserted_at: time(item.inserted_at),
+    createdAt: timestamp(item.inserted_at),
     fragments: list(fragment)(item.fragments).filter((item): item is Fragment => item !== null),
   }
 }
@@ -249,15 +265,15 @@ export const readSessionIndex: Read<SessionIndexEntry[]> = list((value) => {
   }
 })
 
-export const readSessionFile: Read<SessionFile> = (value) => {
+export const readSessionFile: Read<ParsedSessionFile> = (value) => {
   const item = record(value)
   return {
     id: sessionId(item.id),
     title: nullable(string)(item.title),
     pinned: false,
     current_message_id: count(item.current_message_id),
-    inserted_at: time(item.inserted_at),
-    updated_at: time(item.updated_at),
+    createdAt: timestamp(item.inserted_at),
+    updatedAt: timestamp(item.updated_at),
     messages: list(message)(item.messages),
   }
 }

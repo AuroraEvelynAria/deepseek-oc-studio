@@ -50,11 +50,11 @@ export const importHistory = (
 ): Promise<number> =>
   enqueueBackup(async () => {
     onProgress?.({ key: 'historyImporting' })
-    const { importArchive } = await import('./history/importArchive.js')
+    const { importOffMainThread } = await import('./history/importOffMainThread.js')
     const started = performance.now()
     return replaceHistory(
-      (staging) =>
-        importArchive(file, staging, (progress) => {
+      (importId) =>
+        importOffMainThread(file, importId, (progress) => {
           if (!onProgress) {
             return
           }
@@ -85,5 +85,5 @@ export const importHistory = (
 /** 确认删除后调用：以空历史原子替换全部本地会话与附件，保留 API Key 和其他设置。 */
 export const clearHistory = (): Promise<void> =>
   enqueueBackup(async () => {
-    await replaceHistory(async () => {})
+    await replaceHistory(async () => [])
   })

@@ -62,16 +62,17 @@ interface ChatDB extends DBSchema {
 
 let dbPromise: Promise<IDBPDatabase<ChatDB>> | null = null
 
-const storedSummary = (session: Session): StoredSessionSummary => ({
-  ...toSessionSummary(session),
-  fileIds: [
-    ...new Set(
-      session.messages.flatMap((message) =>
-        message.role === 'user' ? message.files.map((file) => file.id) : []
-      )
-    ),
-  ],
-})
+const storedSummary = (session: Session): StoredSessionSummary => {
+  const fileIds = new Set<string>()
+  for (const message of session.messages) {
+    if (message.role === 'user') {
+      for (const file of message.files) {
+        fileIds.add(file.id)
+      }
+    }
+  }
+  return { ...toSessionSummary(session), fileIds: [...fileIds] }
+}
 
 const abortTransaction = (tx: { abort(): void }) => {
   try {
@@ -293,28 +294,25 @@ const scheduleRetiredCleanup = () => {
     .catch(reportStorageError('clear replaced history'))
 }
 
-/** 两组存储轮流使用。读写暂存前核对导入标识，其他页面开始导入后，旧任务不能写入或清空新暂存。 */
-export const beginStaging = async () => {
-  const importId = createId()
-  await withHistory('readwrite', async (tx, { slot }) => {
-    await clearSlot(tx, inactiveSlot(slot))
-    await tx.objectStore('historyCleanup').delete('retired')
-    await setHistoryState(tx, { slot, importId })
+// 导入线程只持有标识。每次写入都在事务内核对标识，防止过期任务写入新的暂存区。
+const withStaging = <Result>(
+  importId: string,
+  run: (tx: HistoryTransaction<'readwrite'>, slot: HistoryState['slot']) => Promise<Result>
+) =>
+  withHistory('readwrite', (tx, state) => {
+    if (state.importId !== importId) {
+      throw new Error('History import was replaced by another import')
+    }
+    return run(tx, state.slot)
   })
+
+export const stagingWriter = (importId: string) => {
   const summaries: SessionSummary[] = []
-  const withStaging = <Result>(
-    run: (tx: HistoryTransaction<'readwrite'>, slot: HistoryState['slot']) => Promise<Result>
-  ) =>
-    withHistory('readwrite', (tx, state) => {
-      if (state.importId !== importId) {
-        throw new Error('History import was replaced by another import')
-      }
-      return run(tx, state.slot)
-    })
   return {
+    summaries,
     async addSessions(sessions: Session[]) {
       const batch = sessions.map(storedSummary)
-      await withStaging(async (tx, slot) => {
+      await withStaging(importId, async (tx, slot) => {
         const stores = slots[inactiveSlot(slot)]
         const details = tx.objectStore(stores.sessions)
         const index = tx.objectStore(stores.summaries)
@@ -328,13 +326,13 @@ export const beginStaging = async () => {
       }
     },
     async addFiles(files: StoredFile[]) {
-      await withStaging(async (tx, slot) => {
+      await withStaging(importId, async (tx, slot) => {
         const store = tx.objectStore(slots[inactiveSlot(slot)].files)
         await Promise.all(files.map((file) => store.put(file)))
       })
     },
     async updateFileTypes(ids: string[], types: ReadonlyMap<string, string>) {
-      await withStaging(async (tx, slot) => {
+      await withStaging(importId, async (tx, slot) => {
         const store = tx.objectStore(slots[inactiveSlot(slot)].sessions)
         await Promise.all(
           ids.map(async (id) => {
@@ -362,8 +360,21 @@ export const beginStaging = async () => {
         )
       })
     },
+  }
+}
+
+/** 两组存储轮流使用，界面线程拥有提交和清理权限。 */
+export const beginStaging = async () => {
+  const importId = createId()
+  await withHistory('readwrite', async (tx, { slot }) => {
+    await clearSlot(tx, inactiveSlot(slot))
+    await tx.objectStore('historyCleanup').delete('retired')
+    await setHistoryState(tx, { slot, importId })
+  })
+  return {
+    importId,
     async commit(clearInBackground: boolean) {
-      preferredSlot = await withStaging(async (tx, slot) => {
+      preferredSlot = await withStaging(importId, async (tx, slot) => {
         const next = inactiveSlot(slot)
         if (clearInBackground) {
           await tx.objectStore('historyCleanup').put({ slot, importId }, 'retired')
@@ -376,7 +387,6 @@ export const beginStaging = async () => {
       if (clearInBackground) {
         scheduleRetiredCleanup()
       }
-      return summaries
     },
     async discard() {
       await withHistory('readwrite', async (tx, state) => {

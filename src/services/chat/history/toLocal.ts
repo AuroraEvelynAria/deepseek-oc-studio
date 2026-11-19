@@ -13,16 +13,15 @@ import type {
   UserMessage,
 } from '../types.js'
 import { fail } from './errors.js'
-import type { ChatMessage, FileEntry, Fragment, SessionFile } from './format.js'
+import type { ChatMessage, FileEntry, Fragment } from './format.js'
 import { sessionFilesDir } from './paths.js'
+import type { ParsedMessage, ParsedSessionFile } from './schema.js'
 
 export type LocalSession = {
   session: Session
   /** 本会话目录下应存在的图片：ZIP 条目名 → 文件 ID */
   images: Map<string, string>
 }
-
-const time = (value: string) => Date.parse(value)
 
 /** 链接会渲染成 href，只接受 HTTP / HTTPS。 */
 const isWebUrl = (value: string) => {
@@ -43,13 +42,20 @@ const toFile = (file: FileEntry): FileAttachment => ({
   mimeType: '',
 })
 
-const toUser = (message: ChatMessage): UserMessage => ({
-  id: String(message.id),
-  role: 'user',
-  createdAt: time(message.inserted_at),
-  content: message.fragments.map((item) => (item.type === 'REQUEST' ? item.content : '')).join(''),
-  files: message.fragments.flatMap((item) => (item.type === 'FILE' ? item.files.map(toFile) : [])),
-})
+const toUser = (message: ParsedMessage): UserMessage => {
+  let content = ''
+  const files: FileAttachment[] = []
+  for (const fragment of message.fragments) {
+    if (fragment.type === 'REQUEST') {
+      content += fragment.content
+    } else if (fragment.type === 'FILE') {
+      for (const file of fragment.files) {
+        files.push(toFile(file))
+      }
+    }
+  }
+  return { id: String(message.id), role: 'user', createdAt: message.createdAt, content, files }
+}
 
 /** 归档不带原调用 ID，以消息和片段位置生成稳定 ID，调用与结果共用。 */
 const toolBlocks = (
@@ -107,6 +113,9 @@ const unavailable: WebFetchToolResultBlock['content'] = {
  * - 没有对应展示的片段直接丢弃。
  */
 const toBlocks = (fragments: Fragment[], messageId: string): ReplyBlock[] => {
+  if (fragments.length === 1 && fragments[0].type === 'RESPONSE') {
+    return [{ type: 'text', text: fragments[0].content }]
+  }
   const searchKind = fragments.some(
     (item) => item.type === 'TOOL_OPEN' || item.type === 'TOOL_FIND'
   )
@@ -216,14 +225,14 @@ const replyStatus: Record<ChatMessage['status'], ReplyStatus> = {
   WIP: 'stopped',
 }
 
-const toAssistant = (message: ChatMessage): AssistantMessage => {
+const toAssistant = (message: ParsedMessage): AssistantMessage => {
   const id = String(message.id)
   const blocks = toBlocks(message.fragments, id)
   const refused = message.status === 'CONTENT_FILTER'
   return {
     id,
     role: 'assistant',
-    createdAt: time(message.inserted_at),
+    createdAt: message.createdAt,
     model: null,
     thinking: message.thinking_enabled,
     search: message.search_enabled,
@@ -243,8 +252,12 @@ const toAssistant = (message: ChatMessage): AssistantMessage => {
  * 按 id 排序还原消息树：父消息的 id 必须更小、角色交替、根为提问。
  * current_message_id 到根的路径为当前分支；其余节点默认选中 id 最大的子消息。
  */
-const buildTree = (file: SessionFile): Pick<Session, 'messages' | 'rootMessageId'> => {
-  const sorted = file.messages.toSorted((a, b) => a.id - b.id)
+const buildTree = (file: ParsedSessionFile): Pick<Session, 'messages' | 'rootMessageId'> => {
+  const sorted = file.messages.every(
+    (message, index, messages) => !index || messages[index - 1].id <= message.id
+  )
+    ? file.messages
+    : file.messages.toSorted((a, b) => a.id - b.id)
   const byId = new Map<number, Message>()
   const messages = sorted.map((message) => {
     const { id, parent_id } = message
@@ -279,13 +292,13 @@ const buildTree = (file: SessionFile): Pick<Session, 'messages' | 'rootMessageId
 }
 
 /** 转换单个会话，并列出本会话目录下需要从 ZIP 读取的图片。 */
-export const toLocalSession = (file: SessionFile): LocalSession => {
+export const toLocalSession = (file: ParsedSessionFile): LocalSession => {
   const session: Session = {
     id: file.id,
     // 空标题按「新对话」显示，导出时还原为 null。
     title: file.title ?? '',
-    createdAt: time(file.inserted_at),
-    updatedAt: time(file.updated_at),
+    createdAt: file.createdAt,
+    updatedAt: file.updatedAt,
     ...buildTree(file),
   }
   const images = new Map<string, string>()

@@ -1,9 +1,10 @@
-import { Inflate } from 'fflate'
+import { Inflate, inflateSync } from 'fflate'
 
 const READ_CHUNK_BYTES = 256 * 1024
 const READ_AHEAD_BYTES = 2 * 1024 * 1024
 // 控制每轮同步解压的工作量；输出交给调用方保存后才继续读取。
 const INFLATE_CHUNK_BYTES = 8 * 1024
+const SMALL_ENTRY_BYTES = 256 * 1024
 
 /** ZIP 结构损坏或使用了不支持的特性 */
 export class ArchiveError extends Error {
@@ -32,6 +33,29 @@ const crcTable = Uint32Array.from({ length: 256 }, (_, value) => {
   }
   return crc >>> 0
 })
+
+const nextCrcTable = (table: Uint32Array) =>
+  table.map((value) => crcTable[value & 0xff] ^ (value >>> 8))
+const crcTable1 = nextCrcTable(crcTable)
+const crcTable2 = nextCrcTable(crcTable1)
+const crcTable3 = nextCrcTable(crcTable2)
+
+const updateCrc = (crc: number, bytes: Uint8Array) => {
+  const view = viewOf(bytes)
+  let offset = 0
+  for (; offset + 4 <= bytes.length; offset += 4) {
+    const word = crc ^ view.getUint32(offset, true)
+    crc =
+      crcTable3[word & 0xff] ^
+      crcTable2[(word >>> 8) & 0xff] ^
+      crcTable1[(word >>> 16) & 0xff] ^
+      crcTable[word >>> 24]
+  }
+  for (; offset < bytes.length; offset++) {
+    crc = (crc >>> 8) ^ crcTable[(crc ^ bytes[offset]) & 0xff]
+  }
+  return crc
+}
 
 // 系统文件选择器返回的 File 可能来自 content URI。复用相邻读取，避免逐个 ZIP 字段打开文档。
 const createReader = (file: File) => {
@@ -271,6 +295,31 @@ export async function* readArchive(
     }
     let completed = false
     const stream = async function* (): AsyncGenerator<Uint8Array> {
+      if (
+        entry.method === 8 &&
+        entry.compressedSize > 0 &&
+        entry.compressedSize <= INFLATE_CHUNK_BYTES &&
+        entry.size <= SMALL_ENTRY_BYTES
+      ) {
+        // 多留一字节以识别超出 ZIP 声明大小的输出，避免接受被截断的内容。
+        const compressed = await readBytes(start, entry.compressedSize)
+        const chunk = inflateSync(compressed, { out: new Uint8Array(entry.size + 1) })
+        if (
+          chunk.length !== entry.size ||
+          (updateCrc(0xffffffff, chunk) ^ 0xffffffff) >>> 0 !== entry.crc
+        ) {
+          invalid()
+        }
+        const repaint = onRead?.(start + entry.compressedSize, directory.offset)
+        if (repaint) {
+          await repaint
+        }
+        if (chunk.length) {
+          yield chunk
+        }
+        completed = true
+        return
+      }
       let written = 0
       let crc = 0xffffffff
       const pending: Uint8Array[] = []
@@ -279,9 +328,7 @@ export async function* readArchive(
         if (written > entry.size) {
           invalid()
         }
-        for (let index = 0; index < chunk.length; index++) {
-          crc = (crc >>> 8) ^ crcTable[(crc ^ chunk[index]) & 0xff]
-        }
+        crc = updateCrc(crc, chunk)
         if (chunk.length) {
           pending.push(chunk)
         }

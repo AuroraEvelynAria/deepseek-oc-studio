@@ -1,4 +1,4 @@
-import type { HistoryStaging, StoredFile } from '../db.js'
+import { stagingWriter, type StoredFile } from '../db.js'
 import type { Session } from '../types.js'
 import { BackupError, fail } from './errors.js'
 import type { SessionIndexEntry } from './format.js'
@@ -54,6 +54,11 @@ const readJson = async (entry: ArchiveEntry, decoder: TextDecoder): Promise<unkn
   }
 }
 
+export type ArchiveProgress = { bytes: number; total: number; count: number } | null
+
+/** 第一次读取就失败时，暂存尚未写入，可以从另一个线程重试。 */
+export class ArchiveSourceError extends Error {}
+
 /**
  * 流式导入：manifest → user（不导入）→ 全部会话 JSON → index → 全部图片。
  * 也支持会话与图片交错排列、index 位于末尾的条目顺序。
@@ -61,10 +66,13 @@ const readJson = async (entry: ArchiveEntry, decoder: TextDecoder): Promise<unkn
  */
 export const importArchive = async (
   file: File,
-  staging: HistoryStaging,
-  onProgress: (progress: { bytes: number; total: number; count: number } | null) => void
-): Promise<void> => {
-  if (!(await isZipFile(file))) {
+  importId: string,
+  onProgress: (progress: ArchiveProgress) => void
+) => {
+  const recognized = await isZipFile(file).catch((cause: unknown) => {
+    throw new ArchiveSourceError('Unable to read the history archive', { cause })
+  })
+  if (!recognized) {
     fail('backupUnrecognized')
   }
   const imported = new Set<string>()
@@ -81,13 +89,34 @@ export const importArchive = async (
   let index: SessionIndexEntry[] | undefined
   let currentSessionId: string | undefined
   const decoder = new TextDecoder()
+  const staging = stagingWriter(importId)
+  let pendingSessions: Promise<{ error: unknown } | undefined> | undefined
+
+  const waitForSessions = async () => {
+    const result = await pendingSessions
+    pendingSessions = undefined
+    if (result) {
+      throw result.error
+    }
+  }
 
   const flushSessions = async () => {
-    if (sessions.length) {
-      await staging.addSessions(sessions)
-    }
+    await waitForSessions()
+    const batch = sessions
     sessions = []
+    const bytes = sessionBytes
     sessionBytes = 0
+    if (!batch.length) {
+      return
+    }
+    // 只保留一批待写入数据，解析下一批时让 IndexedDB 完成上一批。
+    pendingSessions = staging.addSessions(batch).then(
+      () => undefined,
+      (error: unknown) => ({ error })
+    )
+    if (bytes > 8 * 1024 * 1024) {
+      await waitForSessions()
+    }
   }
   const flushFiles = async () => {
     if (files.length) {
@@ -104,7 +133,9 @@ export const importArchive = async (
     lastProgress = now
     onProgress({ bytes, total, count: imported.size })
     // 缓存命中时 ZIP 条目之间不一定有浏览器任务边界，留出绘制进度的机会。
-    return new Promise<void>((resolve) => setTimeout(resolve, 0))
+    return typeof document === 'undefined'
+      ? undefined
+      : new Promise<void>((resolve) => setTimeout(resolve, 0))
   }
 
   const saveImage = async (entry: ArchiveEntry, id: string) => {
@@ -135,6 +166,10 @@ export const importArchive = async (
         // 账号信息（已脱敏）不导入；文件可能缺失。
         await skipEntry(entry)
       } else if (sessionId !== null && !index) {
+        if (entry.size > 8 * 1024 * 1024) {
+          await flushSessions()
+          await waitForSessions()
+        }
         const local = toLocalSession(readSessionFile(await readJson(entry, decoder)))
         if (local.session.id !== sessionId || imported.has(sessionId)) {
           fail('backupIncomplete')
@@ -151,7 +186,7 @@ export const importArchive = async (
         }
         sessions.push(local.session)
         sessionBytes += entry.size
-        if (sessions.length >= 128 || sessionBytes >= 4 * 1024 * 1024) {
+        if (sessions.length >= 512 || sessionBytes >= 4 * 1024 * 1024) {
           await flushSessions()
         }
       } else if (path === INDEX_PATH && !index) {
@@ -169,6 +204,7 @@ export const importArchive = async (
       }
     }
   } catch (error) {
+    await pendingSessions
     throw error instanceof ArchiveError ? new BackupError('backupIncomplete') : error
   }
   if (!manifest) {
@@ -182,10 +218,12 @@ export const importArchive = async (
     listed.size !== imported.size ||
     [...imported].some((id) => !listed.has(id))
   ) {
+    await pendingSessions
     fail('backupIncomplete')
   }
   onProgress(null)
   await flushSessions()
+  await waitForSessions()
   await flushFiles()
   if (stored.size) {
     let ids: string[] = []
@@ -203,4 +241,5 @@ export const importArchive = async (
       await staging.updateFileTypes(ids, stored)
     }
   }
+  return staging.summaries
 }

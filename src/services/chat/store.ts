@@ -389,7 +389,7 @@ let replacingHistory = false
 
 /** 先写入暂存。校验通过后暂停会话修改、停止生成，再原子替换历史。 */
 export const replaceHistory = async (
-  write: (staging: db.HistoryStaging) => Promise<void>,
+  write: (importId: string) => Promise<SessionSummary[]>,
   {
     onCommit,
     clearInBackground = false,
@@ -402,7 +402,7 @@ export const replaceHistory = async (
   let staging: db.HistoryStaging | undefined
   try {
     staging = await db.beginStaging()
-    await write(staging)
+    const summaries = await write(staging.importId)
     onCommit?.()
     set({ importingHistory: true })
     for (const controller of Object.values(get().streaming)) {
@@ -414,7 +414,7 @@ export const replaceHistory = async (
     initTask = undefined
     sessionLoads.clear()
     await waitForIdle()
-    const summaries = await staging.commit(clearInBackground)
+    await staging.commit(clearInBackground)
     sessionAccess.clear()
     unsavedSessions.clear()
     pendingFiles.clear()

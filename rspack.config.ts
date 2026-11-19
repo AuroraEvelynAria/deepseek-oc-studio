@@ -49,7 +49,10 @@ export const createConfig = ({
   optimization: {
     splitChunks: {
       // Android 的本地资源拦截不覆盖 worker 内的 importScripts。
-      chunks: (chunk) => !chunk.canBeInitial() && chunk.name !== 'markdown-parser',
+      chunks: (chunk) =>
+        !chunk.canBeInitial() &&
+        chunk.name !== 'markdown-parser' &&
+        chunk.name !== 'history-import',
     },
   },
   resolve: {
