@@ -121,7 +121,11 @@ async function launch() {
 
 const password = 'input[aria-label="DeepSeek API Key"][type=password]'
 const composer = '[data-drawer-open] textarea'
+const chatTitle = `Android compatibility test chat ${Date.now()}`
+const question = 'Android compatibility smoke test'
 const streamReply = 'Android WebView streamed this reply.'
+const openSidebar =
+  'document.querySelector(\'button[aria-label="Open sidebar"], button[aria-label="打开边栏"]\').click()'
 const setInput = (selector, value) => `(() => {
   const input = document.querySelector(${JSON.stringify(selector)});
   Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), 'value').set.call(input, ${JSON.stringify(value)});
@@ -175,7 +179,7 @@ try {
       { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
       { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: ${JSON.stringify(streamReply)} } },
       { type: 'content_block_stop', index: 0 },
-      { type: 'message_delta', delta: { stop_reason: 'end_turn' } },
+      { type: 'message_delta', delta: { stop_reason: 'end_turn', title: ${JSON.stringify(chatTitle)} } },
       { type: 'message_stop' }
     ];
     const sse = (event) => new TextEncoder().encode('event: ' + event.type + '\\ndata: ' + JSON.stringify(event) + '\\n\\n');
@@ -191,6 +195,15 @@ try {
         const stream = new ReadableStream({ start(controller) {
           events.slice(0, 2).forEach(event => controller.enqueue(sse(event)));
           setTimeout(() => {
+            // Simulate a stale cached connection just before the final reply is saved.
+            const transaction = IDBDatabase.prototype.transaction;
+            IDBDatabase.prototype.transaction = function (stores, mode) {
+              if (mode === 'readwrite' && stores.includes('historyState')) {
+                IDBDatabase.prototype.transaction = transaction;
+                this.close();
+              }
+              return transaction.apply(this, arguments);
+            };
             events.slice(2).forEach(event => controller.enqueue(sse(event)));
             controller.close();
           }, 150);
@@ -238,7 +251,7 @@ try {
       Math.abs(geometry.frameHeight - geometry.height) <= 2
     )
   })
-  await evaluate(setInput(composer, 'Android compatibility smoke test'))
+  await evaluate(setInput(composer, question))
   await evaluate(
     'document.querySelector(\'button[aria-label="Send"], button[aria-label="发送"]\').click()'
   )
@@ -252,9 +265,8 @@ try {
     const geometry = await evaluate(layout(composer))
     return geometry?.visible && !geometry.keyboard && Math.abs(geometry.height - chat.height) <= 2
   })
-  await evaluate(
-    'document.querySelector(\'button[aria-label="Open sidebar"], button[aria-label="打开边栏"]\').click()'
-  )
+  assert.equal(await evaluate('!!document.querySelector("main > [role=alert]")'), false)
+  await evaluate(openSidebar)
   await until('The open sidebar should move the conversation to the right', () =>
     evaluate(`(() => {
       const frame = document.querySelector('[data-drawer-open=true]');
@@ -291,8 +303,26 @@ try {
     return geometry?.visible && Math.abs(geometry.frameHeight - geometry.height) <= 2
   })
   assert.equal(await webview.evaluate('DeepSeekAndroid.readApiKey()'), 'android-compat-test')
+  await webview.evaluate(openSidebar)
+  await until('The finished chat should appear in history after a cold start', () =>
+    webview.evaluate(`(() => {
+      const drawer = document.querySelector('[data-android-drawer]');
+      const title = Array.from(drawer.querySelectorAll('div')).find(
+        (node) => node.childElementCount === 0 && node.textContent === ${JSON.stringify(chatTitle)}
+      );
+      if (!title) return false;
+      title.click();
+      return true;
+    })()`)
+  )
+  await until('The question and finished reply should be restored from local history', () =>
+    webview.evaluate(`(() => {
+      const text = document.querySelector('main').innerText;
+      return text.includes(${JSON.stringify(question)}) && text.includes(${JSON.stringify(streamReply)});
+    })()`)
+  )
   assert.deepEqual(webview.exceptions, [])
-  console.log('PASS cold start with the key persisted through Android Keystore')
+  console.log('PASS cold start with the API key and completed conversation persisted locally')
 } catch (error) {
   if (webview?.exceptions.length) console.error(webview.exceptions)
   throw error

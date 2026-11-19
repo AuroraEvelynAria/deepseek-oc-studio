@@ -83,8 +83,16 @@ const abortTransaction = (tx: { abort(): void }) => {
 }
 
 // 每个操作拿到连接后立即创建事务；IndexedDB 按创建顺序执行范围重叠的事务，读取总能看到之前发起的写入。
-const getDB = () =>
-  (dbPromise ??= openDB<ChatDB>('chat-demo', DB_VERSION, {
+const getDB = () => {
+  if (dbPromise) {
+    return dbPromise
+  }
+  const invalidate = () => {
+    if (dbPromise === opening) {
+      dbPromise = null
+    }
+  }
+  const opening = openDB<ChatDB>('chat-demo', DB_VERSION, {
     upgrade(db, _oldVersion, _newVersion, tx) {
       // 现有历史继续使用原来的存储，只有完成一次导入后才切换。
       for (const name of ['sessions', 'files', 'sessionsStaging', 'filesStaging'] as const) {
@@ -108,21 +116,39 @@ const getDB = () =>
       }
     },
     blocking() {
-      void dbPromise?.then((db) => db.close())
-      dbPromise = null
+      invalidate()
+      void opening.then((db) => db.close())
     },
+    terminated: invalidate,
   }).catch((error: unknown) => {
     // 打开失败后允许界面重试，避免一直复用已拒绝的 Promise。
-    dbPromise = null
+    invalidate()
     throw error
-  }))
+  })
+  dbPromise = opening
+  return opening
+}
 
 const transact = async <Mode extends 'readonly' | 'readwrite', Result>(
   scope: readonly HistoryStore[],
   mode: Mode,
   run: (tx: HistoryTransaction<Mode>) => Promise<Result>
 ): Promise<Result> => {
-  const tx = (await getDB()).transaction(scope, mode)
+  const connection = getDB()
+  const db = await connection
+  let tx: HistoryTransaction<Mode>
+  try {
+    tx = db.transaction(scope, mode)
+  } catch (error) {
+    if (!(error instanceof DOMException) || error.name !== 'InvalidStateError') {
+      throw error
+    }
+    // WebView 可能先关闭连接，再通知 close。事务尚未开始，可以安全重开一次。
+    if (dbPromise === connection) {
+      dbPromise = null
+    }
+    tx = (await getDB()).transaction(scope, mode)
+  }
   const [result] = await Promise.all([
     (async () => {
       try {
