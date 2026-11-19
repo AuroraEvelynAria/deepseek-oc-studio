@@ -20,6 +20,7 @@ export const zh = {
   androidAutoRead: '自动朗读',
   androidAutoReadEnabled: '已开启自动朗读',
   androidAutoReadDisabled: '已关闭自动朗读',
+  jumpToBottom: '转至底部',
   androidAlreadyInNewChat: '已经在新对话中',
   androidCamera: '拍照',
   androidGallery: '相册',
