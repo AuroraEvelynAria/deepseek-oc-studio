@@ -512,21 +512,26 @@
   padding-inline: 17px;
 }
 
+[data-android] .mirror {
+  max-height: calc(var(--line-height) * 7);
+}
+
 [data-android] .androidTextarea {
   top: 26.6811px;
   right: 16.09px;
   left: 14.58px;
   width: auto;
-  height: 16.9px;
+  height: calc(100% - 26.6811px);
   min-height: 0;
   padding: 0;
   line-height: 24px;
-  overflow: visible;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 [data-android][data-keyboard] .androidTextarea {
   top: 23.8311px;
-  height: 17.25px;
+  height: calc(100% - 23.8311px);
 }
 
 [data-android] .androidTextareaHidden {
