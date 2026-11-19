@@ -9,6 +9,7 @@ type AndroidBridge = {
   readApiKey: () => string | null
   writeApiKey: (value: string | null) => boolean
   setDarkBars: (dark: boolean) => void
+  setImageViewerFullscreen: (fullscreen: boolean) => void
   requestRecentPhotos: () => void
   prefetchRecentPhotos: () => void
   requestHistoryExport: (name: string) => void

@@ -20,6 +20,7 @@ export const AndroidDraftAttachments = ({
   canSend,
   onRetry,
   onRemove,
+  onPreview,
   onSuggestion,
 }: {
   items: DraftAttachment[]
@@ -28,6 +29,7 @@ export const AndroidDraftAttachments = ({
   canSend: boolean
   onRetry: (id: string) => void
   onRemove: (id: string) => void
+  onPreview: (id: string) => void
   onSuggestion: (text: string) => void
 }) => {
   const t = useTranslate()
@@ -82,6 +84,7 @@ export const AndroidDraftAttachments = ({
           exiting={items.length === 0}
           onRetry={onRetry}
           onRemove={onRemove}
+          onPreview={onPreview}
         />
         <div className={styles.quickSuggestions} data-open={showSuggestions}>
           <div className={styles.quickSuggestionsClip}>

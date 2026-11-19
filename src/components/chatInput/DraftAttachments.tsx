@@ -15,11 +15,13 @@ export const DraftAttachments = memo(function DraftAttachments({
   items,
   onRetry,
   onRemove,
+  onPreview,
   exiting = false,
 }: {
   items: DraftAttachment[]
   onRetry: (id: string) => void
   onRemove: (id: string) => void
+  onPreview?: (id: string) => void
   exiting?: boolean
 }) {
   if (items.length === 0) {
@@ -34,6 +36,7 @@ export const DraftAttachments = memo(function DraftAttachments({
           exiting={exiting}
           onRetry={() => onRetry(item.id)}
           onRemove={() => onRemove(item.id)}
+          onPreview={!exiting && onPreview ? () => onPreview(item.id) : undefined}
         />
       ))}
     </div>
@@ -46,11 +49,13 @@ const AttachmentItem = ({
   exiting,
   onRetry,
   onRemove,
+  onPreview,
 }: {
   item: DraftAttachment
   exiting: boolean
   onRetry: () => void
   onRemove: () => void
+  onPreview?: () => void
 }) => {
   const t = useTranslate()
   const task = useUploads((state) => state.tasks[item.id] ?? UPLOADING)
@@ -68,7 +73,18 @@ const AttachmentItem = ({
       className={clsx(styles.attachment, failed && styles.attachmentFailed)}
       title={error ?? item.file.name}
     >
-      <img src={item.previewUrl} alt={item.file.name} />
+      {onPreview ? (
+        <button
+          type="button"
+          className={styles.previewImage}
+          aria-label={t('androidPreviewDraftImage', { name: item.file.name })}
+          onClick={onPreview}
+        >
+          <img src={item.previewUrl} alt="" />
+        </button>
+      ) : (
+        <img src={item.previewUrl} alt={item.file.name} />
+      )}
       {status === 'uploading' ? <div className={styles.uploading} /> : null}
       {failed && retry ? (
         <Tooltip content={retryLabel}>

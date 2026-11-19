@@ -68,5 +68,26 @@ final class SystemBars {
         window.setNavigationBarContrastEnforced(false);
     }
 
+    @SuppressWarnings("deprecation") // Android 10 uses immersive system UI flags.
+    static void setFullscreen(Window window, boolean fullscreen) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            WindowInsetsController controller = window.getInsetsController();
+            if (fullscreen) {
+                controller.setSystemBarsBehavior(
+                    WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                controller.hide(WindowInsets.Type.systemBars());
+            } else {
+                controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_DEFAULT);
+                controller.show(WindowInsets.Type.systemBars());
+            }
+        } else {
+            View decor = window.getDecorView();
+            int flags = View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
+            int visibility = decor.getSystemUiVisibility();
+            decor.setSystemUiVisibility(fullscreen ? visibility | flags : visibility & ~flags);
+        }
+    }
+
     private SystemBars() {}
 }

@@ -4,7 +4,7 @@ export const MANY_IMAGES_MAX_EDGE = 4096
 export const MANY_IMAGES_COUNT = 15
 
 /** 官方 Android App 在 RGBA 位图超过 30 MiB 时将宽高各减半一次。 */
-const APP_DOWNSAMPLE_PIXELS = (30 * 1024 * 1024) / 4
+export const APP_DOWNSAMPLE_PIXELS = (30 * 1024 * 1024) / 4
 
 export type UploadedImage = { maxEdge: number; converted: boolean }
 

@@ -3,7 +3,7 @@ import type { TranslationMessage } from '../../i18n/index.js'
 import { createId } from '../../utils/id.js'
 import {
   cancelUpload,
-  isImage,
+  isAttachmentImage,
   resolveMimeType,
   uploadAttachment,
   validateFiles,
@@ -74,7 +74,7 @@ export const addDraftFiles = (
     return error
   }
   const added = files.map((file): DraftAttachment => {
-    const image = isImage(resolveMimeType(file))
+    const image = isAttachmentImage(file)
     return {
       id: createId(),
       file,
@@ -97,6 +97,37 @@ export const retryDraftAttachment = (
   if (attachment) {
     upload(attachment, apiKey)
   }
+}
+
+export const replaceDraftImage = (
+  sessionId: string | null,
+  attachmentId: string,
+  file: File,
+  apiKey: string
+): TranslationMessage | null => {
+  const { attachments } = getDraft(sessionId)
+  const original = attachments.find((item) => item.id === attachmentId && item.isImage)
+  if (!original) {
+    return null
+  }
+  const error = validateFiles([file], attachments.length - 1)
+  if (error) {
+    return error
+  }
+  // 新 ID 将裁剪结果与原件的上传任务和服务端文件标识隔离。
+  const replacement: DraftAttachment = {
+    id: createId(),
+    file,
+    isImage: true,
+    previewUrl: URL.createObjectURL(file),
+  }
+  updateDraft(sessionId, (draft) => ({
+    ...draft,
+    attachments: draft.attachments.map((item) => (item === original ? replacement : item)),
+  }))
+  releaseAttachment(original, true)
+  upload(replacement, apiKey)
+  return null
 }
 
 /** 发送按钮和实际提交共用规则：有内容，且全部附件已上传成功。 */

@@ -14,12 +14,20 @@ import java.io.IOException;
 
 public final class CaptureProvider extends ContentProvider {
     static Uri create(Context context) throws IOException {
+        return create(context, ".jpg");
+    }
+
+    static Uri createPng(Context context) throws IOException {
+        return create(context, ".png");
+    }
+
+    private static Uri create(Context context, String extension) throws IOException {
         File folder = directory(context);
         File[] old = folder.listFiles(file -> file.lastModified() < System.currentTimeMillis() - 86_400_000);
         if (old != null) {
             for (File file : old) file.delete();
         }
-        File photo = File.createTempFile("photo-", ".jpg", folder);
+        File photo = File.createTempFile("photo-", extension, folder);
         return new Uri.Builder().scheme("content").authority(context.getPackageName() + ".capture")
             .appendPath(photo.getName()).build();
     }
@@ -32,7 +40,7 @@ public final class CaptureProvider extends ContentProvider {
 
     private File file(Uri uri) throws FileNotFoundException {
         String name = uri.getLastPathSegment();
-        if (uri.getPathSegments().size() != 1 || name == null || !name.matches("photo-[0-9]+\\.jpg")) {
+        if (uri.getPathSegments().size() != 1 || name == null || !name.matches("photo-[0-9]+\\.(jpg|png)")) {
             throw new FileNotFoundException();
         }
         File result = new File(directory(getContext()), name);
@@ -42,7 +50,10 @@ public final class CaptureProvider extends ContentProvider {
 
     @Override public boolean onCreate() { return true; }
 
-    @Override public String getType(Uri uri) { return "image/jpeg"; }
+    @Override public String getType(Uri uri) {
+        String name = uri.getLastPathSegment();
+        return name != null && name.endsWith(".png") ? "image/png" : "image/jpeg";
+    }
 
     @Override
     public ParcelFileDescriptor openFile(Uri uri, String mode) throws FileNotFoundException {

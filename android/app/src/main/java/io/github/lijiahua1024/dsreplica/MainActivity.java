@@ -28,6 +28,7 @@ import android.widget.FrameLayout;
 import android.window.OnBackInvokedDispatcher;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -45,6 +46,7 @@ public final class MainActivity extends Activity {
     private FrameLayout frame;
     private ApiKeyStore keys;
     private ValueCallback<Uri[]> fileCallback;
+    private boolean choosingPhotos;
     private boolean keyboardVisible;
     private volatile float statusInset;
     private volatile float buttonNavigationInset;
@@ -192,6 +194,7 @@ public final class MainActivity extends Activity {
                                          FileChooserParams params) {
             if (fileCallback != null) fileCallback.onReceiveValue(null);
             fileCallback = callback;
+            choosingPhotos = false;
             if (params.isCaptureEnabled()) {
                 if (granted(Manifest.permission.CAMERA)) {
                     launchCamera();
@@ -210,7 +213,8 @@ public final class MainActivity extends Activity {
                 .distinct().toArray(String[]::new);
             intent.setType(mimeTypes.length == 1 ? mimeTypes[0] : "*/*");
             if (mimeTypes.length > 1) intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
-            if (Build.VERSION.SDK_INT >= 33 && Arrays.equals(mimeTypes, new String[]{"image/*"})) {
+            choosingPhotos = Arrays.equals(mimeTypes, new String[]{"image/*"});
+            if (Build.VERSION.SDK_INT >= 33 && choosingPhotos) {
                 Intent picker = new Intent(MediaStore.ACTION_PICK_IMAGES).setType("image/*");
                 if (multiple) {
                     picker.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, 10);
@@ -290,6 +294,29 @@ public final class MainActivity extends Activity {
         callback.onReceiveValue(files);
     }
 
+    private void completePhotoChooser(Uri[] files) {
+        ValueCallback<Uri[]> callback = fileCallback;
+        photoExecutor.execute(() -> {
+            for (int index = 0; index < files.length; index++) {
+                Uri uri = files[index];
+                try {
+                    if (!SelectedPhoto.isHeif(getContentResolver().getType(uri))) continue;
+                    Uri decoded = CaptureProvider.createPng(this);
+                    try (OutputStream output = getContentResolver().openOutputStream(decoded)) {
+                        if (output == null) continue;
+                        SelectedPhoto.writePng(getContentResolver(), uri, output);
+                    }
+                    files[index] = decoded;
+                } catch (IOException | SecurityException ignored) {
+                    // The original document can still be handled by normal attachment validation.
+                }
+            }
+            runOnUiThread(() -> {
+                if (!isDestroyed() && fileCallback == callback) completeFileChooser(files);
+            });
+        });
+    }
+
     @Override
     public void onRequestPermissionsResult(int code, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(code, permissions, results);
@@ -328,7 +355,11 @@ public final class MainActivity extends Activity {
                 }
             }
             capture = null;
-            completeFileChooser(files);
+            if (choosingPhotos && files != null) {
+                completePhotoChooser(files);
+            } else {
+                completeFileChooser(files);
+            }
         }
     }
 
@@ -396,6 +427,11 @@ public final class MainActivity extends Activity {
 
         @JavascriptInterface
         public void setDarkBars(boolean dark) { runOnUiThread(() -> setBars(dark)); }
+
+        @JavascriptInterface
+        public void setImageViewerFullscreen(boolean fullscreen) {
+            runOnUiThread(() -> SystemBars.setFullscreen(getWindow(), fullscreen));
+        }
 
         @JavascriptInterface
         public void requestRecentPhotos() { runOnUiThread(() -> showRecentPhotos()); }

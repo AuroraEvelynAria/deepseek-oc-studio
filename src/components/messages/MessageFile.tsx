@@ -1,16 +1,18 @@
 import clsx from 'clsx'
 import { useEffect, useState } from 'react'
-import { android, saveAndroidImage } from '../../app/android.js'
+import { android } from '../../app/android.js'
 import { useTranslate } from '../../i18n/index.js'
 import { useUploads } from '../../services/attachments.js'
 import { loadFile } from '../../services/chat/db.js'
+import { addDraftFiles } from '../../services/chat/drafts.js'
+import { useChatStore } from '../../services/chat/store.js'
 import type { FileAttachment } from '../../services/chat/types.js'
-import { Button } from '../base/Button.js'
-import { IconDownloadOutline16, IconPhotoErrorFill20, IconRefreshOutline16 } from '../base/icons.js'
-import { Modal } from '../base/Modal.js'
+import { useSettings } from '../../services/settings.js'
+import { IconPhotoErrorFill20, IconRefreshOutline16 } from '../base/icons.js'
 import { Tooltip } from '../base/Tooltip.js'
-import { showToast } from '../base/toastState.js'
+import { AndroidImageViewer } from '../files/AndroidImageViewer.js'
 import { FileCard } from '../files/FileCard.js'
+import { ensureApiKey } from '../settings/settingsDialogState.js'
 import styles from './MessageFile.module.css'
 
 type FileSource = { blob: Blob; url: string }
@@ -37,53 +39,6 @@ const useFileSource = (id: string) => {
   return fileSource?.id === id ? fileSource.source : undefined
 }
 
-const ImageViewer = ({
-  name,
-  source,
-  onClose,
-}: {
-  name: string
-  source: FileSource
-  onClose: () => void
-}) => {
-  const t = useTranslate()
-  const [saving, setSaving] = useState(false)
-  useEffect(() => {
-    android?.setDarkBars(true)
-    return () => android?.setDarkBars(document.body.hasAttribute('data-ds-dark-theme'))
-  }, [])
-
-  const save = async () => {
-    setSaving(true)
-    try {
-      await saveAndroidImage(name, source.blob)
-      showToast({ key: 'androidImageSaved' })
-    } catch {
-      showToast({ key: 'androidImageSaveFailed', type: 'error' })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <Modal
-      title={name}
-      closable
-      onClose={onClose}
-      className={styles.viewer}
-      mainClassName={styles.viewerImage}
-      footer={
-        <Button disabled={saving} onClick={() => void save()}>
-          <IconDownloadOutline16 />
-          {t('androidSaveImage')}
-        </Button>
-      }
-    >
-      <img src={source.url} alt={name} />
-    </Modal>
-  )
-}
-
 /** 历史或失效附件的补传状态：只在还没有 serverId 时显示 */
 const useUploadState = (file: FileAttachment) =>
   useUploads((state) => {
@@ -101,9 +56,11 @@ const useUploadState = (file: FileAttachment) =>
  * - 文件：显示文件卡片。
  */
 export const MessageFile = ({
+  sessionId,
   file,
   onRetry,
 }: {
+  sessionId: string
   file: FileAttachment
   /** 本条消息补传失败且可重试时提供 */
   onRetry: (() => void) | null
@@ -204,7 +161,31 @@ export const MessageFile = ({
             {preview}
           </button>
           {viewedUrl === source.url ? (
-            <ImageViewer name={file.name} source={source} onClose={() => setViewedUrl(undefined)} />
+            <AndroidImageViewer
+              blob={source.blob}
+              name={file.name}
+              source={source.url}
+              canDownload
+              onClose={() => setViewedUrl(undefined)}
+              onConfirm={(cropped) => {
+                if (useChatStore.getState().importingHistory || !ensureApiKey()) {
+                  setViewedUrl(undefined)
+                  return null
+                }
+                const error = addDraftFiles(
+                  sessionId,
+                  [cropped],
+                  useSettings.getState().apiKey ?? ''
+                )
+                if (!error) {
+                  setViewedUrl(undefined)
+                  window.dispatchEvent(
+                    new CustomEvent('android-focus-composer', { detail: sessionId })
+                  )
+                }
+                return error
+              }}
+            />
           ) : null}
         </>
       )

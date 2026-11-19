@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { android } from '../app/android.js'
 import type { LinkedMessage, TranslationMessage } from '../i18n/index.js'
 import { ApiError, uploadFile } from './api/client.js'
 import { classifyApiError, getUploadErrorInfo, isRetryableApiError } from './api/errors.js'
@@ -39,7 +40,7 @@ export const getUploadPurpose = (name: string, isImage: boolean): FilePurpose | 
 
 /** 文件允许的最大体积（MB），按上传时的 purpose 区分 */
 const getMaxSizeMB = (file: File) =>
-  getUploadPurpose(file.name, isImage(resolveMimeType(file))) === 'user_data'
+  getUploadPurpose(file.name, isAttachmentImage(file)) === 'user_data'
     ? MAX_USER_DATA_SIZE_MB
     : MAX_SIZE_MB
 
@@ -286,6 +287,9 @@ export const resolveMimeType = (file: File) =>
     : (MIME_BY_EXT[getFileExt(file.name)] ?? file.type)
 
 export const isImage = (mimeType: string) => mimeType.startsWith('image/')
+
+export const isAttachmentImage = (file: File) =>
+  isImage(resolveMimeType(file)) && !(android && getFileExt(file.name) === 'avif')
 
 /** 文件扩展名（大写），用于卡片元信息 */
 export const getExtension = (name: string) => {

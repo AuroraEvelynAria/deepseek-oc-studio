@@ -83,6 +83,11 @@ final class RecentPhotos {
                 }
                 return image("image/jpeg", new ByteArrayInputStream(output.toByteArray()));
             }
+            if (SelectedPhoto.isHeif(photo.type())) {
+                ByteArrayOutputStream output = new ByteArrayOutputStream();
+                SelectedPhoto.writePng(resolver, photo.uri(), output);
+                return image("image/png", new ByteArrayInputStream(output.toByteArray()));
+            }
             InputStream input = resolver.openInputStream(photo.uri());
             return input == null ? null : image(photo.type(), input);
         } catch (IOException | SecurityException ignored) {

@@ -86,7 +86,11 @@ export const AndroidAttachments = ({
       }
       const blob = await response.blob()
       if (!controller.signal.aborted) {
-        onRecentFile(new File([blob], photo.name, { type: photo.type }), photo.id)
+        const name =
+          blob.type === 'image/png' && photo.type !== 'image/png'
+            ? photo.name.replace(/\.[^.]+$/, '') + '.png'
+            : photo.name
+        onRecentFile(new File([blob], name, { type: blob.type || photo.type }), photo.id)
       }
     } catch {
       if (!controller.signal.aborted) {

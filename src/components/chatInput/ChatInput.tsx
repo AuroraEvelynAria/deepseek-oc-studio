@@ -18,6 +18,7 @@ import {
   getDraft,
   prepareDraftMessage,
   removeDraftAttachment,
+  replaceDraftImage,
   retryDraftAttachment,
   setDraftText,
   useDrafts,
@@ -36,6 +37,7 @@ import { VoiceButton } from './VoiceButton.js'
 import { Spectrum } from './Spectrum.js'
 import { AndroidAttachments } from './AndroidAttachments.js'
 import { AndroidDraftAttachments } from './AndroidDraftAttachments.js'
+import { AndroidImageViewer } from '../files/AndroidImageViewer.js'
 import { AndroidVoiceOverlay } from './AndroidVoiceOverlay.js'
 import { useHoldToTalk } from './useHoldToTalk.js'
 import { useTranslate } from '../../i18n/index.js'
@@ -73,6 +75,8 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   const togglesRef = useRef<HTMLDivElement>(null)
   const voiceMode = useVoiceMode((state) => state.enabled)
   const [showAttachments, setShowAttachments] = useState(false)
+  const [previewId, setPreviewId] = useState<string>()
+  const preview = attachments.find((item) => item.id === previewId)
   const [typing, setTyping] = useState(false)
   const sendSpoken = useRef(false)
 
@@ -161,6 +165,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
       useChatStore.subscribe((state, previous) => {
         if (state.importingHistory && !previous.importingHistory) {
           cancelVoice()
+          setPreviewId(undefined)
         }
       }),
     [cancelVoice]
@@ -169,6 +174,25 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   // 移动端录音时用频谱替代输入框内容
   const recording = voice.status === 'recording'
   const voiceOverlayActive = recording || voice.status === 'transcribing'
+
+  const focusComposer = useCallback(() => {
+    setShowAttachments(false)
+    useVoiceMode.setState({ enabled: false })
+    requestAnimationFrame(() => textareaRef.current?.focus({ preventScroll: true }))
+  }, [])
+
+  useEffect(() => {
+    if (!android) {
+      return
+    }
+    const onFocusRequest = (event: Event) => {
+      if ((event as CustomEvent<string>).detail === sessionId) {
+        focusComposer()
+      }
+    }
+    window.addEventListener('android-focus-composer', onFocusRequest)
+    return () => window.removeEventListener('android-focus-composer', onFocusRequest)
+  }, [focusComposer, sessionId])
 
   // 排队、上传中或上传失败的附件都留在输入框，全部上传成功后才能发送
   const canSend = !importingHistory && !streaming && voice.status === 'idle' && draftReady
@@ -233,6 +257,10 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
             canSend={canSend}
             onRetry={retryFile}
             onRemove={removeFile}
+            onPreview={(id) => {
+              textareaRef.current?.blur()
+              setPreviewId(id)
+            }}
             onSuggestion={(message) => {
               if (!canSend || getDraft(sessionId).text.trim()) {
                 return
@@ -471,6 +499,28 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
             level={voice.getLevel}
           />
         </>
+      ) : null}
+      {android && !importingHistory && preview?.previewUrl ? (
+        <AndroidImageViewer
+          key={preview.id}
+          blob={preview.file}
+          name={preview.file.name}
+          source={preview.previewUrl}
+          onClose={() => setPreviewId(undefined)}
+          onConfirm={(file) => {
+            const error = replaceDraftImage(
+              sessionId,
+              preview.id,
+              file,
+              useSettings.getState().apiKey ?? ''
+            )
+            if (!error) {
+              setPreviewId(undefined)
+              focusComposer()
+            }
+            return error
+          }}
+        />
       ) : null}
     </div>
   )
