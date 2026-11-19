@@ -1,4 +1,5 @@
 import { Inflate, inflateSync } from 'fflate'
+import { readBlobBuffer } from '../../../utils/blob.js'
 
 const READ_CHUNK_BYTES = 256 * 1024
 const READ_AHEAD_BYTES = 2 * 1024 * 1024
@@ -20,7 +21,7 @@ const invalid = (): never => {
 
 /** 本地文件头签名 PK\x03\x04，用于在解析前区分 ZIP 与其他文件。 */
 export const isZipFile = async (file: File) => {
-  const bytes = new Uint8Array(await file.slice(0, 4).arrayBuffer())
+  const bytes = new Uint8Array(await readBlobBuffer(file.slice(0, 4)))
   return bytes.length === 4 && bytes.every((byte, index) => byte === [0x50, 0x4b, 3, 4][index])
 }
 
@@ -70,7 +71,7 @@ const createReader = (file: File) => {
     }
     if (start < offset || start + length > offset + buffer.length) {
       const end = Math.min(file.size, start + Math.max(READ_AHEAD_BYTES, length))
-      buffer = new Uint8Array(await file.slice(start, end).arrayBuffer())
+      buffer = new Uint8Array(await readBlobBuffer(file.slice(start, end)))
       if (buffer.length !== end - start) {
         invalid()
       }

@@ -5,7 +5,7 @@
 尽可能复刻 DeepSeek 官方手机端（Android）交互与视觉体验的客户端
 
 [![Release](https://img.shields.io/github/v/release/LiJiaHua1024/deepseek-app-replica?style=flat-square&color=2563eb&label=Release)](https://github.com/LiJiaHua1024/deepseek-app-replica/releases/latest)
-[![Platform](https://img.shields.io/badge/Platform-Android%2011%2B-3DDC84?style=flat-square&logo=android&logoColor=white)](https://github.com/LiJiaHua1024/deepseek-app-replica)
+[![Platform](https://img.shields.io/badge/Platform-Android%2010%2B-3DDC84?style=flat-square&logo=android&logoColor=white)](https://github.com/LiJiaHua1024/deepseek-app-replica)
 [![License](https://img.shields.io/badge/License-GPL%20v3-blue?style=flat-square)](LICENSE)
 
 <br />
@@ -22,7 +22,7 @@
 
 请前往 [GitHub Releases](https://github.com/LiJiaHua1024/deepseek-app-replica/releases) 页面获取最新发布的 APK 文件，安装至 Android 设备即可使用。
 
-> 当前源码构建的 APK 支持 Android 11（API 级别 30）及以上版本。已在 Android 11 模拟器的预装 WebView 83 上验证。
+> 当前源码构建的 APK 支持 Android 10（API 级别 29）及以上版本。兼容测试覆盖 Android 10 的预装 WebView 74、升级后的 WebView 83，以及 Android 11 的预装 WebView 83。
 
 ## 使用步骤
 
@@ -36,7 +36,7 @@
 
 项目采用 Android 原生容器承载高性能 Web 交互内核的架构：
 
-- **Android 原生层**：基于 Java 17 与 Android SDK 37（最低兼容 Android 11 / API 30）。通过 WebView 加载本地构建产物，并封装系统级能力：API Key 经 Android Keystore 加密存储、原生麦克风录音采集（`AudioRecord`）、系统相册快速预取以及独立的网页浏览器（`SourceBrowserActivity`）。
+- **Android 原生层**：基于 Java 17 与 Android SDK 37（最低兼容 Android 10 / API 29）。通过 WebView 加载本地构建产物，并封装系统级能力：API Key 经 Android Keystore 加密存储、原生麦克风录音采集（`AudioRecord`）、系统相册快速预取以及独立的网页浏览器（`SourceBrowserActivity`）。
 - **Web 交互层**：React 18 + TypeScript + Zustand 状态管理，基于 CSS Modules 进行交互细节调优，引入 KaTeX、Mermaid 与 Prism.js 提供排版渲染。
 - **构建系统**：Rspack 2 高速打包，与 Gradle `buildWeb` 构建任务无缝联动。
 
@@ -61,6 +61,16 @@ pnpm install
 ```
 
 编译输出路径：`android/app/build/outputs/apk/debug/app-debug.apk`
+
+### 低版本 Android 回归
+
+在 Android Studio 中启动 API 29 或 API 30 模拟器，保留系统镜像预装的 WebView，安装 Debug APK 并保持 API Key 未配置。将下列命令中的序列号换成 `adb devices` 显示的模拟器序列号。
+
+```powershell
+node scripts/test-android-onboarding.mjs emulator-5554
+```
+
+脚本使用测试 Key 和模拟 API 响应，检查无效 Key 提示、保存 Key 后聊天界面的实际尺寸和可点击性、键盘和侧栏、流式回复，以及重启后能否读取已保存的 Key。
 
 ---
 

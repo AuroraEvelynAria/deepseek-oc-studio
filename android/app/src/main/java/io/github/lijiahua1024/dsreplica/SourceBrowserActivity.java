@@ -1,12 +1,12 @@
 package io.github.lijiahua1024.dsreplica;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.Insets;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.net.Uri;
@@ -15,8 +15,6 @@ import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
-import android.view.WindowInsets;
-import android.view.WindowInsetsController;
 import android.webkit.WebBackForwardList;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -60,12 +58,8 @@ public final class SourceBrowserActivity extends Activity {
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(background);
-        root.setOnApplyWindowInsetsListener((view, insets) -> {
-            Insets safe = insets.getInsets(WindowInsets.Type.systemBars()
-                | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime());
-            view.setPadding(safe.left, safe.top, safe.right, safe.bottom);
-            return WindowInsets.CONSUMED;
-        });
+        SystemBars.applyInsets(getWindow(), root, (safe, ime) ->
+            root.setPadding(safe.left, safe.top, safe.right, safe.bottom));
         FrameLayout toolbar = new FrameLayout(this);
         toolbar.setBackgroundColor(background);
         root.addView(toolbar, new LinearLayout.LayoutParams(-1, dp(52)));
@@ -127,10 +121,7 @@ public final class SourceBrowserActivity extends Activity {
         });
         root.addView(page, new LinearLayout.LayoutParams(-1, 0, 1));
         setContentView(root);
-        int flags = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
-            | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
-        getWindow().getInsetsController().setSystemBarsAppearance(dark ? 0 : flags, flags);
-        getWindow().setNavigationBarContrastEnforced(false);
+        SystemBars.setAppearance(getWindow(), dark);
         if (Build.VERSION.SDK_INT >= 33) {
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
                 OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::goBack);
@@ -156,6 +147,7 @@ public final class SourceBrowserActivity extends Activity {
 
     @Override
     @SuppressWarnings("deprecation")
+    @SuppressLint("GestureBackNavigation") // API 33+ back gestures use the registered callback.
     public void onBackPressed() {
         goBack();
     }

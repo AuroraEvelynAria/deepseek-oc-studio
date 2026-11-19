@@ -5,8 +5,8 @@ import { defineConfig } from '@rspack/cli'
 import { rspack, type Configuration } from '@rspack/core'
 
 const dev = process.env.NODE_ENV === 'development' || process.argv.includes('serve')
-// Android 11 ships with an older WebView that can be updated independently of the OS.
-const targets = ['chrome >= 83', 'edge >= 105', 'safari >= 16', 'firefox >= 110']
+// The Android 10 test image ships with WebView 74 before system component updates.
+const targets = ['chrome >= 74', 'edge >= 105', 'safari >= 16', 'firefox >= 110']
 const root = path.dirname(fileURLToPath(import.meta.url))
 const { version } = JSON.parse(
   readFileSync(new URL('./package.json', import.meta.url), 'utf8')

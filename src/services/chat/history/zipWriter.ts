@@ -1,4 +1,5 @@
 import { Zip, ZipPassThrough } from 'fflate'
+import { readBlobChunks } from '../../../utils/blob.js'
 
 // ZIP32 字段中的哨兵值表示需要 ZIP64；当前格式不支持 ZIP64。
 const ZIP64_SIZE = 0xffffffff
@@ -83,28 +84,18 @@ export const writeArchive = async (entries: { name: string; blob: Blob }[]): Pro
       const entry = new ZipPassThrough(name)
       entry.mtime = new Date(1980, 0, 1)
       zip.add(entry)
-      const reader = blob.stream().getReader()
       let written = 0
-      try {
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) {
-            break
-          }
-          written += value.byteLength
-          if (written > blob.size) {
-            invalid()
-          }
-          entry.push(value)
-        }
-        if (written !== blob.size) {
+      for await (const chunk of readBlobChunks(blob)) {
+        written += chunk.byteLength
+        if (written > blob.size) {
           invalid()
         }
-        entry.push(new Uint8Array(), true)
-      } finally {
-        await reader.cancel().catch(() => {})
-        reader.releaseLock()
+        entry.push(chunk)
       }
+      if (written !== blob.size) {
+        invalid()
+      }
+      entry.push(new Uint8Array(), true)
     }
     zip.end()
     if (!completed || size !== expectedSize) {

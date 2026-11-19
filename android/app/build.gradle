@@ -18,10 +18,10 @@ android {
 
     defaultConfig {
         applicationId = 'io.github.lijiahua1024.dsreplica'
-        minSdk = 30
+        minSdk = 29
         targetSdk = 36
-        versionCode = 8
-        versionName = '0.3.1'
+        versionCode = 9
+        versionName = '0.3.2'
     }
 
     signingConfigs {

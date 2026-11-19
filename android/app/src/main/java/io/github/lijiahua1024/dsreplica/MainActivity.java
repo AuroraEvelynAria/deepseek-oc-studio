@@ -10,14 +10,11 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Color;
-import android.graphics.Insets;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.provider.Settings;
-import android.view.WindowInsets;
-import android.view.WindowInsetsController;
 import android.webkit.JavascriptInterface;
 import android.webkit.MimeTypeMap;
 import android.webkit.ValueCallback;
@@ -69,23 +66,19 @@ public final class MainActivity extends Activity {
         frame = new FrameLayout(this);
         webView = new WebView(this);
         frame.addView(webView, new FrameLayout.LayoutParams(-1, -1));
-        frame.setOnApplyWindowInsetsListener((view, insets) -> {
-            Insets safe = insets.getInsets(WindowInsets.Type.systemBars()
-                | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime());
-            view.setPadding(safe.left, 0, safe.right, safe.bottom);
+        SystemBars.applyInsets(getWindow(), frame, (safe, ime) -> {
+            frame.setPadding(safe.left, 0, safe.right, safe.bottom);
             float top = safe.top / getResources().getDisplayMetrics().density;
             if (top != statusInset) {
                 statusInset = top;
-                webView.evaluateJavascript("document.documentElement?.style.setProperty("
+                webView.evaluateJavascript("if (document.documentElement) document.documentElement.style.setProperty("
                     + "'--android-status-inset', '" + top + "px')", null);
             }
-            boolean ime = insets.isVisible(WindowInsets.Type.ime());
             if (ime != keyboardVisible) {
                 keyboardVisible = ime;
-                webView.evaluateJavascript("document.documentElement?.toggleAttribute("
+                webView.evaluateJavascript("if (document.documentElement) document.documentElement.toggleAttribute("
                     + "'data-keyboard', " + ime + ")", null);
             }
-            return WindowInsets.CONSUMED;
         });
         setContentView(frame);
         setBars((getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
@@ -123,10 +116,7 @@ public final class MainActivity extends Activity {
     }
 
     private void setBars(boolean dark) {
-        int flags = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
-            | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
-        getWindow().getInsetsController().setSystemBarsAppearance(dark ? 0 : flags, flags);
-        getWindow().setNavigationBarContrastEnforced(false);
+        SystemBars.setAppearance(getWindow(), dark);
         int color = Color.parseColor(dark ? "#191919" : "#FFFFFF");
         frame.setBackgroundColor(color);
         webView.setBackgroundColor(color);

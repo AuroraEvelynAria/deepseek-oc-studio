@@ -1,6 +1,5 @@
 .page {
   display: flex;
-  align-items: safe center;
   justify-content: center;
   box-sizing: border-box;
   height: var(--app-default-viewport-height);
@@ -12,7 +11,9 @@
 .form {
   display: grid;
   gap: 18px;
-  width: min(100%, 360px);
+  width: 100%;
+  max-width: 360px;
+  margin: auto 0;
   text-align: center;
 }
 

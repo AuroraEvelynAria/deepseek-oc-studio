@@ -21,15 +21,23 @@
 }
 
 [data-android] .frame {
-  --drawer-edge: min(calc(100% - 68.4px), 380px);
+  --drawer-edge: calc(100% - 68.4px);
   --drawer-progress: 0;
+  --drawer-radius: 0px;
   --drawer-transition: 150ms cubic-bezier(0.18, 0.23, 0.32, 1);
   touch-action: pan-y;
 }
 
-/* 进度只用于外层动画，避免每次移动把它传给消息树。 */
+@media (min-width: 448.4px) {
+  [data-android] .frame {
+    --drawer-edge: 380px;
+  }
+}
+
+/* 进度和圆角只用于外层动画，避免每次移动把它们传给消息树。 */
 [data-android] .content {
   --drawer-progress: initial;
+  --drawer-radius: initial;
 }
 
 [data-android] .frame::before {
@@ -44,6 +52,7 @@
 
 [data-android] .frame[data-drawer-open='true'] {
   --drawer-progress: 1;
+  --drawer-radius: 36px;
 }
 
 [data-android] .frame[data-drawer-dragging] {
@@ -80,7 +89,7 @@
   overflow: hidden;
   touch-action: pan-y;
   background: var(--dsw-alias-bg-base);
-  border-radius: calc(min(1, var(--drawer-progress) * 6) * 36px);
+  border-radius: var(--drawer-radius);
   will-change: transform;
   transition:
     transform var(--drawer-transition),

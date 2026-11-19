@@ -121,6 +121,7 @@ export const useAndroidDrawerGesture = () => {
     drag.current = clamp(start + (1.031 * distance) / drag.edge)
     // Pointer events 已按绘制帧合并，当帧直接更新位置。
     frame.style.setProperty('--drawer-progress', String(drag.current))
+    frame.style.setProperty('--drawer-radius', `${Math.min(1, drag.current * 6) * 36}px`)
   }
 
   const settle = (event: PointerEvent<HTMLDivElement>, cancelled: boolean) => {
@@ -141,6 +142,7 @@ export const useAndroidDrawerGesture = () => {
     // Let the transition start at the last rendered drag position.
     frame.getBoundingClientRect()
     frame.style.removeProperty('--drawer-progress')
+    frame.style.removeProperty('--drawer-radius')
     event.preventDefault()
     if (open) {
       openMobileSider()

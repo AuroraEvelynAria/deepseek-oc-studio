@@ -1,3 +1,5 @@
+import { readBlobChunks } from '../utils/blob.js'
+
 type AndroidBridge = {
   statusInset: () => number
   systemFontScale: () => number
@@ -22,23 +24,14 @@ type AndroidBridge = {
 export const android = (window as Window & { DeepSeekAndroid?: AndroidBridge }).DeepSeekAndroid
 
 const writeAndroidBlob = async (blob: Blob, append: (base64: string) => boolean) => {
-  const reader = blob.stream().getReader()
   const chunkSize = 32768
-  try {
-    for (;;) {
-      const { value, done } = await reader.read()
-      if (done) {
-        return
-      }
-      for (let offset = 0; offset < value.length; offset += chunkSize) {
-        const base64 = btoa(String.fromCharCode(...value.subarray(offset, offset + chunkSize)))
-        if (!append(base64)) {
-          throw new Error('Unable to write the file')
-        }
+  for await (const chunk of readBlobChunks(blob)) {
+    for (let offset = 0; offset < chunk.length; offset += chunkSize) {
+      const base64 = btoa(String.fromCharCode(...chunk.subarray(offset, offset + chunkSize)))
+      if (!append(base64)) {
+        throw new Error('Unable to write the file')
       }
     }
-  } finally {
-    reader.releaseLock()
   }
 }
 
