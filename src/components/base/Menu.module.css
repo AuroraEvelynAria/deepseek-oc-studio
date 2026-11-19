@@ -24,6 +24,15 @@
   width: 194.1333px;
   min-width: 0;
   padding: 0;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 45.1556px,
+    rgb(212 212 212) 45.1556px,
+    rgb(212 212 212) 45.5112px,
+    transparent 45.5112px,
+    transparent 45.5112px
+  );
 
   .option {
     gap: 9.2444px;
