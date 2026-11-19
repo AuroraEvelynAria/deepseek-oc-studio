@@ -34,7 +34,8 @@ export class ApiError extends Error {
   constructor(
     readonly kind: ApiErrorKind,
     message: string | TranslationMessage,
-    readonly status?: number
+    readonly status?: number,
+    readonly code?: string
   ) {
     super(typeof message === 'string' ? message : translate(message.key, message.params))
     this.name = 'ApiError'
@@ -55,15 +56,17 @@ const readErrorResponse = async (
 ): Promise<ApiError> => {
   const text = await response.text().catch(() => '')
   let message = text || fallback
+  let code: string | undefined
   try {
     const body: unknown = JSON.parse(text)
     if (isErrorBody(body)) {
       message = body.error.message
+      code = typeof body.error.code === 'string' ? body.error.code : undefined
     }
   } catch {
     // 非 JSON 响应体直接展示原文
   }
-  return new ApiError(kind, message, response.status)
+  return new ApiError(kind, message, response.status, code)
 }
 
 export const request = async (url: string, init: RequestInit): Promise<Response> => {
@@ -123,10 +126,15 @@ export const uploadFile = async (
 }
 
 /** DELETE /anthropic/v1/files/{file_id} */
-export const deleteFile = async (apiKey: string, fileId: string): Promise<void> => {
+export const deleteFile = async (
+  apiKey: string,
+  fileId: string,
+  signal?: AbortSignal
+): Promise<void> => {
   await request(`${ANTHROPIC_BASE_URL}/files/${encodeURIComponent(fileId)}`, {
     method: 'DELETE',
     headers: anthropicHeaders(apiKey, true),
+    signal,
   })
 }
 
@@ -188,7 +196,8 @@ export async function* streamMessage(
       }
     }
     if (isErrorBody(payload)) {
-      throw new ApiError('stream', payload.error.message)
+      const { message, code } = payload.error
+      throw new ApiError('stream', message, undefined, typeof code === 'string' ? code : undefined)
     }
     if (eventName === 'error') {
       throw new ApiError('stream', data)

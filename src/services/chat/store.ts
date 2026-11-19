@@ -6,6 +6,7 @@ import {
   extractFileIds,
   getFileErrorCode,
   getRejectedImagePosition,
+  isContextOverflow,
   isRetryableApiError,
 } from '../api/errors.js'
 import {
@@ -18,6 +19,19 @@ import {
 import { MANY_IMAGES_COUNT, MANY_IMAGES_MAX_EDGE, MAX_IMAGE_EDGE } from '../imageUpload.js'
 import { useSettings } from '../settings.js'
 import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from './branches.js'
+import {
+  contextBudget,
+  estimatePrefixTokens,
+  estimateQuestionTokens,
+  prepareHistoryContext,
+  saveContextCheckpoint,
+  type HistoryContext,
+} from './context.js'
+import {
+  createContextSummarizer,
+  includeContextSummary,
+  summarizeCurrentInput,
+} from './contextSummary.js'
 import * as db from './db.js'
 import {
   clearAllDrafts,
@@ -58,6 +72,9 @@ const SAFETY_CHECK = { level: 'high' } as const
 const FILE_RETRY_LIMIT = 2
 /** 退避基数，第 n 次重试等待 2^n 倍；连续失败达到上限就放弃，把原始报错展示出来 */
 const FILE_RETRY_BASE_DELAY = 1000
+/** 限制一次聊天轮次内自动压缩的历史请求数，已成功的批次留给下轮接着处理。 */
+const HISTORY_SUMMARY_LIMIT = 6
+const HISTORY_OVERFLOW_RETRIES = 3
 
 /** 阅读链接始终开启，智能搜索开关控制是否另行声明搜索工具（含边想边搜）。 */
 const serverTools = (search: boolean) => {
@@ -123,6 +140,8 @@ const sessionAccess = new Map<string, number>()
 const unsavedSessions = new Set<string>()
 /** 保存失败时保留原件，重试成功后才释放。 */
 const pendingFiles = new Map<string, db.StoredFile[]>()
+const loadOriginalFile = async (sessionId: string, id: string) =>
+  pendingFiles.get(sessionId)?.find((file) => file.id === id)?.blob ?? db.loadFile(id)
 const deletingSessions = new Set<string>()
 const deletionTasks = new Set<Promise<boolean>>()
 const streamFlushes = new Map<string, () => void>()
@@ -939,9 +958,7 @@ const uploadRequestImage = async (
   ) {
     return { serverId: task.serverId, serverImage: task.serverImage }
   }
-  const blob =
-    pendingFiles.get(sessionId)?.find(({ id }) => id === file.id)?.blob ??
-    (await db.loadFile(file.id))
+  const blob = await loadOriginalFile(sessionId, file.id)
   signal.throwIfAborted()
   if (!blob) {
     return null
@@ -1094,16 +1111,76 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
   }
   streamFlushes.set(sessionId, flush)
 
+  const signal = controller.signal
+  const apiKey = useSettings.getState().apiKey ?? ''
+  const summarize = createContextSummarizer(apiKey, signal)
+  const budget = contextBudget(MAX_OUTPUT_TOKENS)
+  let historyBudget = Math.max(
+    0,
+    budget.input - estimateQuestionTokens(request.question) - estimatePrefixTokens(request.prefix)
+  )
+  let historyRetries = 0
+  let historySummaryRequests = 0
+  let context: HistoryContext | undefined
+  let maxOutputTokens = MAX_OUTPUT_TOKENS
+  let reduceInput = false
+  let reducedInput: Awaited<ReturnType<typeof summarizeCurrentInput>> = null
   let invalidatedRetries = 0
   try {
     for (;;) {
       /** 附件补齐前出错属于上传失败，请求还没有发出 */
-      let preparing = true
+      let preparing = false
       let receivedContent = false
       let messages: MessageParam[] = []
+      let attempt = request
       try {
-        const prepared = await prepareFiles(sessionId, request, controller.signal)
+        context ??= await prepareHistoryContext({
+          history: request.history,
+          checkpoints: getSession(sessionId)?.contextCheckpoints,
+          budget: historyBudget,
+          recentBudget: budget.recent,
+          summarize: (input) =>
+            historySummaryRequests++ < HISTORY_SUMMARY_LIMIT
+              ? summarize(input)
+              : Promise.resolve(null),
+          save: (checkpoint) => {
+            updateSession(sessionId, (session) => ({
+              ...session,
+              contextCheckpoints: saveContextCheckpoint(session.contextCheckpoints, checkpoint),
+            }))
+            persist(sessionId)
+          },
+          signal,
+        })
+        signal.throwIfAborted()
+        attempt = { ...request, history: context.history }
+        preparing = true
+        const prepared = await prepareFiles(sessionId, attempt, signal)
         preparing = false
+        if (reduceInput && !reducedInput) {
+          reducedInput = await summarizeCurrentInput({
+            apiKey,
+            question: prepared.question,
+            prefix: prepared.prefix,
+            summarize,
+            loadFile: (id) => loadOriginalFile(sessionId, id),
+            signal,
+          })
+          if (!reducedInput) {
+            throw new ApiError('protocol', { key: 'replyInputTooLong' })
+          }
+          historyBudget = Math.max(
+            0,
+            Math.min(
+              budget.recent,
+              contextBudget(maxOutputTokens).input -
+                estimateQuestionTokens(reducedInput.question) -
+                estimatePrefixTokens(reducedInput.prefix)
+            )
+          )
+          context = undefined
+          continue
+        }
         // 附件就绪后获取本轮信息；续写沿用原回答快照，重新生成的快照独立保存。
         const latestReminder = prepared.prefix
           ? prepared.prefix.latestReminder
@@ -1113,16 +1190,17 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         persist(sessionId)
         messages = toRequestMessages(
           prepared.history,
-          prepared.question,
-          prepared.prefix,
+          reducedInput?.question ?? prepared.question,
+          reducedInput ? reducedInput.prefix : prepared.prefix,
           initial.thinking ?? false,
           latestReminder
         )
+        includeContextSummary(messages, context.summary)
         const events = streamMessage(
-          useSettings.getState().apiKey ?? '',
+          apiKey,
           {
             model: initial.model ?? MODEL,
-            max_tokens: MAX_OUTPUT_TOKENS,
+            max_tokens: maxOutputTokens,
             system: SYSTEM_PROMPT,
             messages,
             thinking: { type: initial.thinking ? 'enabled' : 'disabled' },
@@ -1172,9 +1250,32 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         }
         // 收到过内容块（含丢弃的客户端工具）后不自动重发。
         if (!receivedContent) {
+          if (isContextOverflow(error)) {
+            if (context?.tokens) {
+              // 每次严格收紧历史预算。最后一次保留本轮输入，验证是否是输入本身过长。
+              historyBudget =
+                ++historyRetries < HISTORY_OVERFLOW_RETRIES ? Math.floor(context.tokens / 2) : 0
+              context = undefined
+              continue
+            }
+            if (maxOutputTokens === MAX_OUTPUT_TOKENS) {
+              maxOutputTokens = initial.thinking ? 65_536 : 8_192
+              continue
+            }
+            if (!reduceInput) {
+              reduceInput = true
+              continue
+            }
+            reply = settleReply(reply, 'error', Date.now(), {
+              kind: error.kind,
+              message: error.message,
+              localMessage: { key: 'replyInputTooLong' },
+            })
+            break
+          }
           if (
             invalidatedRetries < FILE_RETRY_LIMIT &&
-            reuploadInvalidatedFiles(sessionId, request, error)
+            reuploadInvalidatedFiles(sessionId, attempt, error)
           ) {
             await waitForRetry(invalidatedRetries++, controller.signal)
             if (!controller.signal.aborted) {
@@ -1183,9 +1284,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           } else {
             const repaired = await Promise.race([
               stopped,
-              repairRejectedImage(sessionId, request, messages, error, controller.signal).catch(
-                () => false
-              ),
+              repairRejectedImage(sessionId, attempt, messages, error, signal).catch(() => false),
             ])
             if (repaired) {
               continue
@@ -1196,7 +1295,9 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           reply = settleReply(reply, 'stopped', Date.now())
           break
         }
-        if (error instanceof ApiError && error.kind === 'interrupted' && reply.stopReason) {
+        if (receivedContent && isContextOverflow(error)) {
+          reply = settleReply(reply, 'stopped', Date.now())
+        } else if (error instanceof ApiError && error.kind === 'interrupted' && reply.stopReason) {
           // 已收到 message_delta 的结束原因，只是缺了结尾的 message_stop
           reply = settleReply(reply, 'done', Date.now())
         } else if (error instanceof ApiError) {
