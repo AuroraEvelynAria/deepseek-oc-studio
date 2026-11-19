@@ -638,7 +638,7 @@ const Settings = ({ start }: { start: Page }) => {
             />
             <Row
               label={tr('应用权限', 'App Permissions')}
-              onClick={() => android?.openAppPermissions()}
+              onClick={() => openAndroidPage(`${chinesePoliciesUrl}/app-permissions.html`)}
             />
           </Group>
         ) : null}

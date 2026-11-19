@@ -18,7 +18,6 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.MediaStore;
-import android.provider.Settings;
 import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
@@ -814,12 +813,6 @@ public final class MainActivity extends Activity {
         public int getMusicVolume() {
             AudioManager audio = getSystemService(AudioManager.class);
             return audio == null ? -1 : audio.getStreamVolume(AudioManager.STREAM_MUSIC);
-        }
-
-        @JavascriptInterface
-        public void openAppPermissions() {
-            runOnUiThread(() -> startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                Uri.fromParts("package", getPackageName(), null))));
         }
 
         @JavascriptInterface
