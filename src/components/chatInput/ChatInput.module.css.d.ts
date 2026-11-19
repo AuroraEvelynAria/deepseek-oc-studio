@@ -26,12 +26,21 @@ declare const styles: {
   readonly mirror: string
   readonly functionRow: string
   readonly toggles: string
+  readonly toggleTarget: string
+  readonly searchToggleTarget: string
   readonly collapsedToggles: string
   readonly toggleLabel: string
   readonly toggle: string
   readonly selected: string
   readonly right: string
   readonly sendButton: string
+  readonly androidUploadTarget: string
+  readonly androidVoiceTarget: string
+  readonly androidSendTarget: string
+  readonly androidToolIcon: string
+  readonly androidVoiceIcon: string
+  readonly androidSendVisual: string
+  readonly androidSendLabel: string
   readonly disabled: string
 }
 export = styles

@@ -513,7 +513,7 @@
 }
 
 [data-android] .androidTextarea {
-  top: 25.26px;
+  top: 26.6811px;
   right: 16.09px;
   left: 14.58px;
   width: auto;
@@ -525,7 +525,7 @@
 }
 
 [data-android][data-keyboard] .androidTextarea {
-  top: 22.41px;
+  top: 23.8311px;
   height: 17.25px;
 }
 
@@ -545,8 +545,8 @@
   height: 22.23px;
   overflow: hidden;
   color: var(--dsw-alias-label-caption);
-  font-size: 16.75px;
-  line-height: 22.23px;
+  font-size: 15.75px;
+  line-height: 15.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
   pointer-events: none;
@@ -562,23 +562,58 @@
 }
 
 [data-android] .functionRow {
+  position: relative;
   height: 48px;
   margin: 0;
-  padding: 0 7px 4px 11px;
+  padding: 0;
   box-sizing: border-box;
-  gap: 4px;
+  gap: 0;
 }
 
 [data-android] .toggles {
-  gap: 8px;
+  position: absolute;
+  top: -6.3556px;
+  left: -0.9778px;
+  width: 204.0889px;
+  height: 46.5778px;
+  gap: 0;
+}
+
+[data-android] .toggleTarget {
+  position: relative;
+  display: block;
+  flex-shrink: 0;
+  width: 111.2889px;
+  height: 46.5778px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+
+  &:nth-child(2) {
+    width: 92.8px;
+  }
+}
+
+[data-android] .searchToggleTarget {
+  width: 92.8px;
 }
 
 [data-android] .toggle {
-  height: 32px;
-  padding-inline: 11px;
-  font-size: 14px;
+  position: absolute;
+  top: 16.7111px;
+  left: 11.0222px;
+  display: inline-flex;
+  width: 92.8px;
+  height: 29.8667px;
+  padding: 0 10px;
+  font-size: 12.8px;
+  line-height: 15.2889px;
   font-weight: 400;
   border-width: 1px;
+  border-color: rgba(0, 0, 0, 0.07);
+  box-sizing: border-box;
   transition:
     background 160ms,
     color 160ms,
@@ -595,14 +630,122 @@
   }
 }
 
+[data-android] .searchToggleTarget .toggle {
+  left: 0;
+}
+
 [data-android] .right {
-  gap: 0;
+  position: absolute;
+  inset: 0;
+  display: block;
+  margin: 0;
+}
+
+[data-android] .androidUploadTarget,
+[data-android] .androidVoiceTarget,
+[data-android] .androidSendTarget {
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+}
+
+[data-android] .androidUploadTarget {
+  top: -4.5778px;
+  left: 260.7111px;
+  width: 41.2444px;
+  height: 56.1778px;
+
+}
+
+[data-android] .androidVoiceTarget {
+  top: -4.5778px;
+  left: 301.9556px;
+  width: 57.9556px;
+  height: 56.1778px;
+
+}
+
+[data-android] .functionRow:has(.sendButton) .androidUploadTarget {
+  left: 219.4667px;
+}
+
+[data-android] .functionRow:has(.sendButton) .androidVoiceTarget {
+  left: 260.7111px;
+  width: 59.7333px;
+}
+
+[data-android] .functionRow:not(:has(.sendButton)) .toggles {
+  top: -7.7778px;
+}
+
+[data-android] .functionRow:not(:has(.sendButton)) .androidUploadTarget,
+[data-android] .functionRow:not(:has(.sendButton)) .androidVoiceTarget {
+  top: -6px;
+}
+
+[data-android] .androidToolIcon {
+  position: absolute;
+  top: 17.7778px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 23.4667px;
+  height: 24.1778px;
+
+  svg {
+    width: 22.7556px;
+    height: 22.7556px;
+  }
+}
+
+[data-android] .androidUploadTarget .androidToolIcon {
+  right: 0;
+}
+
+[data-android] .androidVoiceIcon {
+  right: auto;
+  left: 17.7778px;
+  width: 23.8222px;
 }
 
 [data-android] .sendButton {
-  width: 30px;
-  height: 30px;
-  margin-right: 7px;
+  position: absolute;
+  top: -4.2222px;
+  left: 302.3111px;
+  width: 57.6px;
+  height: 55.8222px;
+  margin: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+[data-android] .androidSendVisual {
+  position: absolute;
+  top: 15.6444px;
+  left: 15.6444px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28.0889px;
+  height: 28.0889px;
+  border-radius: 50%;
+  background: rgb(66, 110, 254);
+
+  svg {
+    width: 14.9333px;
+    height: 14.9333px;
+  }
+}
+
+[data-android] .androidSendLabel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14.9333px;
+  height: 14.9333px;
 }
 
 .holdButton {

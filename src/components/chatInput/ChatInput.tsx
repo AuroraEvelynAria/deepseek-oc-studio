@@ -82,6 +82,10 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     if (!toggles) {
       return
     }
+    if (android) {
+      toggles.classList.remove(styles.collapsedToggles)
+      return
+    }
 
     const updateLabels = () => {
       toggles.classList.remove(styles.collapsedToggles)
@@ -412,26 +416,58 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
               <button
                 type="button"
                 role="link"
-                className={clsx(styles.toggle, thinking && styles.selected)}
+                className={clsx(android ? styles.toggleTarget : styles.toggle, thinking && styles.selected)}
                 aria-label={t('thinkingSwitch')}
                 aria-pressed={thinking}
+                data-android-a11y={android ? 'composer-thinking' : undefined}
+                data-android-a11y-label={android ? t('thinkingSwitch') : undefined}
+                data-android-a11y-label-kind={android ? 'text' : undefined}
                 onClick={() => setThinking(!thinking)}
               >
-                <IconThinkOutline14 />
-                <span className={styles.toggleLabel}>{t('thinkingSwitch')}</span>
+                {android ? (
+                  <span className={clsx(styles.toggle, thinking && styles.selected)}>
+                    <IconThinkOutline14 />
+                    <span className={styles.toggleLabel} data-android-a11y-label-node="">
+                      {t('thinkingSwitch')}
+                    </span>
+                  </span>
+                ) : (
+                  <>
+                    <IconThinkOutline14 />
+                    <span className={styles.toggleLabel}>{t('thinkingSwitch')}</span>
+                  </>
+                )}
               </button>
             </Tooltip>
             <Tooltip content={t('deactivatedSearchTooltip')}>
               <button
                 type="button"
                 role="link"
-                className={clsx(styles.toggle, search && styles.selected)}
+                className={clsx(
+                  android ? styles.toggleTarget : styles.toggle,
+                  android && styles.searchToggleTarget,
+                  search && styles.selected
+                )}
                 aria-label={t('search')}
                 aria-pressed={search}
+                data-android-a11y={android ? 'composer-search' : undefined}
+                data-android-a11y-label={android ? t('search') : undefined}
+                data-android-a11y-label-kind={android ? 'text' : undefined}
                 onClick={() => setSearch(!search)}
               >
-                <IconGlobeLanguageOutline14 />
-                <span className={styles.toggleLabel}>{t('search')}</span>
+                {android ? (
+                  <span className={clsx(styles.toggle, search && styles.selected)}>
+                    <IconGlobeLanguageOutline14 />
+                    <span className={styles.toggleLabel} data-android-a11y-label-node="">
+                      {t('search')}
+                    </span>
+                  </span>
+                ) : (
+                  <>
+                    <IconGlobeLanguageOutline14 />
+                    <span className={styles.toggleLabel}>{t('search')}</span>
+                  </>
+                )}
               </button>
             </Tooltip>
           </div>
@@ -442,9 +478,18 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
                   size="xl"
                   tone="primary"
                   role="link"
-                  icon={<AndroidCircle icon={showAttachments ? 'close' : 'add'} />}
+                  icon={
+                    <span className={styles.androidToolIcon} data-android-a11y-label-node="">
+                      <AndroidCircle icon={showAttachments ? 'close' : 'add'} />
+                    </span>
+                  }
                   aria-label={t(showAttachments ? 'close' : 'uploadFile')}
                   aria-expanded={showAttachments}
+                  className={android ? styles.androidUploadTarget : undefined}
+                  data-android-a11y={android ? 'composer-upload' : undefined}
+                  data-android-a11y-label={android ? t(showAttachments ? 'close' : 'uploadFile') : undefined}
+                  data-android-a11y-label-kind={android ? 'description' : undefined}
+                  data-android-a11y-checkable={android ? 'false' : undefined}
                   disabled={importingHistory}
                   onClick={() => {
                     textareaRef.current?.blur()
@@ -456,9 +501,25 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
                     size="xl"
                     tone="primary"
                     role="link"
-                    icon={<AndroidCircle icon={voiceMode ? 'keys' : 'voice'} />}
+                    icon={
+                      <span
+                        className={clsx(
+                          styles.androidToolIcon,
+                          styles.androidVoiceIcon
+                        )}
+                        data-android-a11y-label-node=""
+                      >
+                        <AndroidCircle icon={voiceMode ? 'keys' : 'voice'} />
+                      </span>
+                    }
                     aria-label={t(voiceMode ? 'androidTextMode' : 'androidVoiceMode')}
                     aria-pressed={voiceMode}
+                    className={android ? styles.androidVoiceTarget : undefined}
+                    data-android-a11y={android ? 'composer-voice' : undefined}
+                    data-android-a11y-label={android ? t(voiceMode ? 'androidTextMode' : 'androidVoiceMode') : undefined}
+                    data-android-a11y-label-kind={android ? 'description' : undefined}
+                    data-android-a11y-checkable={android ? 'false' : undefined}
+                    data-android-a11y-focusable={android ? 'false' : undefined}
                     onClick={() => {
                       voice.cancel()
                       useVoiceMode.setState({ enabled: !voiceMode })
@@ -520,9 +581,17 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
                 className={clsx(styles.sendButton, !canSend && styles.disabled)}
                 aria-label={t('send')}
                 aria-disabled={!canSend}
+                data-android-a11y={android ? 'composer-send' : undefined}
+                data-android-a11y-label={android ? t('send') : undefined}
+                data-android-a11y-label-kind={android ? 'description' : undefined}
+                data-android-a11y-checkable={android ? 'false' : undefined}
                 onClick={send}
               >
-                <IconSendOutline16 />
+                <span className={styles.androidSendVisual}>
+                  <span className={styles.androidSendLabel} data-android-a11y-label-node="">
+                    <IconSendOutline16 />
+                  </span>
+                </span>
               </button>
             ) : null}
           </div>
