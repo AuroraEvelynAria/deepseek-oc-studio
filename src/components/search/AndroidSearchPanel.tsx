@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { openAndroidPage } from '../../app/openAndroidPage.js'
+import { useAndroidBackInterception } from '../../app/useAndroidBackInterception.js'
 import { useTranslate } from '../../i18n/index.js'
 import type { Source } from '../../services/chat/view.js'
 import { formatDate } from '../../utils/format.js'
@@ -52,6 +53,7 @@ export const AndroidSearchPanel = () => {
   const sheetRef = useRef<HTMLElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
 
+  useAndroidBackInterception(entry !== null || displayed !== null)
   useLayoutEffect(() => {
     if (entry) {
       overlayRef.current?.style.removeProperty('--result-drag-offset')

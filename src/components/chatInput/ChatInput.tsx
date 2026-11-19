@@ -2,6 +2,7 @@ import clsx from 'clsx'
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { create } from 'zustand'
 import { android } from '../../app/android.js'
+import { useAndroidBackInterception } from '../../app/useAndroidBackInterception.js'
 import {
   IconGlobeLanguageOutline14,
   IconPaperclipOutline16,
@@ -198,6 +199,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   const canSend = !importingHistory && !streaming && voice.status === 'idle' && draftReady
   const showSend = !android || streaming || draftReady
 
+  useAndroidBackInterception(showAttachments)
   useEffect(() => {
     if (!showAttachments) {
       return

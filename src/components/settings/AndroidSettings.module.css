@@ -14,7 +14,7 @@
   padding-bottom: var(--android-button-nav-inset, 0px);
   color: var(--dsw-alias-label-primary);
   background: var(--settings-bg);
-  animation: page-enter 235ms cubic-bezier(0.2, 0.72, 0.25, 1);
+  overflow: hidden;
 }
 
 [data-ds-dark-theme] .page {
@@ -23,6 +23,13 @@
   --settings-muted: #a1a1a4;
   --settings-button: #303030;
   --settings-line: #353535;
+}
+
+.pageContent {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .header {
@@ -455,12 +462,6 @@ a.row:active,
   border-radius: 28px;
   color: #fff;
   background: var(--dsw-alias-brand-text);
-}
-
-@keyframes page-enter {
-  from {
-    transform: translateX(100%);
-  }
 }
 
 @keyframes overlay-enter {

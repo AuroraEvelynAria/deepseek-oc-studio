@@ -10,7 +10,6 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.Gravity;
@@ -24,12 +23,12 @@ import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import android.window.OnBackInvokedDispatcher;
 
 /** A separate WebView keeps external pages away from the application's JavaScript bridge. */
 public final class SourceBrowserActivity extends Activity {
     private WebView page;
     private LinearLayout root;
+    private final InAppBackCallback inAppBack = new InAppBackCallback(this, this::goBack);
 
     static Uri webUri(String value) {
         if (value == null) return null;
@@ -115,6 +114,11 @@ public final class SourceBrowserActivity extends Activity {
         });
         page.setWebViewClient(new WebViewClient() {
             @Override
+            public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
+                inAppBack.setEnabled(view.canGoBack());
+            }
+
+            @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 return webUri(request.getUrl().toString()) == null;
             }
@@ -122,16 +126,13 @@ public final class SourceBrowserActivity extends Activity {
         root.addView(page, new LinearLayout.LayoutParams(-1, 0, 1));
         setContentView(root);
         SystemBars.setAppearance(getWindow(), dark);
-        if (Build.VERSION.SDK_INT >= 33) {
-            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
-                OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::goBack);
-        }
         WebBackForwardList history = state == null ? null : page.restoreState(state);
         if (history == null) {
             page.loadUrl(initial.toString());
         } else if (history.getCurrentItem() != null) {
             title.setText(history.getCurrentItem().getTitle());
         }
+        inAppBack.setEnabled(page.canGoBack());
     }
 
     @Override
@@ -147,13 +148,14 @@ public final class SourceBrowserActivity extends Activity {
 
     @Override
     @SuppressWarnings("deprecation")
-    @SuppressLint("GestureBackNavigation") // API 33+ back gestures use the registered callback.
+    @SuppressLint("GestureBackNavigation") // Legacy back still needs to check the page history.
     public void onBackPressed() {
         goBack();
     }
 
     @Override
     protected void onDestroy() {
+        inAppBack.setEnabled(false);
         if (page != null) {
             root.removeView(page);
             page.destroy();

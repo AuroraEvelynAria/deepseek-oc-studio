@@ -9,6 +9,7 @@ import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
@@ -25,7 +26,6 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
-import android.window.OnBackInvokedDispatcher;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -56,6 +56,9 @@ public final class MainActivity extends Activity {
     private FileExport historyExport;
     private ImageSave imageSave;
     private NativeRecorder recorder;
+    private boolean backPreviewEnabled;
+    private final InAppBackCallback inAppBack = new InAppBackCallback(this, this::handleBack,
+        this::reportBackPreview);
     private final ExecutorService photoExecutor = Executors.newSingleThreadExecutor();
 
     @Override
@@ -103,16 +106,12 @@ public final class MainActivity extends Activity {
         webView.setWebViewClient(new AppPage());
         webView.setWebChromeClient(new DeviceFeatures());
         webView.addJavascriptInterface(new DeviceBridge(), "DeepSeekAndroid");
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
-                OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::handleBack);
-        }
         webView.loadUrl(HOME);
     }
 
     @Override
     @SuppressWarnings("deprecation")
-    @SuppressLint("GestureBackNavigation") // API 33+ back gestures use the registered callback.
+    @SuppressLint("GestureBackNavigation") // Legacy back still needs to ask the WebView first.
     public void onBackPressed() {
         handleBack();
     }
@@ -120,6 +119,19 @@ public final class MainActivity extends Activity {
     private void handleBack() {
         webView.evaluateJavascript("window.dispatchEvent(new Event('android-back', {cancelable: true}))",
             result -> { if ("true".equals(result)) finish(); });
+    }
+
+    private void reportBackPreview(InAppBackCallback.Preview event) {
+        if (!backPreviewEnabled) return;
+        String detail = "null";
+        if (event != null) {
+            float density = getResources().getDisplayMetrics().density;
+            String edge = event.edge() == null ? "null" : "'" + event.edge() + "'";
+            detail = "{progress: " + event.progress() + ", edge: " + edge
+                + ", touchY: " + (event.touchY() / density) + "}";
+        }
+        webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('android-back-preview', {detail: "
+            + detail + "}))", null);
     }
 
     private void setBars(boolean dark) {
@@ -135,6 +147,12 @@ public final class MainActivity extends Activity {
     }
 
     private final class AppPage extends WebViewClient {
+        @Override
+        public void onPageStarted(WebView view, String url, Bitmap favicon) {
+            backPreviewEnabled = false;
+            inAppBack.setEnabled(false);
+        }
+
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
             if (isBundled(request.getUrl())) {
@@ -372,6 +390,7 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        inAppBack.setEnabled(false);
         photoExecutor.shutdownNow();
         if (fileCallback != null) fileCallback.onReceiveValue(null);
         recorder.finish(false);
@@ -427,6 +446,16 @@ public final class MainActivity extends Activity {
 
         @JavascriptInterface
         public void setDarkBars(boolean dark) { runOnUiThread(() -> setBars(dark)); }
+
+        @JavascriptInterface
+        public void setHandlesBack(boolean handlesBack) {
+            runOnUiThread(() -> { if (!isDestroyed()) inAppBack.setEnabled(handlesBack); });
+        }
+
+        @JavascriptInterface
+        public void setBackPreviewEnabled(boolean enabled) {
+            runOnUiThread(() -> { if (!isDestroyed()) backPreviewEnabled = enabled; });
+        }
 
         @JavascriptInterface
         public void setImageViewerFullscreen(boolean fullscreen) {

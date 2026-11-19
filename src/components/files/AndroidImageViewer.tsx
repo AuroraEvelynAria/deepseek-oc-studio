@@ -1,5 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent } from 'react'
 import { android, saveAndroidImage } from '../../app/android.js'
+import {
+  subscribeToAndroidBackPreview,
+  useAndroidBackInterception,
+} from '../../app/useAndroidBackInterception.js'
 import { useTranslate, type TranslationMessage } from '../../i18n/index.js'
 import { Button } from '../base/Button.js'
 import {
@@ -71,6 +75,7 @@ export const AndroidImageViewer = ({
 }) => {
   const t = useTranslate()
   const dialog = useRef<HTMLDialogElement>(null)
+  const previewSurface = useRef<HTMLDivElement>(null)
   const stage = useRef<HTMLDivElement>(null)
   const image = useRef<HTMLImageElement>()
   const editing = useRef(false)
@@ -92,6 +97,7 @@ export const AndroidImageViewer = ({
   const [downloading, setDownloading] = useState(false)
   const [downloadStatus, setDownloadStatus] = useState<TranslationMessage>()
 
+  useAndroidBackInterception()
   useLayoutEffect(() => {
     const element = dialog.current
     if (!element) {
@@ -105,6 +111,33 @@ export const AndroidImageViewer = ({
       element.close()
     }
   }, [])
+
+  useLayoutEffect(() => {
+    const element = dialog.current
+    const surface = previewSurface.current
+    if (isEditing || !element || !surface) {
+      return
+    }
+    const reset = () => {
+      element.style.removeProperty('--image-back-reveal')
+      surface.style.removeProperty('transform')
+    }
+    const unsubscribe = subscribeToAndroidBackPreview((back) => {
+      if (!back?.edge) {
+        reset()
+        return
+      }
+      const shrink = 0.2 * back.progress
+      const x = (back.edge === 'left' ? 8 : -8) * back.progress
+      const y = (back.touchY - surface.clientHeight / 2) * shrink
+      element.style.setProperty('--image-back-reveal', String(shrink))
+      surface.style.transform = `translate(${x}%, ${y}px) scale(${1 - shrink})`
+    })
+    return () => {
+      unsubscribe?.()
+      reset()
+    }
+  }, [isEditing])
 
   useEffect(() => {
     let closed = false
@@ -342,6 +375,7 @@ export const AndroidImageViewer = ({
       role="dialog"
       aria-label={crop ? t('androidCropImage') : t('androidPreviewDraftImage', { name })}
       className={styles.dialog}
+      data-preview={isEditing ? undefined : ''}
       data-drawer-gesture-ignore=""
       onCancel={(event) => {
         event.preventDefault()
@@ -439,53 +473,58 @@ export const AndroidImageViewer = ({
         </>
       ) : (
         <>
-          <button
-            type="button"
-            className={styles.preview}
-            aria-label={t('close')}
-            {...preview.bindings}
-          >
-            <img
-              key={loadAttempt}
-              src={imageSource}
-              alt={name}
-              draggable={false}
-              hidden={!natural}
-              style={{
-                transform: `translate(${preview.position.x}px, ${preview.position.y}px) scale(${preview.position.scale})`,
-              }}
-              onLoad={({ currentTarget }) => {
-                image.current = currentTarget
-                setNatural({
-                  width: currentTarget.naturalWidth,
-                  height: currentTarget.naturalHeight,
-                })
-                setLoadFailed(false)
-              }}
-              onError={() => {
-                image.current = undefined
-                setNatural(undefined)
-                setLoadFailed(true)
-              }}
-            />
-          </button>
-          {loadFailed ? (
-            <div className={styles.loadError}>
-              <IconPhotoErrorFill20 />
-              <span>{t('androidDraftImageLoadFailed')}</span>
-              <button
-                type="button"
-                className={styles.action}
-                onClick={() => {
-                  setLoadFailed(false)
-                  setLoadAttempt((attempt) => attempt + 1)
+          <div ref={previewSurface} className={styles.previewSurface}>
+            <button
+              type="button"
+              className={styles.preview}
+              aria-label={t('close')}
+              {...preview.bindings}
+            >
+              <img
+                key={loadAttempt}
+                src={imageSource}
+                alt={name}
+                draggable={false}
+                hidden={!natural}
+                style={{
+                  transform: `translate(${preview.position.x}px, ${preview.position.y}px) scale(${preview.position.scale})`,
                 }}
-              >
-                <IconRefreshOutline16 />
-                {t('androidDraftImageReload')}
-              </button>
-            </div>
-          ) : natural ? (
+                onLoad={({ currentTarget }) => {
+                  image.current = currentTarget
+                  setNatural({
+                    width: currentTarget.naturalWidth,
+                    height: currentTarget.naturalHeight,
+                  })
+                  setLoadFailed(false)
+                }}
+                onError={() => {
+                  image.current = undefined
+                  setNatural(undefined)
+                  setLoadFailed(true)
+                }}
+              />
+            </button>
+            {loadFailed ? (
+              <div className={styles.loadError}>
+                <IconPhotoErrorFill20 />
+                <span>{t('androidDraftImageLoadFailed')}</span>
+                <button
+                  type="button"
+                  className={styles.action}
+                  onClick={() => {
+                    setLoadFailed(false)
+                    setLoadAttempt((attempt) => attempt + 1)
+                  }}
+                >
+                  <IconRefreshOutline16 />
+                  {t('androidDraftImageReload')}
+                </button>
+              </div>
+            ) : natural ? null : (
+              <span className={styles.loading} aria-hidden="true" />
+            )}
+          </div>
+          {natural && !loadFailed ? (
             <div className={styles.previewControls} hidden={preview.controlsHidden}>
               {downloadStatus ? (
                 <div className={styles.downloadStatus} role="status">
@@ -516,9 +555,7 @@ export const AndroidImageViewer = ({
                 </button>
               ) : null}
             </div>
-          ) : (
-            <span className={styles.loading} aria-hidden="true" />
-          )}
+          ) : null}
         </>
       )}
     </dialog>

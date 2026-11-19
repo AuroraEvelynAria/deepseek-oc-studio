@@ -1,5 +1,6 @@
 import { memo, useEffect } from 'react'
 import { android } from './android.js'
+import { useAndroidBackInterception } from './useAndroidBackInterception.js'
 import { useTranslate } from '../i18n/index.js'
 import { useSettings } from '../services/settings.js'
 import { useIsMobile, useMobileViewport, usePreventPageScroll } from './viewport.js'
@@ -111,6 +112,7 @@ export const App = () => {
   const frameRef = useMobileViewport(isMobile && !needsApiKey)
   const activeId = useChatStore((state) => state.activeId)
 
+  useAndroidBackInterception(drawerOpen)
   usePreventPageScroll(isMobile && !android)
 
   useEffect(() => {
@@ -200,7 +202,7 @@ export const App = () => {
         </main>
         <SearchPanel />
       </div>
-      {android ? <AndroidSettings /> : <SettingsDialog />}
+      {android ? <AndroidSettings chatFrame={frameRef} /> : <SettingsDialog />}
       <Toast />
     </>
   )

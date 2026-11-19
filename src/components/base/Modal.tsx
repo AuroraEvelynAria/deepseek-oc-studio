@@ -1,6 +1,7 @@
 import clsx from 'clsx'
 import { useEffect, useId, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { useAndroidBackInterception } from '../../app/useAndroidBackInterception.js'
 import { useTranslate } from '../../i18n/index.js'
 import { IconCloseOutline16 } from './icons.js'
 import { IconButton } from './IconButton.js'
@@ -33,6 +34,7 @@ export const Modal = ({
   const titleId = useId()
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
+  useAndroidBackInterception()
   useEffect(() => {
     const token = {}
     openModals.push(token)

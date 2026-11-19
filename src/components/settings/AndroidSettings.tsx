@@ -1,6 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { android, saveAndroidHistory } from '../../app/android.js'
 import { openAndroidPage } from '../../app/openAndroidPage.js'
+import {
+  subscribeToAndroidBackPreview,
+  useAndroidBackInterception,
+} from '../../app/useAndroidBackInterception.js'
 import { useTranslate, type LinkedMessage } from '../../i18n/index.js'
 import type { TtsVoice } from '../../services/api/speech.js'
 import {
@@ -32,7 +36,9 @@ import {
   IconSettingsOutline16,
 } from '../base/icons.js'
 import { showToast } from '../base/toastState.js'
+import { closeMobileSider } from '../sider/mobileSiderState.js'
 import { ApiKeyConfirm, ApiKeyField, useApiKeyEditor } from './ApiKeyField.js'
+import { createSettingsPageMotion } from './androidSettingsMotion.js'
 import { closeSettings, useSettingsDialog } from './settingsDialogState.js'
 import styles from './AndroidSettings.module.css'
 
@@ -45,6 +51,16 @@ const faqUrl = 'https://static.deepseek.com/faq/index.html'
 
 type Page = 'root' | 'account' | 'data' | 'export' | 'font' | 'personalization' | 'agreements'
 type Popup = 'locale' | 'theme' | 'voice' | 'logout' | 'delete' | 'import'
+
+const parentPage: Record<Page, Page | null> = {
+  root: null,
+  account: 'root',
+  data: 'root',
+  export: 'data',
+  font: 'root',
+  personalization: 'root',
+  agreements: 'root',
+}
 
 const Profile = () => (
   <svg
@@ -208,13 +224,15 @@ const Choice = <T extends string>({
   )
 }
 
-export const AndroidSettings = () => {
+export const AndroidSettings = ({ chatFrame }: { chatFrame: RefObject<HTMLDivElement> }) => {
   const open = useSettingsDialog((state) => state.open)
   const section = useSettingsDialog((state) => state.section)
-  return open ? <Settings start={section === 'data' ? 'account' : 'root'} key={section} /> : null
+  return open ? (
+    <Settings start={section === 'data' ? 'account' : 'root'} chatFrame={chatFrame} key={section} />
+  ) : null
 }
 
-const Settings = ({ start }: { start: Page }) => {
+const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTMLDivElement> }) => {
   const t = useTranslate()
   const { locale, localePreference, themePreference, fontSize, foldThinking, ttsVoice } =
     useSettings()
@@ -227,6 +245,10 @@ const Settings = ({ start }: { start: Page }) => {
   const [importStatus, setImportStatus] = useState<LinkedMessage | null>(null)
   const [archive, setArchive] = useState<Awaited<ReturnType<typeof exportHistory>> | null>(null)
   const importInput = useRef<HTMLInputElement>(null)
+  const pagesRef = useRef<HTMLDivElement>(null)
+  const motionRef = useRef<ReturnType<typeof createSettingsPageMotion>>()
+  const enterNext = useRef(true)
+  const exiting = useRef(false)
   const sessions = useChatStore((state) => state.sessions.length)
   const editor = useApiKeyEditor()
 
@@ -273,19 +295,106 @@ const Settings = ({ start }: { start: Page }) => {
   const themeLabel = themes.find((item) => item.id === themePreference)?.label
   const localizedPoliciesUrl = `${policiesUrl}/${locale}`
 
+  const openPage = (next: Page) => {
+    if (exiting.current) {
+      return
+    }
+    closeMobileSider()
+    enterNext.current = true
+    setPage(next)
+  }
+
   const back = () => {
-    if (busy) {
+    if (busy || exiting.current) {
       return
     }
     if (popup) {
       setPopup(null)
       setFile(null)
-    } else if (page === 'root') {
-      closeSettings()
-    } else {
-      setPage(page === 'export' ? 'data' : 'root')
+      return
     }
+    const finish = () => {
+      const previous = parentPage[page]
+      if (previous) {
+        enterNext.current = false
+        setPage(previous)
+      } else {
+        closeSettings()
+      }
+    }
+    const motion = motionRef.current
+    if (!motion) {
+      finish()
+      return
+    }
+    closeMobileSider()
+    exiting.current = true
+    void motion.play('back').then((finished) => {
+      if (motionRef.current !== motion) {
+        return
+      }
+      if (finished) {
+        finish()
+      } else {
+        exiting.current = false
+      }
+    })
   }
+
+  useAndroidBackInterception()
+  useLayoutEffect(() => {
+    const pages = pagesRef.current
+    const getPage = (screen: Page) =>
+      pages?.querySelector<HTMLElement>(`[data-settings-page="${screen}"]`)
+    const settings = getPage(page)
+    const content = settings?.querySelector<HTMLElement>(`.${styles.pageContent}`)
+    if (!settings || !content) {
+      return
+    }
+    const parent = parentPage[page]
+    const previous = parent
+      ? (getPage(parent)?.querySelector<HTMLElement>(`.${styles.pageContent}`) ?? null)
+      : chatFrame.current
+    exiting.current = false
+    const motion = createSettingsPageMotion(settings, content, previous)
+    motionRef.current = motion
+    if (enterNext.current) {
+      void motion.play('enter').then((finished) => {
+        if (finished && motionRef.current === motion && !exiting.current) {
+          motion.cancel()
+          closeMobileSider()
+        }
+      })
+    }
+    return () => {
+      motionRef.current = undefined
+      motion.cancel()
+    }
+  }, [chatFrame, page])
+
+  const canPreview = page !== 'font' && popup === null && !busy
+  useLayoutEffect(() => {
+    const motion = motionRef.current
+    if (!canPreview || !motion) {
+      return
+    }
+    let previewing = false
+    const unsubscribe = subscribeToAndroidBackPreview((preview) => {
+      if (!exiting.current) {
+        if (preview && !previewing) {
+          closeMobileSider()
+        }
+        previewing = Boolean(preview)
+        motion.seek(preview?.progress ?? 0)
+      }
+    })
+    return () => {
+      unsubscribe?.()
+      if (previewing && !exiting.current && motionRef.current === motion) {
+        motion.seek(0)
+      }
+    }
+  }, [canPreview, page])
 
   useEffect(() => {
     const onBack = (event: Event) => {
@@ -353,8 +462,8 @@ const Settings = ({ start }: { start: Page }) => {
     }
   }
 
-  return (
-    <section className={styles.page} role="region" aria-label={labels[page]}>
+  const renderPage = (screen: Page) => (
+    <>
       <header className={styles.header}>
         <button
           type="button"
@@ -364,17 +473,17 @@ const Settings = ({ start }: { start: Page }) => {
         >
           <IconChevronRightOutline14 />
         </button>
-        <h1>{labels[page]}</h1>
+        <h1>{labels[screen]}</h1>
       </header>
-      <div className={styles.scroll} key={page}>
-        {page === 'root' ? (
+      <div className={styles.scroll}>
+        {screen === 'root' ? (
           <>
             <Group label={tr('账户', 'Account')}>
-              <Row label={labels.account} icon={<Profile />} onClick={() => setPage('account')} />
+              <Row label={labels.account} icon={<Profile />} onClick={() => openPage('account')} />
               <Row
                 label={labels.data}
                 icon={<IconDataOutline16 />}
-                onClick={() => setPage('data')}
+                onClick={() => openPage('data')}
               />
             </Group>
             <Group label={tr('应用', 'App')}>
@@ -393,12 +502,12 @@ const Settings = ({ start }: { start: Page }) => {
               <Row
                 label={labels.font}
                 icon={<span className={styles.fontIcon}>ᴀA</span>}
-                onClick={() => setPage('font')}
+                onClick={() => openPage('font')}
               />
               <Row
                 label={labels.personalization}
                 icon={<IconSettingsOutline16 />}
-                onClick={() => setPage('personalization')}
+                onClick={() => openPage('personalization')}
               />
             </Group>
             <Group label={tr('语音', 'Voice')}>
@@ -417,7 +526,7 @@ const Settings = ({ start }: { start: Page }) => {
               <Row
                 label={labels.agreements}
                 icon={<IconLinkOutline16 />}
-                onClick={() => setPage('agreements')}
+                onClick={() => openPage('agreements')}
               />
             </Group>
             <Group spaced>
@@ -432,7 +541,7 @@ const Settings = ({ start }: { start: Page }) => {
             </Group>
           </>
         ) : null}
-        {page === 'account' ? (
+        {screen === 'account' ? (
           <Group label={tr('账户', 'Account')}>
             <Row
               label="DeepSeek API Key"
@@ -456,7 +565,7 @@ const Settings = ({ start }: { start: Page }) => {
             />
           </Group>
         ) : null}
-        {page === 'data' ? (
+        {screen === 'data' ? (
           <>
             <p className={styles.caption}>
               {tr(
@@ -469,7 +578,7 @@ const Settings = ({ start }: { start: Page }) => {
               {tr('。', '.')}
             </p>
             <Group>
-              <Row label={labels.export} disabled={busy} onClick={() => setPage('export')} />
+              <Row label={labels.export} disabled={busy} onClick={() => openPage('export')} />
             </Group>
             <Group>
               <Row
@@ -512,7 +621,7 @@ const Settings = ({ start }: { start: Page }) => {
             ) : null}
           </>
         ) : null}
-        {page === 'export' ? (
+        {screen === 'export' ? (
           <>
             <Group>
               <Row
@@ -545,7 +654,7 @@ const Settings = ({ start }: { start: Page }) => {
             </p>
           </>
         ) : null}
-        {page === 'font' ? (
+        {screen === 'font' ? (
           <div
             className={styles.preview}
             style={{
@@ -564,7 +673,7 @@ const Settings = ({ start }: { start: Page }) => {
             </p>
           </div>
         ) : null}
-        {page === 'personalization' ? (
+        {screen === 'personalization' ? (
           <>
             <Group>
               <Row
@@ -586,7 +695,7 @@ const Settings = ({ start }: { start: Page }) => {
             </p>
           </>
         ) : null}
-        {page === 'agreements' ? (
+        {screen === 'agreements' ? (
           <Group>
             <Row
               label={tr('用户协议', 'Terms of Use')}
@@ -617,7 +726,7 @@ const Settings = ({ start }: { start: Page }) => {
           </Group>
         ) : null}
       </div>
-      {page === 'font' ? (
+      {screen === 'font' ? (
         <div className={styles.fontPanel}>
           <Row
             label={follow}
@@ -646,6 +755,11 @@ const Settings = ({ start }: { start: Page }) => {
           />
         </div>
       ) : null}
+    </>
+  )
+
+  const popups = (
+    <>
       {popup === 'locale' ? (
         <Choice
           title={language}
@@ -755,6 +869,37 @@ const Settings = ({ start }: { start: Page }) => {
           </section>
         </div>
       ) : null}
-    </section>
+    </>
+  )
+
+  const pages = [page]
+  for (let parent = parentPage[page]; parent; parent = parentPage[parent]) {
+    pages.unshift(parent)
+  }
+
+  return (
+    <div ref={pagesRef}>
+      {pages.map((screen) => {
+        const active = screen === page
+        return (
+          <section
+            key={screen}
+            ref={(element) => {
+              if (element) {
+                element.inert = !active
+              }
+            }}
+            className={styles.page}
+            data-settings-page={screen}
+            role="region"
+            aria-label={labels[screen]}
+            aria-hidden={active ? undefined : true}
+          >
+            <div className={styles.pageContent}>{renderPage(screen)}</div>
+            {active ? popups : null}
+          </section>
+        )
+      })}
+    </div>
   )
 }
