@@ -177,7 +177,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
 
   // 排队、上传中或上传失败的附件都留在输入框，全部上传成功后才能发送
   const canSend = !importingHistory && !streaming && voice.status === 'idle' && draftReady
-  const showSend = !android || streaming || draftReady
+  const showSend = !android || streaming || draftReady || typing
 
   useEffect(() => {
     if (!showAttachments) {
@@ -409,7 +409,10 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
             </div>
           )}
         </div>
-        <div className={styles.functionRow}>
+        <div
+          className={styles.functionRow}
+          data-empty-typing={android && typing && !draftReady ? '' : undefined}
+        >
           {/* 深度思考 / 智能搜索开关，tooltip 在按钮上方 */}
           <div ref={togglesRef} className={styles.toggles}>
             <Tooltip content={t('deactivatedThinkTooltip')}>
@@ -496,7 +499,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
                     setShowAttachments(!showAttachments)
                   }}
                 />
-                {draftReady && (attachments.length === 0 || text.trim()) ? null : (
+                {typing || (draftReady && (attachments.length === 0 || text.trim())) ? null : (
                   <IconButton
                     size="xl"
                     tone="primary"
@@ -587,6 +590,11 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
                 data-android-a11y-label={android ? t('send') : undefined}
                 data-android-a11y-label-kind={android ? 'description' : undefined}
                 data-android-a11y-checkable={android ? 'false' : undefined}
+                onPointerDown={(event) => {
+                  if (android && !canSend) {
+                    event.preventDefault()
+                  }
+                }}
                 onClick={send}
               >
                 <span className={styles.androidSendVisual}>

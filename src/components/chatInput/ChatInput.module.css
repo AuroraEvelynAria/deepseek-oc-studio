@@ -685,6 +685,15 @@
   left: 219.4667px;
 }
 
+[data-android] .functionRow[data-empty-typing] .androidUploadTarget {
+  top: -6px;
+  left: 260.7111px;
+}
+
+[data-android] .functionRow[data-empty-typing] .sendButton {
+  top: -5.6444px;
+}
+
 [data-android] .functionRow:has(.sendButton) .androidVoiceTarget {
   left: 260.7111px;
   width: 59.7333px;
