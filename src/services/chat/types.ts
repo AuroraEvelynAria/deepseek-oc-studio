@@ -8,6 +8,7 @@ import type {
   StopReason,
   TextCitation,
 } from '../api/types.js'
+import type { UploadedImage } from '../imageUpload.js'
 
 /**
  * 消息附件。id 是本地标识（IndexedDB files 表的主键，原件按它存储，所有引用同一 id 的消息共用一份），
@@ -17,6 +18,8 @@ import type {
 export type FileAttachment = {
   id: string
   serverId: string | null
+  /** 当前 file_id 对应的上传尺寸和转码状态，旧记录可能没有。 */
+  serverImage?: UploadedImage
   name: string
   size: number
   /** 附件类别；导入时沿用归档的 is_image，不由 MIME 识别结果决定。 */

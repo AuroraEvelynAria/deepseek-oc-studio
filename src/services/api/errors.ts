@@ -80,6 +80,18 @@ export const extractFileIds = (message: string): string[] => [
   ...new Set(message.match(/file-api-[\w-]+/g) ?? []),
 ]
 
+/** Messages API 在请求路径中指出被拒绝的图片块。 */
+export const getRejectedImagePosition = (error: unknown) => {
+  if (!(error instanceof ApiError) || (error.status !== 400 && error.kind !== 'stream')) {
+    return null
+  }
+  const match =
+    /^\.?messages\.(\d+)\.content\.(\d+): (?:You have uploaded an (?:unsupported|invalid) image|The image is too large to process)\b/i.exec(
+      error.message
+    )
+  return match ? { message: Number(match[1]), block: Number(match[2]) } : null
+}
+
 /** 上传失败里能识别出具体原因的情况；其余统一按「上传失败」处理 */
 export type UploadErrorCode = 'fileCountLimit' | 'storageLimit' | 'parseFailed'
 

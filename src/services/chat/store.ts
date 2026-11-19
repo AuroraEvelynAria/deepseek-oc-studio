@@ -1,9 +1,21 @@
 import { create } from 'zustand'
 import { createId } from '../../utils/id.js'
 import { ApiError, streamMessage } from '../api/client.js'
-import type { ChatModel, CreateMessageRequest } from '../api/types.js'
-import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
-import { cancelUpload, describeUploadError, uploadAttachment, useUploads } from '../attachments.js'
+import type { ChatModel, CreateMessageRequest, MessageParam } from '../api/types.js'
+import {
+  extractFileIds,
+  getFileErrorCode,
+  getRejectedImagePosition,
+  isRetryableApiError,
+} from '../api/errors.js'
+import {
+  cancelUpload,
+  describeUploadError,
+  uploadAttachment,
+  useUploads,
+  type AttachmentUpload,
+} from '../attachments.js'
+import { MANY_IMAGES_COUNT, MANY_IMAGES_MAX_EDGE, MAX_IMAGE_EDGE } from '../imageUpload.js'
 import { useSettings } from '../settings.js'
 import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from './branches.js'
 import * as db from './db.js'
@@ -42,7 +54,7 @@ const SYSTEM_PROMPT = '该助手为DeepSeek，由深度求索公司创造。'
 const SESSION_CACHE_LIMIT = 5
 /** 首次请求开启高级内容审核。 */
 const SAFETY_CHECK = { level: 'high' } as const
-/** 服务端判定 file_id 失效后，重新补传并重发的最多次数（不含首次请求） */
+/** 同一轮请求因 file_id 失效而重发的最多次数（不含首次请求） */
 const FILE_RETRY_LIMIT = 2
 /** 退避基数，第 n 次重试等待 2^n 倍；连续失败达到上限就放弃，把原始报错展示出来 */
 const FILE_RETRY_BASE_DELAY = 1000
@@ -598,9 +610,10 @@ export const sendMessage = (targetSessionId: string | null) => {
     id: createId(),
     role: 'user',
     content: text,
-    files: files.map(({ id, serverId, name, size, isImage, mimeType }) => ({
+    files: files.map(({ id, serverId, serverImage, name, size, isImage, mimeType }) => ({
       id,
       serverId,
+      serverImage,
       name,
       size,
       isImage,
@@ -762,19 +775,20 @@ export const retryUpload = (sessionId: string, messageId: string) => {
 type Request = { history: Message[]; question: UserMessage; prefix?: AssistantMessage }
 
 /** 把补传得到的 serverId 写回会话里所有引用同一附件的消息（编辑、重新生成会共用附件） */
-const saveServerIds = (sessionId: string, serverIds: Map<string, string>) => {
-  if (serverIds.size === 0) {
+const saveUploadedFiles = (sessionId: string, uploads: Map<string, AttachmentUpload>) => {
+  if (uploads.size === 0) {
     return
   }
   updateSession(sessionId, (session) => ({
     ...session,
     messages: session.messages.map((message) =>
-      message.role === 'user' && message.files.some((file) => serverIds.has(file.id))
+      message.role === 'user' && message.files.some((file) => uploads.has(file.id))
         ? {
             ...message,
-            files: message.files.map((file) =>
-              serverIds.has(file.id) ? { ...file, serverId: serverIds.get(file.id) ?? null } : file
-            ),
+            files: message.files.map((file) => {
+              const result = uploads.get(file.id)
+              return result ? { ...file, ...result } : file
+            }),
           }
         : message
     ),
@@ -786,13 +800,16 @@ const saveServerIds = (sessionId: string, serverIds: Map<string, string>) => {
  * 附件的服务端 id：已有直接用；正在上传的等待同一任务；否则读取本地原件补传。
  * 本地也没有原件（导入的文档附件只有元数据）时返回 null，该附件只展示、不进入请求。
  */
-const ensureServerId = async (apiKey: string, file: FileAttachment): Promise<string | null> => {
+const ensureServerId = async (
+  apiKey: string,
+  file: FileAttachment
+): Promise<AttachmentUpload | null> => {
   if (file.serverId) {
-    return file.serverId
+    return { serverId: file.serverId, serverImage: file.serverImage }
   }
   const task = useUploads.getState().tasks[file.id]
   if (task?.status === 'done') {
-    return task.serverId
+    return { serverId: task.serverId, serverImage: task.serverImage }
   }
   const blob = await db.loadFile(file.id)
   if (!blob) {
@@ -829,22 +846,22 @@ const prepareFiles = async (sessionId: string, request: Request, signal: AbortSi
   // 否则快照里仍是旧 id，补传会直接复用它。
   request = refreshRequest(sessionId, request)
   const apiKey = useSettings.getState().apiKey ?? ''
-  const serverIds = new Map<string, string>()
+  const resultsById = new Map<string, AttachmentUpload>()
   // 停止生成立即生效；上传本身不取消（输入框与其他消息可能共用同一任务），完成后照常写回 serverId
   const aborted = new Promise<never>((_, reject) => {
     signal.addEventListener('abort', () => reject(signal.reason), { once: true })
   })
   const uploads = Promise.allSettled(
     request.question.files.map(async (file) => {
-      const serverId = await ensureServerId(apiKey, file)
-      if (serverId) {
-        serverIds.set(file.id, serverId)
+      const result = await ensureServerId(apiKey, file)
+      if (result) {
+        resultsById.set(file.id, result)
       }
     })
   )
   void uploads.then(() => {
     if (epoch === historyEpoch) {
-      saveServerIds(sessionId, serverIds)
+      saveUploadedFiles(sessionId, resultsById)
     }
   })
   const results = await Promise.race([uploads, aborted])
@@ -856,7 +873,7 @@ const prepareFiles = async (sessionId: string, request: Request, signal: AbortSi
   const pending = new Map<string, FileAttachment>()
   for (const [user] of getContextRounds(request.history).toReversed()) {
     for (const file of user.files) {
-      if (!file.serverId && !serverIds.has(file.id) && !pending.has(file.id)) {
+      if (!file.serverId && !resultsById.has(file.id) && !pending.has(file.id)) {
         pending.set(file.id, file)
       }
     }
@@ -864,25 +881,115 @@ const prepareFiles = async (sessionId: string, request: Request, signal: AbortSi
   for (const file of pending.values()) {
     signal.throwIfAborted()
     try {
-      const serverId = await Promise.race([ensureServerId(apiKey, file), aborted])
-      if (serverId) {
-        serverIds.set(file.id, serverId)
-        saveServerIds(sessionId, new Map([[file.id, serverId]]))
+      const result = await Promise.race([ensureServerId(apiKey, file), aborted])
+      if (result) {
+        saveUploadedFiles(sessionId, new Map([[file.id, result]]))
       }
     } catch {
       signal.throwIfAborted()
     }
   }
 
-  // 用补齐后的会话重新取历史与提问，保证请求里都是 serverId
-  const session = getSession(sessionId)
-  const resolve = <T extends Message>(message: T): T =>
-    (session?.messages.find((m) => m.id === message.id) as T | undefined) ?? message
-  return {
-    history: request.history.map(resolve),
-    question: resolve(request.question),
-    prefix: request.prefix,
+  const prepared = refreshRequest(sessionId, request)
+  const images = getRequestImages(prepared)
+  if (images.length < MANY_IMAGES_COUNT) {
+    return prepared
   }
+
+  // API 根据请求里的图片总数降低尺寸限制，历史轮次也计入。
+  const oversized = new Map(
+    images
+      .filter((file) => (file.serverImage?.maxEdge ?? 0) > MANY_IMAGES_MAX_EDGE)
+      .map((file) => [file.id, file])
+  )
+  const constrained = Promise.allSettled(
+    [...oversized.values()].map(async (file) => {
+      const result = await uploadRequestImage(sessionId, apiKey, file, MANY_IMAGES_MAX_EDGE, signal)
+      if (result && epoch === historyEpoch) {
+        saveUploadedFiles(sessionId, new Map([[file.id, result]]))
+      }
+    })
+  )
+  const constrainedResults = await Promise.race([constrained, aborted])
+  const constraintFailure = constrainedResults.find((result) => result.status === 'rejected')
+  if (constraintFailure) {
+    throw constraintFailure.reason
+  }
+  return refreshRequest(sessionId, prepared)
+}
+
+const getRequestImages = (request: Request) =>
+  [request.question, ...getContextRounds(request.history).map(([user]) => user)].flatMap(
+    ({ files }) => files.filter((file) => file.isImage && file.serverId)
+  )
+
+const uploadRequestImage = async (
+  sessionId: string,
+  apiKey: string,
+  file: FileAttachment,
+  maxEdge: number,
+  signal: AbortSignal
+) => {
+  const task = useUploads.getState().tasks[file.id]
+  if (
+    task?.status === 'done' &&
+    task.serverId !== file.serverId &&
+    task.serverImage?.converted &&
+    task.serverImage.maxEdge <= maxEdge
+  ) {
+    return { serverId: task.serverId, serverImage: task.serverImage }
+  }
+  const blob =
+    pendingFiles.get(sessionId)?.find(({ id }) => id === file.id)?.blob ??
+    (await db.loadFile(file.id))
+  signal.throwIfAborted()
+  if (!blob) {
+    return null
+  }
+  const options = { maxEdge, forceConversion: true }
+  const result = await uploadAttachment(apiKey, file.id, blob, file.name, true, options)
+  // 同一附件可能有另一轮上传正在进行，复用它之前先核对图片尺寸和格式。
+  if (result.serverImage?.converted && result.serverImage.maxEdge <= maxEdge) {
+    return result
+  }
+  signal.throwIfAborted()
+  return uploadAttachment(apiKey, file.id, blob, file.name, true, options)
+}
+
+/** 旧附件或原始格式被 Messages API 拒绝时，按实际发送的消息和块索引只修复那一张。 */
+const repairRejectedImage = async (
+  sessionId: string,
+  request: Request,
+  messages: MessageParam[],
+  error: unknown,
+  signal: AbortSignal
+): Promise<boolean> => {
+  const position = getRejectedImagePosition(error)
+  if (!position) {
+    return false
+  }
+  const message = messages[position.message]
+  if (message?.role !== 'user' || !Array.isArray(message.content)) {
+    return false
+  }
+  const block = message.content[position.block]
+  if (block?.type !== 'image') {
+    return false
+  }
+  const images = getRequestImages(refreshRequest(sessionId, request))
+  const file = images.find(({ serverId }) => serverId === block.source.file_id)
+  const maxEdge = images.length >= MANY_IMAGES_COUNT ? MANY_IMAGES_MAX_EDGE : MAX_IMAGE_EDGE
+  if (!file || (file.serverImage?.converted && file.serverImage.maxEdge <= maxEdge)) {
+    return false
+  }
+  const epoch = historyEpoch
+  const apiKey = useSettings.getState().apiKey ?? ''
+  const result = await uploadRequestImage(sessionId, apiKey, file, maxEdge, signal)
+  if (!result || signal.aborted || epoch !== historyEpoch) {
+    return false
+  }
+  saveUploadedFiles(sessionId, new Map([[file.id, result]]))
+  return true
 }
 
 /** 本次请求实际会用到的服务端 file_id */
@@ -933,7 +1040,7 @@ const reuploadInvalidatedFiles = (sessionId: string, request: Request, error: un
       }
       localIds.push(file.id)
       changed = true
-      return { ...file, serverId: null }
+      return { ...file, serverId: null, serverImage: undefined }
     })
     return changed ? { ...message, files } : message
   })
@@ -967,10 +1074,13 @@ const waitForRetry = (attempt: number, signal: AbortSignal) =>
 /**
  * 请求并消费流：先补齐附件的 serverId，再发请求；流式增量按动画帧刷新内存，完成、失败或停止后落盘。
  * 补传失败时回复记为 upload 错误，可重试。
- * 服务端判定 file_id 失效时重新补传后重发，退避重试且次数有上限，超过则按原始报错收尾。
+ * 服务端拒绝附件时尝试重新补传后重发。失效的 file_id 退避重试，图片按报错中指明的位置修复。
  */
 const streamReply = async (sessionId: string, initial: AssistantMessage, request: Request) => {
   const controller = new AbortController()
+  const stopped = new Promise<false>((resolve) => {
+    controller.signal.addEventListener('abort', () => resolve(false), { once: true })
+  })
   if (!getSession(sessionId)?.title) {
     titleRequests.add(controller)
   }
@@ -984,11 +1094,13 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
   }
   streamFlushes.set(sessionId, flush)
 
+  let invalidatedRetries = 0
   try {
-    for (let attempt = 0; ; attempt += 1) {
+    for (;;) {
       /** 附件补齐前出错属于上传失败，请求还没有发出 */
       let preparing = true
       let receivedContent = false
+      let messages: MessageParam[] = []
       try {
         const prepared = await prepareFiles(sessionId, request, controller.signal)
         preparing = false
@@ -999,7 +1111,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         reply = { ...reply, latestReminder }
         updateReply(sessionId, reply)
         persist(sessionId)
-        const messages = toRequestMessages(
+        messages = toRequestMessages(
           prepared.history,
           prepared.question,
           prepared.prefix,
@@ -1058,18 +1170,31 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           })
           break
         }
-        // 附件失效：重新补传后重发。收到过内容块（含丢弃的客户端工具）后不自动重发。
-        if (
-          attempt < FILE_RETRY_LIMIT &&
-          !receivedContent &&
-          reuploadInvalidatedFiles(sessionId, request, error)
-        ) {
-          await waitForRetry(attempt, controller.signal)
-          if (controller.signal.aborted) {
-            reply = settleReply(reply, 'stopped', Date.now())
-            break
+        // 收到过内容块（含丢弃的客户端工具）后不自动重发。
+        if (!receivedContent) {
+          if (
+            invalidatedRetries < FILE_RETRY_LIMIT &&
+            reuploadInvalidatedFiles(sessionId, request, error)
+          ) {
+            await waitForRetry(invalidatedRetries++, controller.signal)
+            if (!controller.signal.aborted) {
+              continue
+            }
+          } else {
+            const repaired = await Promise.race([
+              stopped,
+              repairRejectedImage(sessionId, request, messages, error, controller.signal).catch(
+                () => false
+              ),
+            ])
+            if (repaired) {
+              continue
+            }
           }
-          continue
+        }
+        if (controller.signal.aborted) {
+          reply = settleReply(reply, 'stopped', Date.now())
+          break
         }
         if (error instanceof ApiError && error.kind === 'interrupted' && reply.stopReason) {
           // 已收到 message_delta 的结束原因，只是缺了结尾的 message_stop
