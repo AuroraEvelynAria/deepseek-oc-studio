@@ -19,6 +19,7 @@ export const en = {
   androidAutoRead: 'Read replies aloud automatically',
   androidAutoReadEnabled: 'Automatic read aloud on',
   androidAutoReadDisabled: 'Automatic read aloud off',
+  androidAlreadyInNewChat: 'Already in new chat',
   androidCamera: 'Camera',
   androidGallery: 'Photos',
   androidFiles: 'Files',
