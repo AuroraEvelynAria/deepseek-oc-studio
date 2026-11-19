@@ -63,18 +63,28 @@
 .reasons {
   display: flex;
   flex: 0 0 50px;
-  gap: 8px;
+  gap: 7.4667px;
+  margin-left: -1.0667px;
+  transform: translateY(-9.1111px);
 
   button {
     flex: 0 1 auto;
+    height: 44.8px;
     min-width: 0;
-    padding: 0 10px;
+    padding: 0 10.6667px;
     border: 1px solid var(--dsw-alias-border-l2);
     border-radius: 25px;
     color: var(--dsw-alias-label-primary);
     background: var(--dsw-alias-bg-base);
     font: inherit;
-    font-size: 14px;
+    font-size: 13.1467px;
+    line-height: 18.8444px;
+    white-space: nowrap;
+  }
+
+  [data-android-a11y-label-node] {
+    display: block;
+    line-height: 18.8444px;
     white-space: nowrap;
   }
 

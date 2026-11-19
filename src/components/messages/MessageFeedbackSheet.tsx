@@ -84,7 +84,11 @@ export const MessageFeedbackSheet = ({ onClose }: { onClose: () => void }) => {
               data-android-a11y-checked={reason === item.id ? 'true' : 'false'}
               onClick={() => setReason(reason === item.id ? null : item.id)}
             >
-              {t(item.label)}
+              {android ? (
+                <span data-android-a11y-label-node>{t(item.label)}</span>
+              ) : (
+                t(item.label)
+              )}
             </button>
           ))}
         </div>
