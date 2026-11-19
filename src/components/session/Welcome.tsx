@@ -40,7 +40,22 @@ export const Welcome = () => {
       <div className={styles.welcome}>
         <div className={styles.greeting}>
           {android ? <img src={whale} alt="" /> : null}
-          {greeting}
+          {android ? (
+            <span
+              className={styles.greetingText}
+              data-android-a11y="welcome-greeting"
+              data-android-a11y-label={greeting}
+              data-android-a11y-role="textView"
+              data-android-a11y-label-kind="selfText"
+              data-android-a11y-checkable="false"
+              data-android-a11y-clickable="false"
+              data-android-a11y-focusable="false"
+            >
+              {greeting}
+            </span>
+          ) : (
+            greeting
+          )}
         </div>
         <ChatInput sessionId={null} />
         {isMobile && !android ? <div className={styles.caveat}>{t('contentCaveat')}</div> : null}
