@@ -1,7 +1,7 @@
 /**
  * Messages API（Anthropic 兼容格式）协议类型，只取本应用用到的部分。
  * 文档：https://api-docs.deepseek.com/zh-cn/api/create-message
- * 声明 deepseek_web_search / deepseek_read_url 或设置 safety_check.level 为 high 时进入扩展模式。
+ * 声明联网工具、开启高级审核或启用自动标题时进入扩展模式。
  */
 
 export type ChatModel = 'deepseek-flash' | 'deepseek-v4-pro'
@@ -127,7 +127,7 @@ export type TextBlockParam = { type: 'text'; text: string }
 
 /**
  * 文件块：引用经 Files API 上传的文件，图片用 image、其余用 document；
- * 图片请求需带 anthropic-beta: files-api-2025-04-14；扩展模式不支持 document，返回 400。
+ * 图片请求需带 anthropic-beta: files-api-2025-04-14。
  */
 export type FileBlockParam = {
   type: 'image' | 'document'
@@ -174,11 +174,12 @@ export type DeepseekReadUrlTool = {
 
 export type CreateMessageRequest = {
   model: ChatModel
+  max_tokens: number
   system: string
   messages: MessageParam[]
   thinking: { type: 'enabled' | 'disabled' }
-  tools: (DeepseekWebSearchTool | DeepseekReadUrlTool)[]
-  safety_check: { level: 'high' }
+  tools?: (DeepseekWebSearchTool | DeepseekReadUrlTool)[]
+  safety_check?: { level: 'high' }
   title?: { enabled: boolean }
 }
 

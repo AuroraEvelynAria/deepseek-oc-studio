@@ -137,6 +137,18 @@ const hasFile = (body: CreateMessageRequest) =>
       message.content.some((block) => block.type === 'image' || block.type === 'document')
   )
 
+const openMessageStream = (apiKey: string, body: CreateMessageRequest, signal: AbortSignal) =>
+  request(`${ANTHROPIC_BASE_URL}/messages`, {
+    method: 'POST',
+    headers: {
+      ...anthropicHeaders(apiKey, hasFile(body)),
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+    },
+    body: JSON.stringify({ ...body, stream: true }),
+    signal,
+  })
+
 /**
  * POST /anthropic/v1/messages（stream: true），逐个产出流式事件，收到 message_stop 时结束。
  * ping、保活注释与无法解析的内容不产出；中止请求时抛出 signal 的 AbortError。
@@ -146,15 +158,21 @@ export async function* streamMessage(
   body: CreateMessageRequest,
   signal: AbortSignal
 ): AsyncGenerator<MessageStreamEvent> {
-  const response = await request(`${ANTHROPIC_BASE_URL}/messages`, {
-    method: 'POST',
-    headers: {
-      ...anthropicHeaders(apiKey, hasFile(body)),
-      'Content-Type': 'application/json',
-      Accept: 'text/event-stream',
-    },
-    body: JSON.stringify({ ...body, stream: true }),
-    signal,
+  const response = await openMessageStream(apiKey, body, signal).catch((error: unknown) => {
+    if (
+      !(body.tools?.length || body.safety_check || body.title?.enabled) ||
+      !(error instanceof ApiError) ||
+      error.status !== 400 ||
+      !/\buser input too long, \d+ tokens exceeds max 32768 tokens\b/i.test(error.message)
+    ) {
+      throw error
+    }
+    // 扩展模式在生成前拒绝长输入时，用基础 Messages API 发送同一上下文。
+    return openMessageStream(
+      apiKey,
+      { ...body, tools: undefined, safety_check: undefined, title: undefined },
+      signal
+    )
   })
   const contentType = response.headers.get('Content-Type') ?? ''
   if (!response.body || !contentType.includes('text/event-stream')) {
