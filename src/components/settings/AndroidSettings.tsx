@@ -272,6 +272,9 @@ const Settings = ({ start }: { start: Page }) => {
   const languageLabel = languages.find((item) => item.id === locale)?.label
   const themeLabel = themes.find((item) => item.id === themePreference)?.label
   const localizedPoliciesUrl = `${policiesUrl}/${locale}`
+  const checkForUpdates = () => {
+    showToast(tr('当前已是最新版本', 'You are using the latest version'), 2000)
+  }
 
   const back = () => {
     if (busy) {
@@ -413,7 +416,13 @@ const Settings = ({ start }: { start: Page }) => {
               />
             </Group>
             <Group label={tr('关于', 'About')}>
-              <Row label={tr('版本信息', 'Version')} value={appVersion} icon={<Info />} />
+              <Row
+                label={tr('版本信息', 'Version')}
+                value={appVersion}
+                icon={<Info />}
+                onClick={checkForUpdates}
+                arrow={false}
+              />
               <Row
                 label={labels.agreements}
                 icon={<IconLinkOutline16 />}
