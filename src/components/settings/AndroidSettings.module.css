@@ -172,7 +172,7 @@ a.row:active,
   padding: 0;
   border: 0;
   border-radius: 20px;
-  background: #e4e4e4;
+  background: #e5e5e5;
   transition: background-color 160ms;
 
   span {
@@ -187,7 +187,7 @@ a.row:active,
   }
 
   &[aria-checked='true'] {
-    background: #24c466;
+    background: #22c55e;
 
     span {
       transform: translateX(20px);
