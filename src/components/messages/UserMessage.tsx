@@ -129,6 +129,10 @@ export const UserMessage = memo(function UserMessage({
               className={styles.bubble}
               role={android ? 'button' : undefined}
               tabIndex={android ? 0 : undefined}
+              data-android-a11y={android ? `user-message-${message.id}` : undefined}
+              data-android-a11y-label={android ? message.content : undefined}
+              data-android-a11y-role={android ? 'view' : undefined}
+              data-android-a11y-checkable={android ? 'false' : undefined}
               aria-disabled={android && busy ? true : undefined}
               onClick={android ? startEdit : undefined}
               onKeyDown={(event) => {
@@ -144,7 +148,12 @@ export const UserMessage = memo(function UserMessage({
                 }
               }}
             >
-              {message.content}
+              <span
+                className={styles.bubbleText}
+                data-android-a11y-label-node={android ? '' : undefined}
+              >
+                {message.content}
+              </span>
               {android ? (
                 <Menu
                   options={[

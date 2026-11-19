@@ -107,6 +107,7 @@ export const AssistantMessage = memo(function AssistantMessage({
           loading={streaming}
           cacheKey={message.id}
           disableLink={false}
+          a11yKeyPrefix={android ? `assistant-answer-${message.id}` : undefined}
           sources={view.sources}
         />
       ) : null}
