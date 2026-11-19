@@ -11,7 +11,7 @@ type Target = {
   scrollable: boolean
   focusable: boolean
   touchThrough: boolean
-  role: 'view' | 'editText' | 'textView'
+  role: 'view' | 'editText' | 'textView' | 'button'
   extraButton: boolean
   keepInteractive: boolean
   labelDepth: number
@@ -101,7 +101,9 @@ const collectTargets = () => {
             ? 'editText'
             : element.dataset.androidA11yRole === 'textView'
               ? 'textView'
-              : 'view',
+              : element.dataset.androidA11yRole === 'button'
+                ? 'button'
+                : 'view',
         extraButton: element.dataset.androidA11yExtraButton === 'true',
         keepInteractive: element.dataset.androidA11yKeepInteractive === 'true',
         labelDepth: element.dataset.androidA11yLabelDepth === '2' ? 2 : 1,

@@ -252,7 +252,9 @@ public final class MainActivity extends Activity {
                             ? "android.widget.EditText"
                             : "textView".equals(A11yProxy.this.role)
                                 ? "android.widget.TextView"
-                                : "android.view.View");
+                                : "button".equals(A11yProxy.this.role)
+                                    ? "android.widget.Button"
+                                    : "android.view.View");
                     info.setText(A11yProxy.this.selfText ? A11yProxy.this.description : "");
                     info.setContentDescription(
                         A11yProxy.this.selfDescription ? A11yProxy.this.description : "");

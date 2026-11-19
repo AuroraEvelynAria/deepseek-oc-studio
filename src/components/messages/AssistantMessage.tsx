@@ -186,10 +186,27 @@ export const AssistantMessage = memo(function AssistantMessage({
         <div className={styles.bottom}>
           <BranchSwitcher versions={versions} disabled={busy} onSelect={onSelectVersion} />
           <div className={clsx(styles.actions, isLast && styles.alwaysShow)}>
-            {copyText ? <CopyButton text={copyText} /> : null}
+            {copyText ? (
+              <CopyButton
+                className={styles.actionCopy}
+                text={copyText}
+                buttonProps={
+                  android
+                    ? {
+                        'data-android-a11y': `reply-copy-${message.id}`,
+                        'data-android-a11y-label': t('copy'),
+                        'data-android-a11y-checkable': 'false',
+                        'data-android-a11y-label-kind': 'description',
+                        'data-android-a11y-touch-through': 'true',
+                      }
+                    : undefined
+                }
+                iconWrapperClassName={android ? styles.actionIcon : undefined}
+              />
+            ) : null}
             {responseText && !refused ? (
               <label
-                className={styles.reaction}
+                className={clsx(styles.reaction, styles.actionLike)}
                 data-checked={liked}
                 data-disabled={busy}
                 data-android-a11y={android ? `reply-like-${message.id}` : undefined}
@@ -204,14 +221,27 @@ export const AssistantMessage = memo(function AssistantMessage({
                   aria-label={t('like')}
                   onChange={() => setLiked((value) => !value)}
                 />
-                <IconThumbUp16 filled={liked} />
+                <span
+                  className={android ? styles.actionIcon : undefined}
+                  data-android-a11y-label-node=""
+                >
+                  <IconThumbUp16 filled={liked} />
+                </span>
               </label>
             ) : null}
             {responseText && !refused ? (
               <IconButton
-                icon={<IconThumbDown16 />}
+                icon={
+                  <span
+                    className={android ? styles.actionIcon : undefined}
+                    data-android-a11y-label-node=""
+                  >
+                    <IconThumbDown16 />
+                  </span>
+                }
                 tooltip={t('dislike')}
                 tooltipPlacement="bottom"
+                className={styles.actionDislike}
                 disabled={busy}
                 data-android-a11y={android ? `reply-dislike-${message.id}` : undefined}
                 data-android-a11y-label={t('dislike')}
@@ -221,23 +251,55 @@ export const AssistantMessage = memo(function AssistantMessage({
               />
             ) : null}
             {responseText && !refused ? (
-              <ReadAloudButton messageId={message.id} text={responseText} />
+              <ReadAloudButton
+                className={styles.actionRead}
+                messageId={message.id}
+                text={responseText}
+                androidA11yKey={android ? `reply-read-${message.id}` : undefined}
+              />
             ) : null}
             {responseText && !refused ? (
               <IconButton
-                icon={<IconShareOutline16 />}
+                icon={
+                  android ? (
+                    <span className={styles.actionIcon} data-android-a11y-label-node="">
+                      <IconShareOutline16 />
+                    </span>
+                  ) : (
+                    <IconShareOutline16 />
+                  )
+                }
                 tooltip={t('share')}
                 tooltipPlacement="bottom"
+                className={styles.actionShare}
                 disabled={busy}
+                data-android-a11y={android ? `reply-share-${message.id}` : undefined}
+                data-android-a11y-label={t('share')}
+                data-android-a11y-checkable="false"
+                data-android-a11y-label-kind="description"
+                data-android-a11y-touch-through={android ? 'true' : undefined}
                 onClick={onShare}
               />
             ) : null}
             <IconButton
-              className={styles.regenerate}
-              icon={<IconRefreshOutline16 />}
+              className={clsx(styles.regenerate, styles.actionRegenerate)}
+              icon={
+                android ? (
+                  <span className={styles.actionIcon} data-android-a11y-label-node="">
+                    <IconRefreshOutline16 />
+                  </span>
+                ) : (
+                  <IconRefreshOutline16 />
+                )
+              }
               tooltip={t('regenerate')}
               tooltipPlacement="bottom"
               disabled={busy || refused}
+              data-android-a11y={android ? `reply-regenerate-${message.id}` : undefined}
+              data-android-a11y-label={t('regenerate')}
+              data-android-a11y-checkable="false"
+              data-android-a11y-label-kind="description"
+              data-android-a11y-touch-through={android ? 'true' : undefined}
               onClick={() => {
                 stopReadAloud()
                 regenerateReply(sessionId, message.id)
