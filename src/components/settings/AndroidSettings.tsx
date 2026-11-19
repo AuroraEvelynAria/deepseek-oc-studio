@@ -764,6 +764,7 @@ const Settings = ({ start }: { start: Page }) => {
           title={appearance}
           value={themePreference}
           fields={themes}
+          confirmLabel={tr('确认', 'Confirm')}
           confirm={(value) => {
             setThemePreference(value)
             setPopup(null)
