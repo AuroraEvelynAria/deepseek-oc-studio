@@ -93,6 +93,7 @@ export const en = {
   feedbackPlaceholder: 'Tell us why this answer was not helpful, and what a better answer would be.',
   submit: 'Submit',
   selectAll: 'Select all',
+  androidSelectText: 'Select text',
   selectedGroups: '{count} group selected',
   generateImage: 'Generate image',
   copyLink: 'Copy link',

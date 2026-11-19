@@ -90,6 +90,7 @@ export const zh = {
   feedbackPlaceholder: '我们想知道你对此回答不满意的原因，你认为更好的回答是什么？',
   submit: '提交',
   selectAll: '全选',
+  androidSelectText: '选择文本',
   selectedGroups: '已选 {count} 组',
   generateImage: '生成图片',
   copyLink: '复制链接',

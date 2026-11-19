@@ -17,31 +17,42 @@ export const Menu = ({
   options,
   children,
   androidA11yPrefix,
+  variant,
+  anchorClassName,
 }: {
   options: MenuOption[]
   children: (props: { open: boolean; toggle: () => void }) => ReactNode
   androidA11yPrefix?: string
+  variant?: 'userMessage'
+  anchorClassName?: string
 }) => {
   const [open, setOpen] = useState(false)
   const close = () => setOpen(false)
   const sidebarMenu = Boolean(androidA11yPrefix?.startsWith('sidebar-session-menu'))
+  const userMessageMenu = variant === 'userMessage'
   // 左侧对齐并再左移 5px，让菜单文字与触发元素图标对齐
   const { anchorRef, floatingRef, position } = useAnchoredPosition<HTMLSpanElement, HTMLDivElement>(
     open,
-    { align: 'start', alignOffset: -5, offset: sidebarMenu ? 6.4 : 4 }
+    userMessageMenu
+      ? { align: 'end', alignOffset: 0, offset: -7.8222 }
+      : { align: 'start', alignOffset: -5, offset: sidebarMenu ? 6.4 : 4 }
   )
   useDismiss(open, [anchorRef, floatingRef], close)
 
   return (
     <>
-      <span ref={anchorRef} className={styles.anchor}>
+      <span ref={anchorRef} className={clsx(styles.anchor, anchorClassName)}>
         {children({ open, toggle: () => setOpen((value) => !value) })}
       </span>
       {open
         ? createPortal(
             <div
               ref={floatingRef}
-              className={clsx(styles.menu, sidebarMenu && styles.sidebarMenu)}
+              className={clsx(
+                styles.menu,
+                sidebarMenu && styles.sidebarMenu,
+                userMessageMenu && styles.userMessageMenu
+              )}
               style={position ?? undefined}
               role="menu"
             >

@@ -207,6 +207,7 @@ export const MessageList = ({
                     busy={streaming}
                     versions={versions.get(message.id) ?? EMPTY_VERSIONS}
                     onSelectVersion={selectVersion}
+                    onShare={() => setSharing(true)}
                   />
                 ) : (
                   <AssistantMessage

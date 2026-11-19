@@ -72,6 +72,14 @@
   }
 }
 
+[data-android] .bubble[data-selecting='true'] {
+  user-select: text;
+
+  .bubbleText {
+    background-color: rgb(191 219 254 / 70%);
+  }
+}
+
 .bubbleText {
   display: inline-block;
   max-width: 100%;
@@ -79,6 +87,19 @@
   z-index: 1;
   line-height: inherit;
   vertical-align: top;
+}
+
+.menuAnchor {
+  position: absolute;
+  top: 100%;
+  right: -3.5556px;
+  width: 0;
+  height: 0;
+}
+
+.menuCopyIcon {
+  display: flex;
+  transform: scaleY(1.05);
 }
 
 .menuTrigger {
@@ -91,6 +112,40 @@
   border: 0;
   opacity: 0;
   pointer-events: none;
+}
+
+[data-android] .selectionToolbar {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 8px);
+  right: 0;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--dsw-specific-menu);
+  box-shadow:
+    0 0 1px rgb(0 0 0 / 20%),
+    0 12px 32px rgb(0 0 0 / 8%);
+  white-space: nowrap;
+
+  button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 36px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 8px;
+    color: var(--dsw-alias-label-primary);
+    background: transparent;
+    font: inherit;
+    font-size: 14px;
+
+    &:active {
+      background: var(--dsw-alias-interactive-bg-hover);
+    }
+  }
 }
 
 @media not all and (min-width: 440px) {

@@ -89,6 +89,38 @@ export const IconShareOutline16 = () => (
   </svg>
 )
 
+export const IconShareArrowOutline16 = () => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M1 15.2c.4-5.4 5.1-10 11.5-10.4M9 1.2l6.1 3.6-5.9 3.5M1 15.2c2.2-4.7 5.4-7.7 9.5-9.2"
+      stroke="currentColor"
+      strokeWidth="1.45"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
+
+export const IconSelectTextOutline16 = () => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M1.1 2.4h3.3M2.75 2.4v12.6M1.1 15h3.3"
+      stroke="currentColor"
+      strokeWidth="1.45"
+      strokeLinecap="square"
+    />
+    <rect
+      x="7.2"
+      y="2.7"
+      width="8.5"
+      height="12.3"
+      stroke="currentColor"
+      strokeWidth="1.45"
+      strokeDasharray="1.2 1.25"
+    />
+  </svg>
+)
+
 export const IconDarkOutline16 = () => (
   <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path

@@ -1,9 +1,14 @@
 import { useTranslate } from '../../i18n/index.js'
 import clsx from 'clsx'
-import { memo, useLayoutEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { android } from '../../app/android.js'
 import { useIsMobile } from '../../app/viewport.js'
-import { IconCopyOutline16, IconEditOutline16 } from '../base/icons.js'
+import {
+  IconCopyOutline16,
+  IconEditOutline16,
+  IconSelectTextOutline16,
+  IconShareArrowOutline16,
+} from '../base/icons.js'
 import { editMessage, retryUpload } from '../../services/chat/store.js'
 import { stopReadAloud } from '../../services/speech/readAloud.js'
 import type { UserMessage as UserMessageType } from '../../services/chat/types.js'
@@ -31,6 +36,7 @@ export const UserMessage = memo(function UserMessage({
   busy,
   versions,
   onSelectVersion,
+  onShare,
 }: {
   sessionId: string
   message: UserMessageType
@@ -41,11 +47,15 @@ export const UserMessage = memo(function UserMessage({
   busy: boolean
   versions: MessageVersions
   onSelectVersion: SelectMessageVersion
+  onShare: () => void
 }) {
   const t = useTranslate()
   const [editing, setEditing] = useState(false)
+  const [selecting, setSelecting] = useState(false)
   const [draft, setDraft] = useState(message.content)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const bubbleRef = useRef<HTMLDivElement>(null)
+  const bubbleTextRef = useRef<HTMLSpanElement>(null)
   const menuTriggerRef = useRef<HTMLButtonElement>(null)
   const isMobile = useIsMobile()
   const canSend = !busy && (draft.trim() !== '' || message.files.length > 0)
@@ -67,9 +77,58 @@ export const UserMessage = memo(function UserMessage({
 
   const startEdit = () => {
     if (!busy) {
+      setSelecting(false)
       setDraft(message.content)
       setEditing(true)
     }
+  }
+
+  const stopSelecting = useCallback(() => {
+    setSelecting(false)
+    window.getSelection()?.removeAllRanges()
+  }, [])
+
+  const startSelecting = () => {
+    setSelecting(true)
+    requestAnimationFrame(() => {
+      const text = bubbleTextRef.current
+      if (!text) {
+        return
+      }
+      const range = document.createRange()
+      range.selectNodeContents(text)
+      const selection = window.getSelection()
+      selection?.removeAllRanges()
+      selection?.addRange(range)
+    })
+  }
+
+  useEffect(() => {
+    if (!selecting) {
+      return
+    }
+    const onPointerDown = (event: PointerEvent) => {
+      if (!bubbleRef.current?.contains(event.target as Node)) {
+        stopSelecting()
+      }
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        stopSelecting()
+      }
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [selecting, stopSelecting])
+
+  const copyMessage = () => {
+    void copyText(message.content).then((copied) =>
+      showToast({ key: copied ? 'copied' : 'copyFailed' }, copied ? 1990 : undefined)
+    )
   }
 
   return (
@@ -126,7 +185,9 @@ export const UserMessage = memo(function UserMessage({
         <>
           {message.content ? (
             <div
+              ref={bubbleRef}
               className={styles.bubble}
+              data-selecting={android && selecting ? 'true' : undefined}
               role={android ? 'button' : undefined}
               tabIndex={android ? 0 : undefined}
               data-android-a11y={android ? `user-message-${message.id}` : undefined}
@@ -134,7 +195,7 @@ export const UserMessage = memo(function UserMessage({
               data-android-a11y-role={android ? 'view' : undefined}
               data-android-a11y-checkable={android ? 'false' : undefined}
               aria-disabled={android && busy ? true : undefined}
-              onClick={android ? startEdit : undefined}
+              onClick={android ? (selecting ? stopSelecting : startEdit) : undefined}
               onKeyDown={(event) => {
                 if (android && (event.key === 'Enter' || event.key === ' ')) {
                   event.preventDefault()
@@ -144,54 +205,99 @@ export const UserMessage = memo(function UserMessage({
               onContextMenu={(event) => {
                 if (android) {
                   event.preventDefault()
+                  stopSelecting()
                   menuTriggerRef.current?.click()
                 }
               }}
             >
               <span
+                ref={bubbleTextRef}
                 className={styles.bubbleText}
                 data-android-a11y-label-node={android ? '' : undefined}
               >
                 {message.content}
               </span>
               {android ? (
-                <Menu
-                  options={[
-                    {
-                      key: 'copy',
-                      label: t('copy'),
-                      icon: <IconCopyOutline16 />,
-                      onSelect: () => {
-                        void copyText(message.content).then((copied) =>
-                          showToast(
-                            { key: copied ? 'copied' : 'copyFailed' },
-                            copied ? 1990 : undefined
-                          )
-                        )
+                <>
+                  <Menu
+                    variant="userMessage"
+                    anchorClassName={styles.menuAnchor}
+                    options={[
+                      {
+                        key: 'copy',
+                        label: t('copy'),
+                        icon: (
+                          <span className={styles.menuCopyIcon}>
+                            <IconCopyOutline16 />
+                          </span>
+                        ),
+                        onSelect: copyMessage,
                       },
-                    },
-                    {
-                      key: 'edit',
-                      label: t('androidEditMessage'),
-                      icon: <IconEditOutline16 />,
-                      onSelect: startEdit,
-                    },
-                  ]}
-                >
-                  {({ toggle }) => (
-                    <button
-                      ref={menuTriggerRef}
-                      className={styles.menuTrigger}
-                      type="button"
-                      aria-hidden="true"
-                      tabIndex={-1}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        toggle()
-                      }}
-                    />
-                  )}
-                </Menu>
+                      {
+                        key: 'selectText',
+                        label: t('androidSelectText'),
+                        icon: <IconSelectTextOutline16 />,
+                        onSelect: startSelecting,
+                      },
+                      {
+                        key: 'edit',
+                        label: t('androidEditMessage'),
+                        icon: <IconEditOutline16 />,
+                        onSelect: startEdit,
+                      },
+                      {
+                        key: 'share',
+                        label: t('share'),
+                        icon: <IconShareArrowOutline16 />,
+                        onSelect: onShare,
+                      },
+                    ]}
+                  >
+                    {({ toggle }) => (
+                      <button
+                        ref={menuTriggerRef}
+                        className={styles.menuTrigger}
+                        type="button"
+                        aria-hidden="true"
+                        tabIndex={-1}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          toggle()
+                        }}
+                      />
+                    )}
+                  </Menu>
+                  {selecting ? (
+                    <div
+                      className={styles.selectionToolbar}
+                      role="toolbar"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <button
+                        type="button"
+                        aria-label={t('copy')}
+                        onClick={() => {
+                          copyMessage()
+                          stopSelecting()
+                        }}
+                      >
+                        <IconCopyOutline16 />
+                        {t('copy')}
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={t('share')}
+                        onClick={() => {
+                          stopSelecting()
+                          onShare()
+                        }}
+                      >
+                        <IconShareArrowOutline16 />
+                        {t('share')}
+                      </button>
+                    </div>
+                  ) : null}
+                </>
               ) : null}
             </div>
           ) : null}
