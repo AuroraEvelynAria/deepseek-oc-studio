@@ -59,6 +59,11 @@
   height: 44.8px;
   user-select: none;
 
+  &.active {
+    background-color: var(--dsw-alias-button-ghost-active-fill);
+    color: var(--dsw-alias-brand-text);
+  }
+
   .action {
     position: absolute;
     right: 4px;
@@ -90,7 +95,25 @@
   }
 
   &:active {
-    background: var(--dsw-alias-bg-skeleton);
+    background: rgb(227 233 246);
+  }
+
+  &.tapHighlight {
+    animation: androidSessionTapHighlight 170ms linear both;
+  }
+}
+
+@keyframes androidSessionTapHighlight {
+  0%,
+  30% {
+    color: var(--dsw-alias-brand-text);
+    background-color: rgb(237 241 254);
+  }
+
+  30.1%,
+  100% {
+    color: rgb(60 104 248);
+    background-color: rgb(227 233 246);
   }
 }
 

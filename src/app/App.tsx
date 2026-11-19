@@ -111,7 +111,6 @@ export const App = () => {
   const importingHistory = useChatStore((state) => state.importingHistory)
   const frameRef = useMobileViewport(isMobile && !needsApiKey)
   const activeId = useChatStore((state) => state.activeId)
-
   usePreventPageScroll(isMobile && !android)
 
   useEffect(() => {
@@ -139,8 +138,12 @@ export const App = () => {
   useEffect(closeSearchPanel, [activeId])
   // 切换会话时停止朗读
   useEffect(stopReadAloud, [activeId])
-  // 移动端选中会话、切换布局后收起抽屉
-  useEffect(closeMobileSider, [activeId, isMobile])
+  // 移动端切换布局后收起抽屉；会话行点击负责在按压反馈后关闭
+  useEffect(() => {
+    if (isMobile) {
+      closeMobileSider()
+    }
+  }, [isMobile])
 
   useEffect(() => {
     void initChat()

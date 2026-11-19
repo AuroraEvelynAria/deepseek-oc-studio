@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { memo, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { android } from '../../app/android.js'
 import { useTranslate } from '../../i18n/index.js'
 import {
@@ -36,13 +36,32 @@ export const SessionItem = memo(function SessionItem({
 }) {
   const t = useTranslate()
   const [renaming, setRenaming] = useState(false)
+  const [tapHighlight, setTapHighlight] = useState(false)
   const renameInputRef = useRef<HTMLInputElement>(null)
   const actionsRef = useRef<HTMLDivElement>(null)
+  const closeTimerRef = useRef<number | undefined>(undefined)
+  const highlightTimerRef = useRef<number | undefined>(undefined)
   const displayTitle = session.title || t('untitledChat')
   const openSession = () => {
     selectSession(session.id)
-    closeMobileSider()
+    if (!android) {
+      closeMobileSider()
+      return
+    }
+    window.clearTimeout(closeTimerRef.current)
+    window.clearTimeout(highlightTimerRef.current)
+    setTapHighlight(true)
+    closeTimerRef.current = window.setTimeout(closeMobileSider, 170)
+    highlightTimerRef.current = window.setTimeout(() => setTapHighlight(false), 350)
   }
+
+  useEffect(
+    () => () => {
+      window.clearTimeout(closeTimerRef.current)
+      window.clearTimeout(highlightTimerRef.current)
+    },
+    []
+  )
 
   if (selection) {
     return (
@@ -76,7 +95,7 @@ export const SessionItem = memo(function SessionItem({
   return (
     <>
       <div
-        className={clsx(styles.item, active && styles.active)}
+        className={clsx(styles.item, active && styles.active, tapHighlight && styles.tapHighlight)}
         data-android-a11y={android ? `sidebar-session-${session.id}` : undefined}
         data-android-a11y-label={displayTitle}
         data-android-a11y-checkable="false"
