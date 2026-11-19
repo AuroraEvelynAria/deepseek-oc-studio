@@ -56,6 +56,7 @@ public final class MainActivity extends Activity {
     private FileExport historyExport;
     private ImageSave imageSave;
     private NativeRecorder recorder;
+    private AppUpdater updater;
     private boolean backPreviewEnabled;
     private final InAppBackCallback inAppBack = new InAppBackCallback(this, this::handleBack,
         this::reportBackPreview);
@@ -106,6 +107,9 @@ public final class MainActivity extends Activity {
         webView.setWebViewClient(new AppPage());
         webView.setWebChromeClient(new DeviceFeatures());
         webView.addJavascriptInterface(new DeviceBridge(), "DeepSeekAndroid");
+        updater = new AppUpdater(this, status ->
+            webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('android-update', {detail: "
+                + status + "}))", null));
         webView.loadUrl(HOME);
     }
 
@@ -354,7 +358,9 @@ public final class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int code, int result, Intent data) {
         super.onActivityResult(code, result, data);
-        if (code == EXPORT_HISTORY) {
+        if (code == AppUpdater.INSTALL_SOURCE_SETTINGS) {
+            updater.permissionResult();
+        } else if (code == EXPORT_HISTORY) {
             Uri uri = result == RESULT_OK && data != null ? data.getData() : null;
             reportExport(uri == null ? "cancelled" : historyExport.open(uri) ? "ready" : "error");
         } else if (code == FILE_CHOOSER && fileCallback != null) {
@@ -382,6 +388,18 @@ public final class MainActivity extends Activity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        updater.resume();
+    }
+
+    @Override
+    protected void onPause() {
+        updater.pause();
+        super.onPause();
+    }
+
+    @Override
     protected void onStop() {
         recorder.finish(false);
         webView.evaluateJavascript("window.dispatchEvent(new Event('android-recording-interrupted'))", null);
@@ -392,6 +410,7 @@ public final class MainActivity extends Activity {
     protected void onDestroy() {
         inAppBack.setEnabled(false);
         photoExecutor.shutdownNow();
+        updater.close();
         if (fileCallback != null) fileCallback.onReceiveValue(null);
         recorder.finish(false);
         historyExport.close();
@@ -428,6 +447,15 @@ public final class MainActivity extends Activity {
             runOnUiThread(() -> startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                 Uri.fromParts("package", getPackageName(), null))));
         }
+
+        @JavascriptInterface
+        public String updateStatus() { return updater.status(); }
+
+        @JavascriptInterface
+        public void checkForUpdate() { runOnUiThread(() -> updater.check()); }
+
+        @JavascriptInterface
+        public void installUpdate() { runOnUiThread(() -> updater.update()); }
 
         @JavascriptInterface
         public void openSourcePage(String url, boolean dark, String closeLabel, String browserLabel) {

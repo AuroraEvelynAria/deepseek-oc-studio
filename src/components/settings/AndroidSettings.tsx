@@ -5,7 +5,7 @@ import {
   subscribeToAndroidBackPreview,
   useAndroidBackInterception,
 } from '../../app/useAndroidBackInterception.js'
-import { useTranslate, type LinkedMessage } from '../../i18n/index.js'
+import { useTranslate, type LinkedMessage, type TranslationKey } from '../../i18n/index.js'
 import type { TtsVoice } from '../../services/api/speech.js'
 import {
   BackupError,
@@ -30,9 +30,11 @@ import {
   IconChevronRightOutline14,
   IconCloseOutline16,
   IconDataOutline16,
+  IconDownloadOutline16,
   IconGlobeLanguageOutline14,
   IconLightOutline16,
   IconLinkOutline16,
+  IconRefreshOutline16,
   IconSettingsOutline16,
 } from '../base/icons.js'
 import { showToast } from '../base/toastState.js'
@@ -48,6 +50,24 @@ const appVersion = document.querySelector<HTMLMetaElement>(
 const policiesUrl = 'https://cdn.deepseek.com/policies'
 const chinesePoliciesUrl = `${policiesUrl}/zh-CN`
 const faqUrl = 'https://static.deepseek.com/faq/index.html'
+const releasesUrl = 'https://github.com/LiJiaHua1024/deepseek-app-replica/releases/latest'
+
+const updateMessages = {
+  current: 'updateCurrent',
+  checkFailed: 'updateCheckFailed',
+  downloadFailed: 'updateDownloadFailed',
+  invalidApk: 'updateInvalidApk',
+  apkMissing: 'updateApkMissing',
+  permissionDenied: 'updatePermissionDenied',
+  installerUnavailable: 'updateInstallerUnavailable',
+} satisfies Record<string, TranslationKey>
+
+type UpdateStatus = {
+  phase: 'idle' | 'checking' | 'available' | 'downloading' | 'ready'
+  version?: string
+  progress?: number
+  message?: keyof typeof updateMessages
+}
 
 type Page = 'root' | 'account' | 'data' | 'export' | 'font' | 'personalization' | 'agreements'
 type Popup = 'locale' | 'theme' | 'voice' | 'logout' | 'delete' | 'import'
@@ -241,6 +261,8 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
   const [popup, setPopup] = useState<Popup | null>(null)
   const [tone, setTone] = useState(ttsVoice)
   const [busy, setBusy] = useState(false)
+  const [update, setUpdate] = useState<UpdateStatus>({ phase: 'idle' })
+  const [updateFallback, setUpdateFallback] = useState(false)
   const [file, setFile] = useState<File | null>(null)
   const [importStatus, setImportStatus] = useState<LinkedMessage | null>(null)
   const [archive, setArchive] = useState<Awaited<ReturnType<typeof exportHistory>> | null>(null)
@@ -251,6 +273,31 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
   const exiting = useRef(false)
   const sessions = useChatStore((state) => state.sessions.length)
   const editor = useApiKeyEditor()
+  const updateBusy = update.phase === 'checking' || update.phase === 'downloading'
+
+  useEffect(() => {
+    if (!android?.updateStatus) {
+      return
+    }
+    const onUpdate = (event: Event) => {
+      const status = (event as CustomEvent<UpdateStatus>).detail
+      setUpdate(status)
+      if (status.message) {
+        showToast({
+          key: updateMessages[status.message],
+          type: status.message === 'current' ? undefined : 'error',
+        })
+      }
+      setUpdateFallback(
+        status.message === 'checkFailed' ||
+          status.message === 'downloadFailed' ||
+          status.message === 'installerUnavailable'
+      )
+    }
+    window.addEventListener('android-update', onUpdate)
+    setUpdate(JSON.parse(android.updateStatus()) as UpdateStatus)
+    return () => window.removeEventListener('android-update', onUpdate)
+  }, [])
 
   const labels: Record<Page, string> = {
     root: t('settings'),
@@ -523,6 +570,43 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
             </Group>
             <Group label={tr('关于', 'About')}>
               <Row label={tr('版本信息', 'Version')} value={appVersion} icon={<Info />} />
+              {android?.checkForUpdate ? (
+                <Row
+                  label={t('checkForUpdate')}
+                  value={update.phase === 'checking' ? t('checkingForUpdate') : undefined}
+                  icon={<IconRefreshOutline16 />}
+                  onClick={() => android?.checkForUpdate()}
+                  disabled={updateBusy}
+                  arrow={false}
+                />
+              ) : null}
+              {update.version && android ? (
+                <Row
+                  label={t(
+                    update.phase === 'downloading'
+                      ? 'updateDownloading'
+                      : update.phase === 'ready'
+                        ? 'updateInstall'
+                        : 'updateDownload'
+                  )}
+                  value={
+                    update.phase === 'downloading'
+                      ? `${update.progress ?? 0}%`
+                      : `v${update.version}`
+                  }
+                  icon={<IconDownloadOutline16 />}
+                  onClick={() => android?.installUpdate()}
+                  disabled={updateBusy}
+                  arrow={false}
+                />
+              ) : null}
+              {updateFallback || update.phase === 'ready' ? (
+                <Row
+                  label={t('updateOpenReleases')}
+                  icon={<IconLinkOutline16 />}
+                  href={releasesUrl}
+                />
+              ) : null}
               <Row
                 label={labels.agreements}
                 icon={<IconLinkOutline16 />}
