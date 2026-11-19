@@ -315,7 +315,10 @@ export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean 
             data-android-a11y-role="button"
             data-android-a11y-label-kind="selfText"
             data-android-a11y-touch-through="true"
-            onClick={() => openSettings('general')}
+            onClick={() => {
+              closeMobileSider()
+              openSettings('general')
+            }}
           >
             <span className={styles.settingsIcon}>
               {androidDrawer ? (
