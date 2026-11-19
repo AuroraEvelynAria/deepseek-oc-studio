@@ -59,7 +59,8 @@ export const Menu = ({
                   data-android-a11y-touch-through={
                     androidA11yPrefix ? 'true' : undefined
                   }
-                  onClick={() => {
+                  onClick={(event) => {
+                    event.stopPropagation()
                     setOpen(false)
                     option.onSelect()
                   }}

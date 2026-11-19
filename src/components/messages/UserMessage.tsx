@@ -163,7 +163,10 @@ export const UserMessage = memo(function UserMessage({
                       icon: <IconCopyOutline16 />,
                       onSelect: () => {
                         void copyText(message.content).then((copied) =>
-                          showToast({ key: copied ? 'copied' : 'copyFailed' })
+                          showToast(
+                            { key: copied ? 'copied' : 'copyFailed' },
+                            copied ? 1990 : undefined
+                          )
                         )
                       },
                     },
