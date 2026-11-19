@@ -82,6 +82,7 @@ export const zh = {
   like: '喜欢',
   dislike: '不喜欢',
   share: '分享',
+  report: '举报',
   feedback: '反馈',
   feedbackHarmful: '有害/不安全',
   feedbackFalse: '虚假信息',

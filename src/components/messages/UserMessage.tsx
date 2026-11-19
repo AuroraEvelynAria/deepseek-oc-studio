@@ -216,6 +216,18 @@ export const UserMessage = memo(function UserMessage({
                 data-android-a11y-label-node={android ? '' : undefined}
               >
                 {message.content}
+                {android && selecting ? (
+                  <>
+                    <span
+                      className={clsx(styles.selectionHandle, styles.selectionHandleStart)}
+                      aria-hidden="true"
+                    />
+                    <span
+                      className={clsx(styles.selectionHandle, styles.selectionHandleEnd)}
+                      aria-hidden="true"
+                    />
+                  </>
+                ) : null}
               </span>
               {android ? (
                 <>
@@ -282,18 +294,7 @@ export const UserMessage = memo(function UserMessage({
                         }}
                       >
                         <IconCopyOutline16 />
-                        {t('copy')}
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={t('share')}
-                        onClick={() => {
-                          stopSelecting()
-                          onShare()
-                        }}
-                      >
-                        <IconShareArrowOutline16 />
-                        {t('share')}
+                        <span>{t('copy')}</span>
                       </button>
                     </div>
                   ) : null}

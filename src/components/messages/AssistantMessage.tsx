@@ -1,9 +1,14 @@
 import { useTranslate } from '../../i18n/index.js'
 import clsx from 'clsx'
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { android } from '../../app/android.js'
 import {
+  IconCopyOutline16,
+  IconFlagOutline16,
+  IconPlayMediaOutline16,
   IconRefreshOutline16,
+  IconSelectTextOutline16,
+  IconShareArrowOutline16,
   IconShareOutline16,
   IconThumbDown16,
   IconThumbUp16,
@@ -21,8 +26,10 @@ import { useSettings } from '../../services/settings.js'
 import { showToast } from '../base/toastState.js'
 import type { AssistantMessage as AssistantMessageType } from '../../services/chat/types.js'
 import { openSettings } from '../settings/settingsDialogState.js'
+import { copyText as copyToClipboard } from '../../utils/clipboard.js'
 import { IconButton } from '../base/IconButton.js'
 import { Button } from '../base/Button.js'
+import { Menu } from '../base/Menu.js'
 import { Markdown } from '../markdown/Markdown.js'
 import { SiteThumbnails } from '../search/SiteLogo.js'
 import { toggleSearchPanel, useSearchPanel } from '../search/searchPanelState.js'
@@ -72,7 +79,83 @@ export const AssistantMessage = memo(function AssistantMessage({
   const copyText = responseText || notice?.text
   const [liked, setLiked] = useState(false)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const [selecting, setSelecting] = useState(false)
+  const [selectionRects, setSelectionRects] = useState<{
+    start: { x: number; y: number }
+    end: { x: number; y: number }
+    toolbarTop: number
+  } | null>(null)
+  const selectableRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const menuTriggerRef = useRef<HTMLButtonElement>(null)
   const wasStreaming = useRef(streaming)
+
+  const stopSelecting = useCallback(() => {
+    setSelecting(false)
+    setSelectionRects(null)
+    window.getSelection()?.removeAllRanges()
+  }, [])
+
+  const startSelecting = () => {
+    setSelecting(true)
+    requestAnimationFrame(() => {
+      const root = contentRef.current
+      const positionRoot = selectableRef.current
+      if (!root || !positionRoot) {
+        return
+      }
+      const range = document.createRange()
+      range.selectNodeContents(root)
+      const selection = window.getSelection()
+      selection?.removeAllRanges()
+      selection?.addRange(range)
+      const rects = [...range.getClientRects()].filter(
+        (rect) => rect.width > 1 && rect.height > 1
+      )
+      if (rects.length === 0) {
+        return
+      }
+      const rootRect = positionRoot.getBoundingClientRect()
+      const first = rects[0]
+      const last = rects[rects.length - 1]
+      setSelectionRects({
+        start: { x: first.left - rootRect.left, y: first.top - rootRect.top - 6 },
+        end: { x: last.right - rootRect.left, y: last.top - rootRect.top - 6 },
+        toolbarTop: first.top - rootRect.top - 56,
+      })
+    })
+  }
+
+  useEffect(() => {
+    if (!selecting) {
+      return
+    }
+    const onPointerDown = (event: PointerEvent) => {
+      if (!selectableRef.current?.contains(event.target as Node)) {
+        stopSelecting()
+      }
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        stopSelecting()
+      }
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [selecting, stopSelecting])
+
+  const copyAssistantText = () => {
+    if (!copyText) {
+      return
+    }
+    void copyToClipboard(copyText).then((copied) =>
+      showToast({ key: copied ? 'copied' : 'copyFailed' }, copied ? 1990 : undefined)
+    )
+  }
   useEffect(() => {
     if (
       android &&
@@ -100,63 +183,205 @@ export const AssistantMessage = memo(function AssistantMessage({
           hasResponse={!!responseText}
         />
       )}
-      {answer ? (
-        <Markdown
-          className="ds-assistant-message-main-content"
-          content={answer.markdown}
-          loading={streaming}
-          cacheKey={message.id}
-          disableLink={false}
-          a11yKeyPrefix={android ? `assistant-answer-${message.id}` : undefined}
-          sources={view.sources}
-        />
-      ) : null}
+      <div
+        ref={selectableRef}
+        className={clsx(styles.selectable, android && selecting && styles.selecting)}
+        onContextMenu={(event) => {
+          if (!android || !responseText) {
+            return
+          }
+          event.preventDefault()
+          event.stopPropagation()
+          stopSelecting()
+          menuTriggerRef.current?.click()
+        }}
+        onClick={selecting ? stopSelecting : undefined}
+      >
+        {android && responseText ? (
+          <Menu
+            variant="assistantMessage"
+            anchorClassName={styles.menuAnchor}
+            options={[
+              {
+                key: 'copy',
+                label: t('copy'),
+                icon: <IconCopyOutline16 />,
+                onSelect: copyAssistantText,
+              },
+              {
+                key: 'selectText',
+                label: t('androidSelectText'),
+                icon: <IconSelectTextOutline16 />,
+                onSelect: startSelecting,
+              },
+              {
+                key: 'regenerate',
+                label: t('regenerate'),
+                icon: <IconRefreshOutline16 />,
+                onSelect: () => {
+                  stopReadAloud()
+                  regenerateReply(sessionId, message.id)
+                },
+              },
+              {
+                key: 'like',
+                label: t('like'),
+                icon: <IconThumbUp16 filled={liked} />,
+                onSelect: () => setLiked((value) => !value),
+              },
+              {
+                key: 'dislike',
+                label: t('dislike'),
+                icon: <IconThumbDown16 />,
+                onSelect: () => setFeedbackOpen(true),
+              },
+              {
+                key: 'read',
+                label: t('ttsPlay'),
+                icon: <IconPlayMediaOutline16 />,
+                onSelect: () =>
+                  toggleReadAloud(message.id, responseText, (error) =>
+                    showToast(describeReadAloudError(error))
+                  ),
+              },
+              {
+                key: 'share',
+                label: t('share'),
+                icon: <IconShareArrowOutline16 />,
+                onSelect: onShare,
+              },
+              {
+                key: 'report',
+                label: t('report'),
+                icon: <IconFlagOutline16 />,
+                onSelect: () => setFeedbackOpen(true),
+              },
+            ]}
+          >
+            {({ toggle }) => (
+              <button
+                ref={menuTriggerRef}
+                className={styles.menuTrigger}
+                type="button"
+                aria-hidden="true"
+                tabIndex={-1}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  toggle()
+                }}
+              />
+            )}
+          </Menu>
+        ) : null}
+        <div ref={contentRef} className={styles.selectableContent}>
+          {answer ? (
+            <Markdown
+              className="ds-assistant-message-main-content"
+              content={answer.markdown}
+              loading={streaming}
+              cacheKey={message.id}
+              disableLink={false}
+              a11yKeyPrefix={android ? `assistant-answer-${message.id}` : undefined}
+              sources={view.sources}
+            />
+          ) : null}
+          {notice?.presentation === 'response' ? (
+            <Markdown
+              className="ds-assistant-message-main-content"
+              content={notice.text}
+              loading={false}
+              cacheKey={`${message.id}-template`}
+              disableLink={false}
+            />
+          ) : notice ? (
+            <div className={styles.notice}>
+              <IconWarningOutline16 />
+              <span>
+                {notice.text}
+                {notice.action === 'apiKey' ? (
+                  <>
+                    {' '}
+                    <button
+                      type="button"
+                      className={styles.noticeAction}
+                      onClick={() => openSettings('data')}
+                    >
+                      {t('changeApiKey')}
+                    </button>
+                  </>
+                ) : null}
+                {notice.action === 'topUp' ? (
+                  <>
+                    {' '}
+                    <a
+                      className={styles.noticeAction}
+                      href={TOP_UP_URL}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {t('topUp')}
+                    </a>
+                  </>
+                ) : null}
+              </span>
+            </div>
+          ) : null}
+        </div>
+        {android && selecting ? (
+          <>
+            <span
+              className={styles.selectionHandle}
+              style={{
+                left: selectionRects?.start.x,
+                top: selectionRects?.start.y,
+              }}
+              aria-hidden="true"
+            />
+            <span
+              className={styles.selectionHandle}
+              style={{
+                left: selectionRects?.end.x,
+                top: selectionRects?.end.y,
+              }}
+              aria-hidden="true"
+            />
+            <div
+              className={styles.selectionToolbar}
+              role="toolbar"
+              style={{ top: selectionRects?.toolbarTop }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                aria-label={t('copy')}
+                onClick={() => {
+                  copyAssistantText()
+                  stopSelecting()
+                }}
+              >
+                <IconCopyOutline16 />
+                <span>{t('copy')}</span>
+              </button>
+              <button
+                type="button"
+                aria-label={t('share')}
+                onClick={() => {
+                  stopSelecting()
+                  onShare()
+                }}
+              >
+                <IconShareArrowOutline16 />
+                <span>{t('share')}</span>
+              </button>
+            </div>
+          </>
+        ) : null}
+      </div>
       {waiting ? (
         <div className={styles.waiting}>
           {[0, 1, 2].map((index) => (
             <span key={index} className={styles.waitingDot} />
           ))}
-        </div>
-      ) : null}
-      {notice?.presentation === 'response' ? (
-        <Markdown
-          className="ds-assistant-message-main-content"
-          content={notice.text}
-          loading={false}
-          cacheKey={`${message.id}-template`}
-          disableLink={false}
-        />
-      ) : notice ? (
-        <div className={styles.notice}>
-          <IconWarningOutline16 />
-          <span>
-            {notice.text}
-            {notice.action === 'apiKey' ? (
-              <>
-                {' '}
-                <button
-                  type="button"
-                  className={styles.noticeAction}
-                  onClick={() => openSettings('data')}
-                >
-                  {t('changeApiKey')}
-                </button>
-              </>
-            ) : null}
-            {notice.action === 'topUp' ? (
-              <>
-                {' '}
-                <a
-                  className={styles.noticeAction}
-                  href={TOP_UP_URL}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {t('topUp')}
-                </a>
-              </>
-            ) : null}
-          </span>
         </div>
       ) : null}
       {!streaming && !refused && view.searchResults.length > 0 ? (

@@ -89,6 +89,36 @@
   vertical-align: top;
 }
 
+[data-android] .selectionHandle {
+  position: absolute;
+  z-index: 4;
+  bottom: -18px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #4d8dff;
+  pointer-events: none;
+
+  &::before {
+    position: absolute;
+    bottom: 14px;
+    left: 50%;
+    width: 2.4px;
+    height: 9px;
+    background: #4d8dff;
+    content: '';
+    transform: translateX(-50%);
+  }
+}
+
+[data-android] .selectionHandleStart {
+  left: -9px;
+}
+
+[data-android] .selectionHandleEnd {
+  right: -9px;
+}
+
 .menuAnchor {
   position: absolute;
   top: 100%;
@@ -117,11 +147,10 @@
 [data-android] .selectionToolbar {
   position: absolute;
   z-index: 5;
-  top: calc(100% + 8px);
-  right: 0;
+  top: -3px;
+  right: -2px;
   display: flex;
-  gap: 4px;
-  padding: 4px;
+  padding: 0;
   border-radius: 12px;
   background: var(--dsw-specific-menu);
   box-shadow:
@@ -131,19 +160,28 @@
 
   button {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 6px;
-    height: 36px;
-    padding: 0 10px;
+    justify-content: center;
+    gap: 2px;
+    width: 70px;
+    height: 47px;
+    padding: 3px 8px;
     border: 0;
     border-radius: 8px;
     color: var(--dsw-alias-label-primary);
     background: transparent;
     font: inherit;
-    font-size: 14px;
+    font-size: 14.93px;
+    line-height: 22.4px;
 
     &:active {
       background: var(--dsw-alias-interactive-bg-hover);
+    }
+
+    svg {
+      width: 16px;
+      height: 16px;
     }
   }
 }

@@ -23,13 +23,14 @@ export const Menu = ({
   options: MenuOption[]
   children: (props: { open: boolean; toggle: () => void }) => ReactNode
   androidA11yPrefix?: string
-  variant?: 'userMessage'
+  variant?: 'userMessage' | 'assistantMessage'
   anchorClassName?: string
 }) => {
   const [open, setOpen] = useState(false)
   const close = () => setOpen(false)
   const sidebarMenu = Boolean(androidA11yPrefix?.startsWith('sidebar-session-menu'))
   const userMessageMenu = variant === 'userMessage'
+  const assistantMessageMenu = variant === 'assistantMessage'
   // 左侧对齐并再左移 5px，让菜单文字与触发元素图标对齐
   const { anchorRef, floatingRef, position } = useAnchoredPosition<HTMLSpanElement, HTMLDivElement>(
     open,
@@ -51,7 +52,8 @@ export const Menu = ({
               className={clsx(
                 styles.menu,
                 sidebarMenu && styles.sidebarMenu,
-                userMessageMenu && styles.userMessageMenu
+                userMessageMenu && styles.userMessageMenu,
+                assistantMessageMenu && styles.assistantMessageMenu
               )}
               style={position ?? undefined}
               role="menu"

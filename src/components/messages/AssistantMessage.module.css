@@ -29,6 +29,109 @@
   }
 }
 
+.selectable {
+  position: relative;
+}
+
+[data-android] .selecting :global(.ds-assistant-message-main-content p),
+[data-android] .selecting :global(.ds-assistant-message-main-content li),
+[data-android] .selecting :global(.ds-assistant-message-main-content h1),
+[data-android] .selecting :global(.ds-assistant-message-main-content h2),
+[data-android] .selecting :global(.ds-assistant-message-main-content h3),
+[data-android] .selecting :global(.ds-assistant-message-main-content h4),
+[data-android] .selecting :global(.ds-assistant-message-main-content h5),
+[data-android] .selecting :global(.ds-assistant-message-main-content h6),
+[data-android] .selecting :global(.ds-assistant-message-main-content blockquote),
+[data-android] .selecting :global(.ds-assistant-message-main-content td),
+[data-android] .selecting :global(.ds-assistant-message-main-content th),
+[data-android] .selecting :global(.ds-assistant-message-main-content pre),
+[data-android] .selecting :global(.ds-assistant-message-main-content code) {
+  background-color: rgb(191 219 254 / 70%);
+}
+
+.menuAnchor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+}
+
+.menuTrigger {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+[data-android] .selectionHandle {
+  position: absolute;
+  z-index: 4;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #4d8dff;
+  pointer-events: none;
+  transform: translate(-50%, -2px);
+
+  &::before {
+    position: absolute;
+    bottom: 14px;
+    left: 50%;
+    width: 2.4px;
+    height: 9px;
+    background: #4d8dff;
+    content: '';
+    transform: translateX(-50%);
+  }
+}
+
+[data-android] .selectionToolbar {
+  position: absolute;
+  z-index: 6;
+  left: 0;
+  display: flex;
+  padding: 0;
+  border-radius: 12px;
+  background: var(--dsw-specific-menu);
+  box-shadow:
+    0 0 1px rgb(0 0 0 / 20%),
+    0 12px 32px rgb(0 0 0 / 8%);
+  white-space: nowrap;
+
+  button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    width: 58px;
+    height: 47px;
+    padding: 3px 6px;
+    border: 0;
+    border-radius: 8px;
+    color: var(--dsw-alias-label-primary);
+    background: transparent;
+    font: inherit;
+    font-size: 14.93px;
+    line-height: 22.4px;
+
+    &:active {
+      background: var(--dsw-alias-interactive-bg-hover);
+    }
+
+    svg {
+      width: 16px;
+      height: 16px;
+    }
+  }
+}
+
 .waiting {
   display: flex;
   align-items: center;

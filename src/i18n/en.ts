@@ -85,6 +85,7 @@ export const en = {
   like: 'Like',
   dislike: 'Dislike',
   share: 'Share',
+  report: 'Report',
   feedback: 'Feedback',
   feedbackHarmful: 'Harmful/Unsafe',
   feedbackFalse: 'False information',
