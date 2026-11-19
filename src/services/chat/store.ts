@@ -56,6 +56,9 @@ const serverTools = (search: boolean): CreateMessageRequest['tools'] => {
   return tools
 }
 
+/** 允许自动补标题的请求；手动重命名后取消本轮标题写入，包含主动清空标题的情况。 */
+const titleRequests = new Set<AbortController>()
+
 type ChatState = {
   ready: boolean
   initError: boolean
@@ -457,6 +460,10 @@ export const renameSession = (id: string, title: string) => {
   if (get().importingHistory || deletingSessions.has(id)) {
     return
   }
+  const controller = getStreamController(id)
+  if (controller) {
+    titleRequests.delete(controller)
+  }
   if (getSession(id)) {
     updateSession(id, (session) => ({ ...session, title }))
     persist(id)
@@ -594,7 +601,6 @@ export const sendMessage = (targetSessionId: string | null) => {
   const reply = createReply()
   updateSession(sessionId, (session) => ({
     ...appendBranch(session, history.at(-1)?.id ?? null, [question, reply]),
-    title: session.title || text || files[0]?.name || '',
     updatedAt: now,
   }))
   if (files.length > 0) {
@@ -955,6 +961,9 @@ const waitForRetry = (attempt: number, signal: AbortSignal) =>
  */
 const streamReply = async (sessionId: string, initial: AssistantMessage, request: Request) => {
   const controller = new AbortController()
+  if (!getSession(sessionId)?.title) {
+    titleRequests.add(controller)
+  }
   set((state) => ({ streaming: { ...state.streaming, [sessionId]: controller } }))
   let reply = initial
   let frame = 0
@@ -996,12 +1005,25 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
             thinking: { type: initial.thinking ? 'enabled' : 'disabled' },
             safety_check: SAFETY_CHECK,
             tools: serverTools(initial.search ?? false),
+            ...(titleRequests.has(controller) ? { title: { enabled: true } } : {}),
           },
           controller.signal
         )
         const blockIndexes = new Map<number, number>()
         for await (const event of events) {
           receivedContent ||= event.type === 'content_block_start'
+          if (
+            event.type === 'message_delta' &&
+            (event.delta.stop_reason === 'end_turn' || event.delta.stop_reason === 'max_tokens') &&
+            event.delta.title?.trim() &&
+            titleRequests.has(controller) &&
+            !controller.signal.aborted &&
+            !get().importingHistory
+          ) {
+            const title = event.delta.title.trim()
+            updateSession(sessionId, (session) => (session.title ? session : { ...session, title }))
+            titleRequests.delete(controller)
+          }
           reply = applyEvent(reply, event, Date.now(), blockIndexes)
           if (document.visibilityState === 'hidden') {
             flush()
@@ -1058,6 +1080,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
       }
     }
   } finally {
+    titleRequests.delete(controller)
     streamFlushes.delete(sessionId)
     cancelAnimationFrame(frame)
     updateReply(sessionId, reply)
