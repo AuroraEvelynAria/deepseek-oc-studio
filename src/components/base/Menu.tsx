@@ -24,10 +24,11 @@ export const Menu = ({
 }) => {
   const [open, setOpen] = useState(false)
   const close = () => setOpen(false)
+  const sidebarMenu = Boolean(androidA11yPrefix?.startsWith('sidebar-session-menu'))
   // 左侧对齐并再左移 5px，让菜单文字与触发元素图标对齐
   const { anchorRef, floatingRef, position } = useAnchoredPosition<HTMLSpanElement, HTMLDivElement>(
     open,
-    { align: 'start', alignOffset: -5, offset: 4 }
+    { align: 'start', alignOffset: -5, offset: sidebarMenu ? 6.4 : 4 }
   )
   useDismiss(open, [anchorRef, floatingRef], close)
 
@@ -40,7 +41,7 @@ export const Menu = ({
         ? createPortal(
             <div
               ref={floatingRef}
-              className={styles.menu}
+              className={clsx(styles.menu, sidebarMenu && styles.sidebarMenu)}
               style={position ?? undefined}
               role="menu"
             >

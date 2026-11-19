@@ -46,8 +46,8 @@
 }
 
 .actionTrigger {
-  width: 34px;
-  height: 34px;
+  width: 44.8px;
+  height: 44.8px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -55,8 +55,8 @@
 
 [data-android] .item {
   content-visibility: auto;
-  padding-inline: 7px 4px;
-  height: 48px;
+  padding-inline: 20.6222px;
+  height: 44.8px;
   user-select: none;
 
   .action {
@@ -80,6 +80,13 @@
 
   &.active .title {
     margin-right: 44.8px;
+  }
+
+  .title {
+    position: relative;
+    top: -0.1778px;
+    font-size: 15px;
+    line-height: 22.4px;
   }
 
   &:active {

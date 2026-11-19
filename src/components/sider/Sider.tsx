@@ -145,7 +145,7 @@ export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean 
               data-android-a11y-focusable="false"
               data-android-a11y-label-kind="text"
             >
-              {t('androidSearchChats')}
+              <span data-android-a11y-label-node="">{t('androidSearchChats')}</span>
             </span>
           ) : null}
           <input
@@ -309,6 +309,12 @@ export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean 
             type="button"
             className={styles.settings}
             aria-label={t('settings')}
+            data-android-a11y={androidDrawer ? 'sidebar-settings' : undefined}
+            data-android-a11y-label={androidDrawer ? t('settings') : undefined}
+            data-android-a11y-checkable="false"
+            data-android-a11y-role="button"
+            data-android-a11y-label-kind="selfText"
+            data-android-a11y-touch-through="true"
             onClick={() => openSettings('general')}
           >
             <span className={styles.settingsIcon}>
