@@ -15,7 +15,11 @@ export const AndroidSound = ({ muted }: { muted: boolean }) => (
       fill={muted ? 'none' : 'currentColor'}
       stroke={muted ? 'currentColor' : 'none'}
     />
-    <path d="M16 7.7a6.1 6.1 0 0 1 .7 7.9m2.4-10.9a10.3 10.3 0 0 1 1.3 12.6" />
+    <path d="M16 7.7a6.1 6.1 0 0 1 .7 7.9" />
+    <path
+      d="M18.4 4.7a10.3 10.3 0 0 1 1.3 12.6"
+      opacity={muted ? 1 : 0.25}
+    />
     {muted ? <path d="m1.5 3.2 18.6 18.6" /> : null}
   </svg>
 )
