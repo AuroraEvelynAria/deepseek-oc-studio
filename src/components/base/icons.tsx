@@ -261,24 +261,37 @@ export const IconPanelLeftOutline16 = () => (
 )
 
 export const IconPinOutline16 = () => (
-  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <svg
+    width={16}
+    height={16}
+    viewBox="0 0 51 51"
+    fill="none"
+    overflow="visible"
+    xmlns="http://www.w3.org/2000/svg"
+  >
     <path
-      d="M5.278 1.657 7.165.768l8.067 8.067-0.889 1.887-1.19-1.19-2.222 2.222.36 2.588-1.278 1.278-3.583-3.583-3.786 3.786-1.021-1.021 3.786-3.786L1.243 7.43l1.278-1.278 2.588.36 2.222-2.222-1.19-1.19-0.863.557Z"
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M5.562 35.188 4.312 36.062-1.938 44.188-2.312 45.688l.624.75 1.5-.5 9-7.25ZM20.188 4.188 18.188 5.938 17.688 9.312 17.062 10.562 8.312 18.938.438 20.312-1.812 22.438-2.062 24.562-1.188 26.312 17.438 44.938 19.188 45.938 21.312 46.062 23.188 44.562 23.938 43.312 25.312 35.188 33.562 26.812 38.312 25.688 39.438 24.562 39.688 23.562 38.062 21.188 21.938 5.062ZM21.938 11.438 31.938 21.188 32.438 22.438 31.188 23.188 21.312 33.188 20.062 40.312 19.312 40.812 3.188 24.438 3.938 23.938 10.562 22.938Z"
       fill="currentColor"
     />
   </svg>
 )
 
 export const IconMultiSelectOutline16 = () => (
-  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="3.1" cy="4" r="1.4" fill="currentColor" />
-    <circle cx="3.1" cy="12" r="1.4" fill="currentColor" />
-    <path
-      d="M6.4 4h8M6.4 12h8"
-      stroke="currentColor"
-      strokeWidth="1.4"
-      strokeLinecap="round"
-    />
+  <svg
+    width={16}
+    height={16}
+    viewBox="0 0 51 51"
+    fill="none"
+    overflow="visible"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <g fill="none" stroke="currentColor" strokeWidth={4}>
+      <circle cx={4.5} cy={12.5} r={5.5} />
+      <circle cx={4.5} cy={32.5} r={5.5} />
+      <path d="M18 12.5h14M18 32.5h14" strokeLinecap="round" />
+    </g>
   </svg>
 )
 
