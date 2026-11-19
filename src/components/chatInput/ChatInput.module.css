@@ -378,6 +378,8 @@
 }
 
 [data-android] .attachments {
+  height: 80px;
+  align-items: flex-start;
   padding: 9px 9px 0;
   transition:
     opacity 240ms ease,
@@ -385,18 +387,39 @@
 }
 
 [data-android] .attachment {
-  width: 80px;
-  height: 80px;
+  top: 32.6889px;
+  left: -1.0889px;
+  width: 74.6667px;
+  height: 74.6667px;
+  border-color: #e7e7e7;
   animation: android-attachment-enter 210ms linear 90ms backwards;
 }
 
 [data-android] .remove {
-  top: 5px;
-  right: 5px;
-  width: 20px;
-  height: 20px;
+  top: -8.8889px;
+  right: auto;
+  left: 37.6889px;
+  width: 44.8px;
+  height: 44.8px;
   opacity: 1;
-  background: #606164;
+  background: transparent;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 18.8444px;
+    height: 18.8444px;
+    border-radius: 50%;
+    background: #606164;
+    transform: translate(-50%, -50%);
+  }
+
+  svg {
+    position: relative;
+    z-index: 1;
+  }
 }
 
 @keyframes android-attachment-enter {
