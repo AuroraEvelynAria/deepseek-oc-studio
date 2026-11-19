@@ -251,9 +251,11 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   const androidPlaceholder = android && !voiceMode && !typing && !text.trim()
   const textareaValue =
     android && typing && androidPristine && !text ? t('androidMessageHint') : text
+  const photoSuggestions =
+    !!android && !text.trim() && attachments.some((item) => item.isImage)
 
   return (
-    <div className={styles.composer}>
+    <div className={styles.composer} data-photo-suggestions={photoSuggestions ? '' : undefined}>
       <div
         data-drawer-gesture-ignore=""
         className={clsx(
@@ -270,7 +272,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
         {android ? (
           <AndroidDraftAttachments
             items={attachments}
-            suggestions={!text.trim() && attachments.some((item) => item.isImage)}
+            suggestions={photoSuggestions}
             loading={imagesUploading}
             canSend={canSend}
             onRetry={retryFile}

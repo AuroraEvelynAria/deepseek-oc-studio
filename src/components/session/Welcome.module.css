@@ -32,6 +32,10 @@
   padding: 0 12px var(--android-composer-bottom);
 }
 
+[data-android] .welcome:has([data-photo-suggestions]) {
+  padding-bottom: 12.49px;
+}
+
 [data-android] .container {
   touch-action: none;
 }

@@ -96,9 +96,13 @@ export const AndroidDraftAttachments = ({
                       key={key}
                       type="button"
                       disabled={!canSend}
+                      data-android-a11y={`photo-suggestion-${key}`}
+                      data-android-a11y-label={t(key)}
+                      data-android-a11y-checkable="false"
+                      data-android-a11y-label-kind="text"
                       onClick={() => onSuggestion(t(key))}
                     >
-                      {t(key)}
+                      <span data-android-a11y-label-node="">{t(key)}</span>
                       <svg viewBox="0 0 16 16" aria-hidden="true">
                         <path d="M2.5 8h10m-3.5-3.5L12.5 8 9 11.5" />
                       </svg>
