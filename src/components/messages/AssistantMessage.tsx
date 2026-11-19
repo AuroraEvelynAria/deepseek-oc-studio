@@ -78,7 +78,7 @@ export const AssistantMessage = memo(function AssistantMessage({
     .join('\n\n')
   const copyText = responseText || notice?.text
   const [liked, setLiked] = useState(false)
-  const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const [sheet, setSheet] = useState<'feedback' | 'report' | null>(null)
   const [selecting, setSelecting] = useState(false)
   const [selectionRects, setSelectionRects] = useState<{
     start: { x: number; y: number }
@@ -233,7 +233,7 @@ export const AssistantMessage = memo(function AssistantMessage({
                 key: 'dislike',
                 label: t('dislike'),
                 icon: <IconThumbDown16 />,
-                onSelect: () => setFeedbackOpen(true),
+                onSelect: () => setSheet('feedback'),
               },
               {
                 key: 'read',
@@ -254,7 +254,7 @@ export const AssistantMessage = memo(function AssistantMessage({
                 key: 'report',
                 label: t('report'),
                 icon: <IconFlagOutline16 />,
-                onSelect: () => setFeedbackOpen(true),
+                onSelect: () => setSheet('report'),
               },
             ]}
           >
@@ -474,7 +474,7 @@ export const AssistantMessage = memo(function AssistantMessage({
                 data-android-a11y-label={t('dislike')}
                 data-android-a11y-checked="false"
                 data-android-a11y-label-kind="description"
-                onClick={() => setFeedbackOpen(true)}
+                onClick={() => setSheet('feedback')}
               />
             ) : null}
             {responseText && !refused ? (
@@ -549,7 +549,7 @@ export const AssistantMessage = memo(function AssistantMessage({
           ) : null}
         </div>
       )}
-      {feedbackOpen ? <MessageFeedbackSheet onClose={() => setFeedbackOpen(false)} /> : null}
+      {sheet ? <MessageFeedbackSheet variant={sheet} onClose={() => setSheet(null)} /> : null}
     </div>
   )
 })

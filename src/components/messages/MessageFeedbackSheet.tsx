@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
+import clsx from 'clsx'
 import { android } from '../../app/android.js'
 import { useTranslate, type TranslationKey } from '../../i18n/index.js'
 import { IconCloseOutline16 } from '../base/icons.js'
@@ -12,8 +13,15 @@ const reasons: ReadonlyArray<{ id: string; label: TranslationKey }> = [
   { id: 'other', label: 'feedbackOther' },
 ]
 
-export const MessageFeedbackSheet = ({ onClose }: { onClose: () => void }) => {
+export const MessageFeedbackSheet = ({
+  onClose,
+  variant = 'feedback',
+}: {
+  onClose: () => void
+  variant?: 'feedback' | 'report'
+}) => {
   const t = useTranslate()
+  const report = variant === 'report'
   const [reason, setReason] = useState<string | null>(null)
   const [detail, setDetail] = useState('')
   const [inputFocused, setInputFocused] = useState(false)
@@ -44,7 +52,7 @@ export const MessageFeedbackSheet = ({ onClose }: { onClose: () => void }) => {
       onMouseDown={(event) => event.target === event.currentTarget && onClose()}
     >
       <div
-        className={styles.mask}
+        className={clsx(styles.mask, report && styles.reportMask)}
         data-android-a11y={android ? 'feedback-close-mask' : undefined}
         data-android-a11y-label={t('close')}
         data-android-a11y-checkable="false"
@@ -52,11 +60,9 @@ export const MessageFeedbackSheet = ({ onClose }: { onClose: () => void }) => {
         data-android-a11y-label-kind="none"
         onClick={onClose}
       />
-      <section
-        className={styles.sheet}
-      >
-        <header className={styles.header}>
-          <h2 className={styles.title}>{t('feedback')}</h2>
+      <section className={clsx(styles.sheet, report && styles.reportSheet)}>
+        <header className={clsx(styles.header, report && styles.reportHeader)}>
+          <h2 className={styles.title}>{t(report ? 'report' : 'feedback')}</h2>
           <button
             type="button"
             className={styles.close}
@@ -71,29 +77,31 @@ export const MessageFeedbackSheet = ({ onClose }: { onClose: () => void }) => {
             <IconCloseOutline16 />
           </button>
         </header>
-        <div className={styles.reasons}>
-          {reasons.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              role="checkbox"
-              aria-checked={reason === item.id}
-              data-android-a11y={android ? `feedback-${item.id}` : undefined}
-              data-android-a11y-label={t(item.label)}
-              data-android-a11y-checkable="true"
-              data-android-a11y-checked={reason === item.id ? 'true' : 'false'}
-              onClick={() => setReason(reason === item.id ? null : item.id)}
-            >
-              {android ? (
-                <span data-android-a11y-label-node>{t(item.label)}</span>
-              ) : (
-                t(item.label)
-              )}
-            </button>
-          ))}
-        </div>
+        {report ? null : (
+          <div className={styles.reasons}>
+            {reasons.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="checkbox"
+                aria-checked={reason === item.id}
+                data-android-a11y={android ? `feedback-${item.id}` : undefined}
+                data-android-a11y-label={t(item.label)}
+                data-android-a11y-checkable="true"
+                data-android-a11y-checked={reason === item.id ? 'true' : 'false'}
+                onClick={() => setReason(reason === item.id ? null : item.id)}
+              >
+                {android ? (
+                  <span data-android-a11y-label-node>{t(item.label)}</span>
+                ) : (
+                  t(item.label)
+                )}
+              </button>
+            ))}
+          </div>
+        )}
         <textarea
-          className={styles.input}
+          className={clsx(styles.input, report && styles.reportInput)}
           value={detail}
           placeholder={t('feedbackPlaceholder')}
           aria-label={t('feedbackPlaceholder')}
