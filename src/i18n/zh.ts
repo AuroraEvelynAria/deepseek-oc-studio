@@ -257,6 +257,8 @@ export const zh = {
   ttsFailed: '朗读失败，请稍后再试',
   readAloudLowVolume: '当前音量较低，请调高设备音量',
   retry: '重试',
+  pageLoading: '正在加载...',
+  pageLoadFailed: '页面加载失败，请重试',
   latestReminderLanguage: '中文',
   settingsLocaleZhCN: '简体中文',
   settingsLocaleEnUS: 'English',

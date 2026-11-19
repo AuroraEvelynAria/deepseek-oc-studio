@@ -2,7 +2,15 @@ type AndroidBridge = {
   statusInset: () => number
   systemFontScale: () => number
   getMusicVolume?: () => number
-  openSourcePage: (url: string, dark: boolean, closeLabel: string, browserLabel: string) => void
+  openSourcePage: (
+    url: string,
+    dark: boolean,
+    closeLabel: string,
+    browserLabel: string,
+    loadingLabel: string,
+    errorLabel: string,
+    retryLabel: string
+  ) => void
   readApiKey: () => string | null
   writeApiKey: (value: string | null) => boolean
   setDarkBars: (dark: boolean) => void

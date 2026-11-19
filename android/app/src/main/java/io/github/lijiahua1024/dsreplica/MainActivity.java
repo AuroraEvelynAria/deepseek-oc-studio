@@ -816,12 +816,15 @@ public final class MainActivity extends Activity {
         }
 
         @JavascriptInterface
-        public void openSourcePage(String url, boolean dark, String closeLabel, String browserLabel) {
+        public void openSourcePage(String url, boolean dark, String closeLabel, String browserLabel,
+                                   String loadingLabel, String errorLabel, String retryLabel) {
             Uri uri = SourceBrowserActivity.webUri(url);
             if (uri == null) return;
             runOnUiThread(() -> startActivity(new Intent(MainActivity.this, SourceBrowserActivity.class)
                 .setData(uri).putExtra("dark", dark)
-                .putExtra("closeLabel", closeLabel).putExtra("browserLabel", browserLabel)));
+                .putExtra("closeLabel", closeLabel).putExtra("browserLabel", browserLabel)
+                .putExtra("loadingLabel", loadingLabel).putExtra("errorLabel", errorLabel)
+                .putExtra("retryLabel", retryLabel)));
         }
 
         @JavascriptInterface

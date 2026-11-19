@@ -266,6 +266,8 @@ export const en = {
   ttsFailed: 'Failed to read aloud. Please try again later.',
   readAloudLowVolume: 'Volume is low. Please turn up your device volume.',
   retry: 'Retry',
+  pageLoading: 'Loading...',
+  pageLoadFailed: 'Unable to load this page. Please try again.',
   latestReminderLanguage: 'English',
   settingsLocaleZhCN: 'Simplified Chinese',
   settingsLocaleEnUS: 'English',
