@@ -216,6 +216,7 @@ const Choice = <T extends string>({
   icon,
   value,
   fields,
+  confirmLabel,
   confirm,
   dismiss,
 }: {
@@ -223,6 +224,7 @@ const Choice = <T extends string>({
   icon?: ReactNode
   value: T
   fields: ReadonlyArray<{ id: T; label: string }>
+  confirmLabel?: string
   confirm: (value: T) => void
   dismiss: () => void
 }) => {
@@ -256,7 +258,7 @@ const Choice = <T extends string>({
           ))}
         </div>
         <button type="button" className={styles.confirm} onClick={() => confirm(next)}>
-          {t('confirm')}
+          {confirmLabel ?? t('confirm')}
         </button>
       </section>
     </div>
@@ -306,10 +308,13 @@ const Settings = ({ start }: { start: Page }) => {
     { id: 'light', label: tr('浅色', 'Light') },
     { id: 'dark', label: tr('深色', 'Dark') },
   ]
-  const languages: { id: LocalePreference; label: string }[] = [
+  const languages: { id: LocalePreference | 'am' | 'ar' | 'hy'; label: string }[] = [
     { id: 'system', label: tr('系统', 'System') },
-    { id: 'zh-CN', label: '中文（简体中文）' },
+    { id: 'zh-CN', label: '中文 (简体中文)' },
     { id: 'en-US', label: 'English' },
+    { id: 'am', label: 'አማርኛ' },
+    { id: 'ar', label: 'العربية' },
+    { id: 'hy', label: 'հայերեն' },
   ]
   const tones: { id: TtsVoice; label: string; description: string }[] = [
     {
@@ -744,8 +749,11 @@ const Settings = ({ start }: { start: Page }) => {
           icon={<IconGlobeLanguageOutline14 />}
           value={localePreference}
           fields={languages}
+          confirmLabel={tr('确认', 'Confirm')}
           confirm={(value) => {
-            setLocale(value)
+            if (value === 'system' || value === 'zh-CN' || value === 'en-US') {
+              setLocale(value)
+            }
             setPopup(null)
           }}
           dismiss={back}
