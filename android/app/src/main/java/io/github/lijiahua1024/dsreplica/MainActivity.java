@@ -47,6 +47,7 @@ public final class MainActivity extends Activity {
     private ValueCallback<Uri[]> fileCallback;
     private boolean keyboardVisible;
     private volatile float statusInset;
+    private volatile float buttonNavigationInset;
     private boolean askedForPhotos;
     private Uri capture;
     private RecentPhotos recentPhotos;
@@ -66,18 +67,22 @@ public final class MainActivity extends Activity {
         frame = new FrameLayout(this);
         webView = new WebView(this);
         frame.addView(webView, new FrameLayout.LayoutParams(-1, -1));
-        SystemBars.applyInsets(getWindow(), frame, (safe, ime) -> {
-            frame.setPadding(safe.left, 0, safe.right, safe.bottom);
-            float top = safe.top / getResources().getDisplayMetrics().density;
-            if (top != statusInset) {
+        SystemBars.applyInsets(getWindow(), frame, (safe, ime, buttonNavigationBottom) -> {
+            // Let WebView paint behind the navigation buttons while CSS insets the controls.
+            int webBottom = ime ? 0 : buttonNavigationBottom;
+            frame.setPadding(safe.left, 0, safe.right, safe.bottom - webBottom);
+            float density = getResources().getDisplayMetrics().density;
+            float top = safe.top / density;
+            float bottom = webBottom / density;
+            if (top != statusInset || bottom != buttonNavigationInset || ime != keyboardVisible) {
                 statusInset = top;
-                webView.evaluateJavascript("if (document.documentElement) document.documentElement.style.setProperty("
-                    + "'--android-status-inset', '" + top + "px')", null);
-            }
-            if (ime != keyboardVisible) {
+                buttonNavigationInset = bottom;
                 keyboardVisible = ime;
-                webView.evaluateJavascript("if (document.documentElement) document.documentElement.toggleAttribute("
-                    + "'data-keyboard', " + ime + ")", null);
+                webView.evaluateJavascript("if (document.documentElement) { const root = document.documentElement;"
+                    + "root.style.setProperty('--android-status-inset', '" + top + "px');"
+                    + "root.style.setProperty('--android-button-nav-inset', '" + bottom + "px');"
+                    + "root.toggleAttribute('data-button-navigation', " + (bottom > 0) + ");"
+                    + "root.toggleAttribute('data-keyboard', " + ime + "); }", null);
             }
         });
         setContentView(frame);
@@ -361,6 +366,9 @@ public final class MainActivity extends Activity {
     private final class DeviceBridge {
         @JavascriptInterface
         public float statusInset() { return statusInset; }
+
+        @JavascriptInterface
+        public float buttonNavigationInset() { return buttonNavigationInset; }
 
         @JavascriptInterface
         public float systemFontScale() { return getResources().getConfiguration().fontScale; }

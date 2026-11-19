@@ -248,6 +248,7 @@
 
 [data-android] .drawer {
   z-index: 0;
+  bottom: var(--android-button-nav-inset, 0px);
   width: var(--drawer-edge);
   padding-top: var(--android-status-inset, 0px);
   background: var(--dsw-alias-bg-base);

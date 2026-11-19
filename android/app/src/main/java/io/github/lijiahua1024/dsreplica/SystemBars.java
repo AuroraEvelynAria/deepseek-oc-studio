@@ -11,7 +11,7 @@ import android.view.WindowInsetsController;
 
 final class SystemBars {
     interface InsetsListener {
-        void update(Insets safe, boolean keyboardVisible);
+        void update(Insets safe, boolean keyboardVisible, int buttonNavigationBottom);
     }
 
     @SuppressWarnings("deprecation") // Android 10 reports the keyboard in the system window insets.
@@ -20,7 +20,9 @@ final class SystemBars {
             content.setOnApplyWindowInsetsListener((view, insets) -> {
                 Insets safe = insets.getInsets(WindowInsets.Type.systemBars()
                     | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime());
-                listener.update(safe, insets.isVisible(WindowInsets.Type.ime()));
+                int buttonNavigationBottom = insets.getInsets(WindowInsets.Type.tappableElement()).bottom > 0
+                    ? insets.getInsets(WindowInsets.Type.navigationBars()).bottom : 0;
+                listener.update(safe, insets.isVisible(WindowInsets.Type.ime()), buttonNavigationBottom);
                 return WindowInsets.CONSUMED;
             });
             return;
@@ -44,7 +46,9 @@ final class SystemBars {
                     Math.max(safe.right, cutout.getSafeInsetRight()),
                     Math.max(safe.bottom, cutout.getSafeInsetBottom()));
             }
-            listener.update(safe, keyboardVisible);
+            int buttonNavigationBottom = insets.getTappableElementInsets().bottom > 0
+                ? Math.min(safe.bottom, navigation) : 0;
+            listener.update(safe, keyboardVisible, buttonNavigationBottom);
             return insets.consumeSystemWindowInsets().consumeStableInsets().consumeDisplayCutout();
         });
     }

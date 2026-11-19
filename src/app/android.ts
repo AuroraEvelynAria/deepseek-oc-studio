@@ -2,6 +2,7 @@ import { readBlobChunks } from '../utils/blob.js'
 
 type AndroidBridge = {
   statusInset: () => number
+  buttonNavigationInset: () => number
   systemFontScale: () => number
   openAppPermissions: () => void
   openSourcePage: (url: string, dark: boolean, closeLabel: string, browserLabel: string) => void

@@ -34,20 +34,36 @@
   }
 }
 
-/* 进度和圆角只用于外层动画，避免每次移动把它们传给消息树。 */
+/* 抽屉动画的变量只用于外层，避免每次移动把它们传给消息树。 */
 [data-android] .content {
   --drawer-progress: initial;
   --drawer-radius: initial;
+  --drawer-transform: initial;
 }
 
+/* 关闭动画结束后隐藏底色，避免 WebView 残留的圆角裁剪露出灰底。 */
 [data-android] .frame::before {
   content: '';
   position: absolute;
   inset: 0;
   background: #000;
   opacity: calc(0.207 * (1 - var(--drawer-progress)));
-  transition: opacity var(--drawer-transition);
+  visibility: hidden;
+  transition:
+    opacity var(--drawer-transition),
+    visibility var(--drawer-transition);
   pointer-events: none;
+}
+
+[data-android] .frame[data-drawer-open='true'],
+[data-android] .frame[data-drawer-dragging] {
+  --drawer-transform: translateX(calc(var(--drawer-edge) * var(--drawer-progress)))
+    scale(calc(1 - 0.0504 * var(--drawer-progress)));
+}
+
+[data-android] .frame[data-drawer-open='true']::before,
+[data-android] .frame[data-drawer-dragging]::before {
+  visibility: visible;
 }
 
 [data-android] .frame[data-drawer-open='true'] {
@@ -62,8 +78,7 @@
 [data-android] .frame::after,
 [data-android] .main {
   transform-origin: left center;
-  transform: translateX(calc(var(--drawer-edge) * var(--drawer-progress)))
-    scale(calc(1 - 0.0504 * var(--drawer-progress)));
+  transform: var(--drawer-transform, none);
 }
 
 /* 单独绘制阴影，动画期间只改变它的位置和透明度。 */
@@ -86,14 +101,19 @@
   z-index: 2;
   box-sizing: border-box;
   padding-top: var(--android-status-inset, 0px);
+  padding-bottom: var(--android-button-nav-inset, 0px);
   overflow: hidden;
   touch-action: pan-y;
   background: var(--dsw-alias-bg-base);
   border-radius: var(--drawer-radius);
-  will-change: transform;
   transition:
     transform var(--drawer-transition),
     border-radius var(--drawer-transition);
+}
+
+[data-android] .frame[data-drawer-open='true'] .main,
+[data-android] .frame[data-drawer-dragging] .main {
+  will-change: transform;
 }
 
 [data-android] .main::after {

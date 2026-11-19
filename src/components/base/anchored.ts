@@ -129,8 +129,13 @@ export const useAnchoredPosition = <T extends HTMLElement, F extends HTMLElement
       return
     }
     const rect = anchor.getBoundingClientRect()
+    const buttonNavigationInset =
+      Number.parseFloat(
+        document.documentElement.style.getPropertyValue('--android-button-nav-inset')
+      ) || 0
     const spaceAbove = rect.top - offset - VIEWPORT_PADDING
-    const spaceBelow = window.innerHeight - rect.bottom - offset - VIEWPORT_PADDING
+    const spaceBelow =
+      window.innerHeight - buttonNavigationInset - rect.bottom - offset - VIEWPORT_PADDING
 
     if (maxHeight === undefined) {
       const { width, height } = floating.getBoundingClientRect()

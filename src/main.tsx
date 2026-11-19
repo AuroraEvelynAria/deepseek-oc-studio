@@ -9,8 +9,12 @@ import './app/android.css'
 
 ensureKatex()
 if (android) {
-  document.documentElement.dataset.android = ''
-  document.documentElement.style.setProperty('--android-status-inset', `${android.statusInset()}px`)
+  const root = document.documentElement
+  const buttonNavigationInset = android.buttonNavigationInset()
+  root.dataset.android = ''
+  root.style.setProperty('--android-status-inset', `${android.statusInset()}px`)
+  root.style.setProperty('--android-button-nav-inset', `${buttonNavigationInset}px`)
+  root.toggleAttribute('data-button-navigation', buttonNavigationInset > 0)
 }
 setupTheme()
 

@@ -1,7 +1,7 @@
 .overlay {
   --overlay-opacity: 0.36;
   position: fixed;
-  inset: 0;
+  inset: 0 0 var(--android-button-nav-inset, 0px);
   z-index: 1000;
   display: flex;
   align-items: center;

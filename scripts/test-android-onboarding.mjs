@@ -131,6 +131,11 @@ const layout = (selector) => `(() => {
   const input = document.querySelector(${JSON.stringify(selector)});
   if (!input) return null;
   const rect = input.getBoundingClientRect();
+  const wrapper = input.closest('[data-drawer-gesture-ignore]');
+  const controlBottom = wrapper ? wrapper.getBoundingClientRect().bottom : rect.bottom;
+  const buttonNavigationInset = Number.parseFloat(
+    document.documentElement.style.getPropertyValue('--android-button-nav-inset')
+  ) || 0;
   const viewport = window.visualViewport;
   const height = viewport ? viewport.height : window.innerHeight;
   const top = viewport ? viewport.offsetTop : 0;
@@ -139,7 +144,8 @@ const layout = (selector) => `(() => {
   return {
     height: height,
     frameHeight: document.querySelector('[data-drawer-open], #root > main').getBoundingClientRect().height,
-    visible: rect.width > 0 && rect.height > 0 && rect.top >= top && rect.bottom <= top + height + 2
+    visible: rect.width > 0 && rect.height > 0 && rect.top >= top
+      && controlBottom <= top + height - buttonNavigationInset + 2
       && document.elementFromPoint(x, y) === input,
     keyboard: document.documentElement.hasAttribute('data-keyboard'),
     x: Math.round(x * devicePixelRatio), y: Math.round(y * devicePixelRatio)
@@ -254,17 +260,23 @@ try {
       const frame = document.querySelector('[data-drawer-open=true]');
       if (!frame) return false;
       const drawer = frame.querySelector('[data-android-drawer]').getBoundingClientRect();
-      const main = frame.querySelector('main').getBoundingClientRect();
-      return drawer.width > 100 && Math.abs(main.left - drawer.right) <= 2;
+      const main = frame.querySelector('main');
+      return drawer.width > 100 && Math.abs(main.getBoundingClientRect().left - drawer.right) <= 2
+        && getComputedStyle(frame, '::before').visibility === 'visible'
+        && getComputedStyle(main).borderTopLeftRadius === '36px';
     })()`)
   )
   adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
-  await until(
-    'Android back should close the sidebar and restore the conversation',
-    async () =>
-      (await evaluate('!!document.querySelector("[data-drawer-open=false]")')) &&
-      (await evaluate(layout(composer)))?.visible
-  )
+  await until('Android back should close the sidebar and restore the conversation', async () => {
+    const drawerClosed = await evaluate(`(() => {
+        const frame = document.querySelector('[data-drawer-open=false]');
+        if (!frame) return false;
+        const main = getComputedStyle(frame.querySelector('main'));
+        return main.transform === 'none' && main.willChange === 'auto' && main.borderTopLeftRadius === '0px'
+          && getComputedStyle(frame, '::before').visibility === 'hidden';
+      })()`)
+    return drawerClosed && (await evaluate(layout(composer)))?.visible
+  })
   assert.deepEqual(webview.exceptions, [])
   console.log(
     'PASS key rejection, key save, full-height chat, keyboard, streaming reply, and sidebar'

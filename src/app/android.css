@@ -7,6 +7,10 @@
     calc(28px * var(--android-chat-font-scale, 1)) var(--dsw-font-family);
 }
 
+[data-android][data-button-navigation] body {
+  --android-composer-bottom: 21px;
+}
+
 [data-android][data-keyboard] body {
   --android-composer-bottom: 11px;
 }

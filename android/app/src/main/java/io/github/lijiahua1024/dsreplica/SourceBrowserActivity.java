@@ -58,7 +58,7 @@ public final class SourceBrowserActivity extends Activity {
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(background);
-        SystemBars.applyInsets(getWindow(), root, (safe, ime) ->
+        SystemBars.applyInsets(getWindow(), root, (safe, ime, buttonNavigationBottom) ->
             root.setPadding(safe.left, safe.top, safe.right, safe.bottom));
         FrameLayout toolbar = new FrameLayout(this);
         toolbar.setBackgroundColor(background);
