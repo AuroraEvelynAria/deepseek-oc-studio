@@ -213,7 +213,6 @@ export const App = () => {
         </main>
         <SearchPanel />
       </div>
-      <div id="android-overlays" role="presentation" />
       {android ? <AndroidSettings chatFrame={frameRef} /> : <SettingsDialog />}
       <Toast />
     </>

@@ -1,6 +1,5 @@
 import clsx from 'clsx'
 import { memo } from 'react'
-import { android } from '../../app/android.js'
 import { useTranslate } from '../../i18n/index.js'
 import { useUploads, type UploadTask } from '../../services/attachments.js'
 import type { DraftAttachment } from '../../services/chat/drafts.js'
@@ -80,23 +79,12 @@ const AttachmentItem = ({
           type="button"
           className={styles.previewImage}
           aria-label={t('androidPreviewDraftImage', { name: item.file.name })}
-          data-android-a11y={android ? `draft-preview-${item.id}` : undefined}
-          data-android-a11y-label={item.file.name}
-          data-android-a11y-checkable="false"
-          data-android-a11y-label-kind="none"
           onClick={onPreview}
         >
           <img src={item.previewUrl} alt="" />
         </button>
       ) : (
-        <img
-          src={item.previewUrl}
-          alt={item.file.name}
-          data-android-a11y={android ? `draft-preview-${item.id}` : undefined}
-          data-android-a11y-label={item.file.name}
-          data-android-a11y-checkable="false"
-          data-android-a11y-label-kind="none"
-        />
+        <img src={item.previewUrl} alt={item.file.name} />
       )}
       {status === 'uploading' ? <div className={styles.uploading} /> : null}
       {failed && retry ? (
@@ -116,11 +104,6 @@ const AttachmentItem = ({
         type="button"
         className={clsx(styles.remove, failed && !retry && styles.invalidRemove)}
         aria-label={t('delete')}
-        data-android-a11y={android ? `draft-remove-${item.id}` : undefined}
-        data-android-a11y-label={t('delete')}
-        data-android-a11y-checkable="false"
-        data-android-a11y-label-kind="description"
-        data-android-a11y-label-depth="2"
         onClick={onRemove}
       >
         <IconCloseFill14 />

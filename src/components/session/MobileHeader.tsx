@@ -22,7 +22,6 @@ export const MobileHeader = ({ title }: { title?: string }) => {
       <IconButton
         size="xl"
         tone="primary"
-        role="link"
         className={styles.menu}
         icon={<IconMenuOutline20 />}
         aria-label={t('expandSiderbarButton')}
@@ -31,16 +30,7 @@ export const MobileHeader = ({ title }: { title?: string }) => {
       {title === undefined && !android ? null : (
         <>
           {title === undefined ? null : (
-            <div
-              className={styles.title}
-              data-android-a11y={android ? 'session-title' : undefined}
-              data-android-a11y-label={android ? title : undefined}
-              data-android-a11y-label-kind={android ? 'selfText' : undefined}
-              data-android-a11y-role={android ? 'textView' : undefined}
-              data-android-a11y-checkable={android ? 'false' : undefined}
-              data-android-a11y-clickable={android ? 'false' : undefined}
-              data-android-a11y-focusable={android ? 'false' : undefined}
-            >
+            <div className={styles.title}>
               <span className={styles.titleText}>{title}</span>
             </div>
           )}
@@ -48,7 +38,6 @@ export const MobileHeader = ({ title }: { title?: string }) => {
             <IconButton
               size="xl"
               tone="primary"
-              role="link"
               className={styles.sound}
               data-read-state={reading ? readStatus : undefined}
               icon={<AndroidSound muted={!autoRead && !reading} />}
@@ -66,7 +55,6 @@ export const MobileHeader = ({ title }: { title?: string }) => {
           <IconButton
             size="xl"
             tone="primary"
-            role="link"
             className={styles.newChat}
             icon={<IconNewChatOutline20 />}
             aria-label={t('newChat')}

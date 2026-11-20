@@ -6,6 +6,9 @@ declare const styles: {
   readonly "filesWithDocuments": string;
   readonly "bubble": string;
   readonly "bubbleText": string;
+  readonly "menuAnchor": string;
+  readonly "menuCopyIcon": string;
+  readonly "menuTrigger": string;
   readonly "bottom": string;
   readonly "alwaysShow": string;
   readonly "editor": string;

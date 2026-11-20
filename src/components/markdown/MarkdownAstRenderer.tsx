@@ -4,7 +4,6 @@ import type {
   BlockContent,
   DefinitionContent,
   List as ListNode,
-  Paragraph,
   PhrasingContent,
   Root,
   Table as TableNode,
@@ -160,11 +159,9 @@ const MarkdownBlockContentOrDefinitionContent = memo(
   function MarkdownBlockContentOrDefinitionContent({
     nodes,
     loading,
-    a11yKeyPrefix,
   }: {
     nodes: Array<BlockContent | DefinitionContent>
     loading: boolean
-    a11yKeyPrefix?: string
   }) {
     return nodes.map((node, index) => {
       switch (node.type) {
@@ -189,30 +186,11 @@ const MarkdownBlockContentOrDefinitionContent = memo(
                 <MarkdownPhrasingContent nodes={node.children} />
               )
         case 'paragraph':
-          {
-            const proxyable =
-              a11yKeyPrefix !== undefined &&
-              node.children.every((child) =>
-                ['break', 'emphasis', 'inlineCode', 'strong', 'text'].includes(child.type)
-              )
           return (
-            <p
-              key={index}
-              className="ds-markdown-paragraph"
-              data-android-a11y={
-                proxyable ? `${a11yKeyPrefix}-paragraph-${index}` : undefined
-              }
-              data-android-a11y-label={proxyable ? paragraphText(node) : undefined}
-              data-android-a11y-label-kind={proxyable ? 'selfText' : undefined}
-              data-android-a11y-role={proxyable ? 'textView' : undefined}
-              data-android-a11y-checkable={proxyable ? 'false' : undefined}
-              data-android-a11y-clickable={proxyable ? 'false' : undefined}
-              data-android-a11y-focusable={proxyable ? 'false' : undefined}
-            >
+            <p key={index} className="ds-markdown-paragraph">
               <MarkdownPhrasingContent nodes={node.children} />
             </p>
           )
-          }
         case 'code':
           return (
             <CodeBlock
@@ -234,60 +212,25 @@ const MarkdownBlockContentOrDefinitionContent = memo(
   }
 )
 
-const phrasingText = (node: PhrasingContent): string => {
-  switch (node.type) {
-    case 'break':
-      return '\n'
-    case 'citation':
-      return ''
-    case 'emphasis':
-    case 'link':
-    case 'strong':
-      return node.children.map(phrasingText).join('')
-    case 'html':
-      return node.value
-    case 'image':
-      return node.alt ?? ''
-    case 'inlineCode':
-    case 'inlineMath':
-    case 'text':
-      return node.value
-    default:
-      return ''
-  }
-}
-
-const paragraphText = (node: Paragraph) => node.children.map(phrasingText).join('')
-
 export const MarkdownAstRenderer = memo(function MarkdownAstRenderer({
   ast,
   className,
-  a11yKeyPrefix,
   loading = false,
 }: {
   ast: Root
   className?: string
-  a11yKeyPrefix?: string
   loading?: boolean
 }) {
-  const simpleParagraphs = ast.children.every(
-    (node) =>
-      node.type === 'paragraph' &&
-      node.children.every((child) =>
-        ['break', 'emphasis', 'inlineCode', 'strong', 'text'].includes(child.type)
-      )
-  )
   return useMemo(
     () => (
       <div className={clsx('ds-markdown', className)}>
         {/* 解析器在根节点下产出块级内容。 */}
         <MarkdownBlockContentOrDefinitionContent
           nodes={ast.children as Array<BlockContent | DefinitionContent>}
-          a11yKeyPrefix={simpleParagraphs ? a11yKeyPrefix : undefined}
           loading={loading}
         />
       </div>
     ),
-    [a11yKeyPrefix, className, ast.children, loading, simpleParagraphs]
+    [className, ast.children, loading]
   )
 })

@@ -23,7 +23,6 @@ export const Markdown = memo(function Markdown({
   cacheKey,
   className,
   disableLink,
-  a11yKeyPrefix,
   sources,
 }: {
   content: string
@@ -31,7 +30,6 @@ export const Markdown = memo(function Markdown({
   cacheKey: string
   className?: string
   disableLink: boolean
-  a11yKeyPrefix?: string
   sources?: Source[]
 }) {
   const throttledMarkdown = useThrottleMarkdownRender(
@@ -90,7 +88,6 @@ export const Markdown = memo(function Markdown({
       key={cacheKey}
       className={className}
       ast={ast}
-      a11yKeyPrefix={a11yKeyPrefix}
       loading={loading || (useWorker && parsed?.request !== request)}
     />
   ) : null

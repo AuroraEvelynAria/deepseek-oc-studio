@@ -6,10 +6,6 @@ import { IconButton } from '../base/IconButton.js'
 import { showToast } from '../base/toastState.js'
 import { copyText } from '../../utils/clipboard.js'
 
-type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  [key: `data-android-a11y${string}`]: string | undefined
-}
-
 /** 复制成功后图标换成对勾 1 秒并提示，期间再次点击不重复复制 */
 export const CopyButton = ({
   text,
@@ -19,7 +15,7 @@ export const CopyButton = ({
 }: {
   text: string
   className?: string
-  buttonProps?: ButtonProps
+  buttonProps?: ButtonHTMLAttributes<HTMLButtonElement>
   iconWrapperClassName?: string
 }) => {
   const t = useTranslate()
@@ -31,13 +27,7 @@ export const CopyButton = ({
   return (
     <IconButton
       icon={
-        iconWrapperClassName ? (
-          <span className={iconWrapperClassName} data-android-a11y-label-node="">
-            {icon}
-          </span>
-        ) : (
-          icon
-        )
+        iconWrapperClassName ? <span className={iconWrapperClassName}>{icon}</span> : icon
       }
       tooltip={t('copy')}
       tooltipPlacement="bottom"

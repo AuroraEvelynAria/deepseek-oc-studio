@@ -320,7 +320,7 @@ const LocaleSetting = () => {
   )
 }
 
-/** 朗读音色；官方四项视觉音色映射到当前接口支持的两个后端音色。 */
+/** 朗读音色：stella（海星，女声）/ tide（暗潮，男声） */
 const TtsVoiceSetting = () => {
   const t = useTranslate()
   const ttsVoice = useSettings((state) => state.ttsVoice)
@@ -333,8 +333,6 @@ const TtsVoiceSetting = () => {
           ariaLabel={t('settingsTtsVoice')}
           value={ttsVoice}
           options={[
-            { value: 'shell', label: t('settingsTtsVoiceShell') },
-            { value: 'wave', label: t('settingsTtsVoiceWave') },
             { value: 'stella', label: t('settingsTtsVoiceStella') },
             { value: 'tide', label: t('settingsTtsVoiceTide') },
           ]}

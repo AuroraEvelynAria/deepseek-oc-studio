@@ -4,6 +4,7 @@ import { android } from '../../app/android.js'
 import { useTranslate } from '../../i18n/index.js'
 import {
   IconPanelLeftOutline16,
+  IconPinOutline16,
   IconSearchOutline16,
   IconCloseOutline16,
   IconEllipsisOutline16,
@@ -36,7 +37,6 @@ export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean 
   const username = profile.username || t('profileDefaultUsername')
   const androidDrawer = Boolean(mobile && android)
   const [query, setQuery] = useState('')
-  const [searchFocused, setSearchFocused] = useState(false)
   const matches = useSessionSearch(query, sessions)
   const [now, setNow] = useState(Date.now)
   const [selecting, setSelecting] = useState(false)
@@ -149,7 +149,7 @@ export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean 
 
   return (
     <div className={clsx(styles.sider, mobile && styles.mobile)}>
-      {androidDrawer && selecting ? (
+      {selecting ? (
         <div className={styles.selectionHeader}>
           {checked.size
             ? t('androidSelectedChats', { count: checked.size })
@@ -162,40 +162,14 @@ export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean 
           />
         </div>
       ) : androidDrawer ? (
-        <label
-          className={styles.search}
-          data-android-a11y={android ? 'sidebar-search' : undefined}
-          data-android-a11y-label=""
-          data-android-a11y-checkable="false"
-          data-android-a11y-long-clickable="true"
-          data-android-a11y-role="editText"
-          data-android-a11y-label-kind="none"
-          data-android-a11y-keep-interactive="true"
-          data-android-a11y-touch-through="true"
-        >
+        <label className={styles.search}>
           <IconSearchOutline16 />
-          {android && !query && !searchFocused ? (
-            <span
-              className={styles.searchPlaceholder}
-              data-android-a11y="sidebar-search-placeholder"
-              data-android-a11y-label={t('androidSearchChats')}
-              data-android-a11y-checkable="false"
-              data-android-a11y-clickable="false"
-              data-android-a11y-focusable="false"
-              data-android-a11y-label-kind="text"
-            >
-              <span data-android-a11y-label-node="">{t('androidSearchChats')}</span>
-            </span>
-          ) : null}
           <input
             type="search"
-            placeholder={android ? '' : t('androidSearchChats')}
-            aria-label={android ? undefined : t('androidSearchChats')}
-            data-android-a11y-focus-target={android ? '' : undefined}
+            placeholder={t('androidSearchChats')}
+            aria-label={t('androidSearchChats')}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
           />
         </label>
       ) : (
@@ -244,26 +218,10 @@ export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean 
               </svg>
             }
             aria-label={t('androidMultiSelect')}
-            data-android-a11y={android ? 'sidebar-multiselect' : undefined}
-            data-android-a11y-label={t('androidMultiSelect')}
-            data-android-a11y-checkable="false"
-            data-android-a11y-label-kind="description"
-            data-android-a11y-touch-through="true"
             onClick={() => setSelecting(true)}
           />
         ) : null}
-        <div
-          ref={listRef}
-          className={styles.list}
-          data-android-a11y={android ? 'sidebar-list' : undefined}
-          data-android-a11y-label=""
-          data-android-a11y-checkable="false"
-          data-android-a11y-clickable="false"
-          data-android-a11y-focusable="false"
-          data-android-a11y-scrollable="true"
-          data-android-a11y-label-kind="none"
-          data-android-a11y-touch-through="true"
-        >
+        <div ref={listRef} className={styles.list}>
           {positionedGroups.map((group) => {
             const limit = group.sessions.length
             const start = Math.min(
@@ -282,18 +240,7 @@ export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean 
                 key={group.key}
                 className={clsx(styles.section, group.key === 'pinned' && styles.pinnedSection)}
               >
-                <div
-                  className={styles.sectionHeader}
-                  data-android-a11y={android ? `sidebar-group-${group.key}` : undefined}
-                  data-android-a11y-label={group.label}
-                  data-android-a11y-checkable="false"
-                  data-android-a11y-clickable="false"
-                  data-android-a11y-focusable="false"
-                  data-android-a11y-role="textView"
-                  data-android-a11y-label-kind="selfText"
-                >
-                  {group.label}
-                </div>
+                <div className={styles.sectionHeader}>{group.label}</div>
                 {start ? <div aria-hidden="true" style={{ height: start * rowHeight }} /> : null}
                 {group.sessions.slice(start, end).map((session) => (
                   <SessionItem
@@ -340,16 +287,7 @@ export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean 
               disabled={!checked.size}
               onClick={() => setPinning({ ids: checked, unpin })}
             >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 18 18"
-                fill="none"
-                stroke="currentColor"
-                aria-hidden="true"
-              >
-                <path d="m6 7 4-4 3 3-4 4-1 3-2-2-3 3-1-1 3-3-2-2z" />
-              </svg>
+              <IconPinOutline16 />
               {t(unpin ? 'androidUnpin' : 'androidPinned')}
             </button>
             <button
@@ -367,12 +305,6 @@ export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean 
             type="button"
             className={styles.settings}
             aria-label={`${username} · ${t('settings')}`}
-            data-android-a11y={androidDrawer ? 'sidebar-settings' : undefined}
-            data-android-a11y-label={androidDrawer ? t('settings') : undefined}
-            data-android-a11y-checkable="false"
-            data-android-a11y-role="button"
-            data-android-a11y-label-kind="selfText"
-            data-android-a11y-touch-through="true"
             onClick={() => {
               openSettings('general')
             }}
@@ -478,12 +410,6 @@ export const MobileSider = memo(function MobileSider() {
           className={styles.drawerMask}
           role="button"
           aria-label={t('closeSiderbarButton')}
-          data-android-a11y={android ? 'sidebar-mask' : undefined}
-          data-android-a11y-label={t('closeSiderbarButton')}
-          data-android-a11y-checkable="false"
-          data-android-a11y-focusable="false"
-          data-android-a11y-label-kind="none"
-          data-android-a11y-touch-through="true"
           onClick={closeMobileSider}
         />
       ) : null}

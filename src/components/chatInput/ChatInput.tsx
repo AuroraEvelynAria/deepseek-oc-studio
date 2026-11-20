@@ -86,7 +86,6 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   const [previewId, setPreviewId] = useState<string>()
   const preview = attachments.find((item) => item.id === previewId)
   const [typing, setTyping] = useState(false)
-  const [androidPristine, setAndroidPristine] = useState(true)
   const sendSpoken = useRef(false)
 
   useEffect(() => {
@@ -109,10 +108,6 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   useLayoutEffect(() => {
     const toggles = togglesRef.current
     if (!toggles) {
-      return
-    }
-    if (android) {
-      toggles.classList.remove(styles.collapsedToggles)
       return
     }
 
@@ -205,12 +200,9 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     useVoiceMode.setState({ enabled: false })
     if (android) {
       setTyping(true)
-      if (!getDraft(sessionId).text) {
-        setAndroidPristine(true)
-      }
     }
     requestAnimationFrame(() => textareaRef.current?.focus({ preventScroll: true }))
-  }, [sessionId])
+  }, [])
 
   useEffect(() => {
     if (!android) {
@@ -264,12 +256,8 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     if (!android || !typing) {
       return
     }
-    const textarea = textareaRef.current
-    textarea?.focus({ preventScroll: true })
-    if (androidPristine && !getDraft(sessionId).text) {
-      textarea?.setSelectionRange(0, 0)
-    }
-  }, [androidPristine, sessionId, t, typing])
+    textareaRef.current?.focus({ preventScroll: true })
+  }, [typing])
 
   const send = () => {
     if (
@@ -292,9 +280,6 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     }
   }
 
-  const androidPlaceholder = android && !voiceMode && !typing && !text.trim()
-  const textareaValue =
-    android && typing && androidPristine && !text ? t('androidMessageHint') : text
   const photoSuggestions = !!android && !text.trim() && attachments.some((item) => item.isImage)
 
   return (
@@ -368,13 +353,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
           ) : (
             <textarea
               ref={textareaRef}
-              className={clsx(
-                styles.textarea,
-                android && styles.androidTextarea,
-                android && androidPristine && styles.androidPristine,
-                androidPlaceholder && styles.androidTextareaHidden,
-                recording && isMobile && styles.textareaHidden
-              )}
+              className={clsx(styles.textarea, recording && isMobile && styles.textareaHidden)}
               placeholder={t(
                 android
                   ? typing
@@ -386,31 +365,13 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
               // 移动端不自动聚焦，避免一打开就弹出键盘
               autoFocus={!isMobile}
               disabled={importingHistory}
-              value={textareaValue}
-              onChange={(event) => {
-                let value = event.target.value
-                if (android && androidPristine) {
-                  const prompt = t('androidMessageHint')
-                  setAndroidPristine(false)
-                  if (value.includes(prompt)) {
-                    value = value.replaceAll(prompt, '')
-                  }
-                }
-                setText(value)
-              }}
+              value={text}
+              onChange={(event) => setText(event.target.value)}
               onFocus={() => {
                 setTyping(true)
-                if (android && !getDraft(sessionId).text) {
-                  setAndroidPristine(true)
-                }
                 setShowAttachments(false)
               }}
-              onBlur={() => {
-                setTyping(false)
-                if (android) {
-                  setAndroidPristine(!getDraft(sessionId).text)
-                }
-              }}
+              onBlur={() => setTyping(false)}
               {...(android ? hold.delayed : {})}
               onPointerDown={(event) => {
                 if (android && !text && !typing) {
@@ -448,9 +409,6 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
               }}
             />
           )}
-          {androidPlaceholder ? (
-            <div className={styles.androidPlaceholder}>{t('androidHoldHint')}</div>
-          ) : null}
           {recording && isMobile && !android ? <Spectrum getAnalyser={voice.getAnalyser} /> : null}
           {voiceMode ? null : (
             <div className={styles.mirror} aria-hidden>
@@ -458,10 +416,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
             </div>
           )}
         </div>
-        <div
-          className={styles.functionRow}
-          data-empty-typing={android && typing && !draftReady ? '' : undefined}
-        >
+        <div className={styles.functionRow}>
           {/* 深度思考 / 智能搜索开关，tooltip 在按钮上方 */}
           <div ref={togglesRef} className={styles.toggles}>
             {customEndpoint ? null : (
@@ -469,62 +424,25 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
                 <Tooltip content={t('deactivatedThinkTooltip')}>
                   <button
                     type="button"
-                    role="link"
-                    className={clsx(
-                      android ? styles.toggleTarget : styles.toggle,
-                      thinking && styles.selected
-                    )}
+                    className={clsx(styles.toggle, thinking && styles.selected)}
                     aria-label={t('thinkingSwitch')}
                     aria-pressed={thinking}
-                    data-android-a11y={android ? 'composer-thinking' : undefined}
-                    data-android-a11y-label={android ? t('thinkingSwitch') : undefined}
-                    data-android-a11y-label-kind={android ? 'text' : undefined}
                     onClick={() => setThinking(!thinking)}
                   >
-                    {android ? (
-                      <span className={clsx(styles.toggle, thinking && styles.selected)}>
-                        <IconThinkOutline14 />
-                        <span className={styles.toggleLabel} data-android-a11y-label-node="">
-                          {t('thinkingSwitch')}
-                        </span>
-                      </span>
-                    ) : (
-                      <>
-                        <IconThinkOutline14 />
-                        <span className={styles.toggleLabel}>{t('thinkingSwitch')}</span>
-                      </>
-                    )}
+                    <IconThinkOutline14 />
+                    <span className={styles.toggleLabel}>{t('thinkingSwitch')}</span>
                   </button>
                 </Tooltip>
                 <Tooltip content={t('deactivatedSearchTooltip')}>
                   <button
                     type="button"
-                    role="link"
-                    className={clsx(
-                      android ? styles.toggleTarget : styles.toggle,
-                      android && styles.searchToggleTarget,
-                      search && styles.selected
-                    )}
+                    className={clsx(styles.toggle, search && styles.selected)}
                     aria-label={t('search')}
                     aria-pressed={search}
-                    data-android-a11y={android ? 'composer-search' : undefined}
-                    data-android-a11y-label={android ? t('search') : undefined}
-                    data-android-a11y-label-kind={android ? 'text' : undefined}
                     onClick={() => setSearch(!search)}
                   >
-                    {android ? (
-                      <span className={clsx(styles.toggle, search && styles.selected)}>
-                        <IconGlobeLanguageOutline14 />
-                        <span className={styles.toggleLabel} data-android-a11y-label-node="">
-                          {t('search')}
-                        </span>
-                      </span>
-                    ) : (
-                      <>
-                        <IconGlobeLanguageOutline14 />
-                        <span className={styles.toggleLabel}>{t('search')}</span>
-                      </>
-                    )}
+                    <IconGlobeLanguageOutline14 />
+                    <span className={styles.toggleLabel}>{t('search')}</span>
                   </button>
                 </Tooltip>
               </>
@@ -536,21 +454,9 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
                 <IconButton
                   size="xl"
                   tone="primary"
-                  role="link"
-                  icon={
-                    <span className={styles.androidToolIcon} data-android-a11y-label-node="">
-                      <AndroidCircle icon={showAttachments ? 'close' : 'add'} />
-                    </span>
-                  }
+                  icon={<AndroidCircle icon={showAttachments ? 'close' : 'add'} />}
                   aria-label={t(showAttachments ? 'close' : 'uploadFile')}
                   aria-expanded={showAttachments}
-                  className={android ? styles.androidUploadTarget : undefined}
-                  data-android-a11y={android ? 'composer-upload' : undefined}
-                  data-android-a11y-label={
-                    android ? t(showAttachments ? 'close' : 'uploadFile') : undefined
-                  }
-                  data-android-a11y-label-kind={android ? 'description' : undefined}
-                  data-android-a11y-checkable={android ? 'false' : undefined}
                   disabled={importingHistory}
                   onClick={() => {
                     textareaRef.current?.blur()
@@ -561,25 +467,9 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
                   <IconButton
                     size="xl"
                     tone="primary"
-                    role="link"
-                    icon={
-                      <span
-                        className={clsx(styles.androidToolIcon, styles.androidVoiceIcon)}
-                        data-android-a11y-label-node=""
-                      >
-                        <AndroidCircle icon={voiceMode ? 'keys' : 'voice'} />
-                      </span>
-                    }
+                    icon={<AndroidCircle icon={voiceMode ? 'keys' : 'voice'} />}
                     aria-label={t(voiceMode ? 'androidTextMode' : 'androidVoiceMode')}
                     aria-pressed={voiceMode}
-                    className={android ? styles.androidVoiceTarget : undefined}
-                    data-android-a11y={android ? 'composer-voice' : undefined}
-                    data-android-a11y-label={
-                      android ? t(voiceMode ? 'androidTextMode' : 'androidVoiceMode') : undefined
-                    }
-                    data-android-a11y-label-kind={android ? 'description' : undefined}
-                    data-android-a11y-checkable={android ? 'false' : undefined}
-                    data-android-a11y-focusable={android ? 'false' : undefined}
                     onClick={() => {
                       if (!voiceMode && !ensureApiKey(true)) {
                         return
@@ -639,9 +529,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
                   stopReply(sessionId)
                 }}
               >
-                <span className={styles.androidSendVisual}>
-                  <IconStopFill16 />
-                </span>
+                <IconStopFill16 />
               </button>
             ) : showSend ? (
               <button
@@ -649,10 +537,6 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
                 className={clsx(styles.sendButton, !canSend && styles.disabled)}
                 aria-label={t('send')}
                 aria-disabled={!canSend}
-                data-android-a11y={android ? 'composer-send' : undefined}
-                data-android-a11y-label={android ? t('send') : undefined}
-                data-android-a11y-label-kind={android ? 'description' : undefined}
-                data-android-a11y-checkable={android ? 'false' : undefined}
                 onPointerDown={(event) => {
                   if (android && !canSend) {
                     event.preventDefault()
@@ -660,11 +544,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
                 }}
                 onClick={send}
               >
-                <span className={styles.androidSendVisual}>
-                  <span className={styles.androidSendLabel} data-android-a11y-label-node="">
-                    <IconSendOutline16 />
-                  </span>
-                </span>
+                <IconSendOutline16 />
               </button>
             ) : null}
           </div>

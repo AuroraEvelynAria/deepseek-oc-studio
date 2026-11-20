@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { useAndroidBackInterception } from '../../app/useAndroidBackInterception.js'
 import styles from './SessionActionDialog.module.css'
 
 /** 侧边栏会话动作弹窗；叠放时 Esc 只关闭最上层。 */
@@ -30,6 +31,8 @@ export const SessionActionDialog = ({
   onCancel: () => void
   onConfirm: () => void
 }) => {
+  useAndroidBackInterception(!closeDisabled)
+
   useEffect(() => {
     const token = {}
     openDialogs.push(token)

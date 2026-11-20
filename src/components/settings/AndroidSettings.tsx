@@ -394,25 +394,12 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
     { id: 'light', label: tr('浅色', 'Light') },
     { id: 'dark', label: tr('深色', 'Dark') },
   ]
-  const languages: { id: LocalePreference | 'am' | 'ar' | 'hy'; label: string }[] = [
+  const languages: { id: LocalePreference; label: string }[] = [
     { id: 'system', label: tr('系统', 'System') },
     { id: 'zh-CN', label: '中文 (简体中文)' },
     { id: 'en-US', label: 'English' },
-    { id: 'am', label: 'አማርኛ' },
-    { id: 'ar', label: 'العربية' },
-    { id: 'hy', label: 'հայերեն' },
   ]
   const tones: { id: TtsVoice; label: string; description: string }[] = [
-    {
-      id: 'shell',
-      label: t('settingsTtsVoiceShell'),
-      description: t('settingsTtsVoiceShellDescription'),
-    },
-    {
-      id: 'wave',
-      label: t('settingsTtsVoiceWave'),
-      description: t('settingsTtsVoiceWaveDescription'),
-    },
     {
       id: 'stella',
       label: t('settingsTtsVoiceStella'),
@@ -425,15 +412,11 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
     },
   ]
   const currentTone = tones.find((item) => item.id === tone) ?? tones[0]
-  const selectTone = (direction: -1 | 1) => {
-    const index = Math.max(
-      0,
-      tones.findIndex((item) => item.id === tone)
-    )
-    setTone(tones[Math.max(0, Math.min(tones.length - 1, index + direction))].id)
-  }
-  const languageLabel =
-    locale === 'zh-CN' ? '中文 (简体中文)' : languages.find((item) => item.id === locale)?.label
+  const systemFontStep = Math.min(
+    6,
+    Math.max(0, Math.round(((android?.systemFontScale() ?? 1) - 1) / 0.1 + 2))
+  )
+  const languageLabel = languages.find((item) => item.id === locale)?.label
   const themeLabel = themes.find((item) => item.id === themePreference)?.label
   const localizedPoliciesUrl = `${policiesUrl}/${locale}`
 
@@ -762,10 +745,7 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
               />
             </Group>
             <p className={styles.legal}>
-              {`模型名称：Deepseek Chat
-备案号：Beijing-DeepseekChat-202404280016
-浙ICP备2023025841号-3A
-内容由 AI 生成，请仔细甄别，并合法使用`}
+              {t('appName')}
             </p>
           </>
         ) : null}
@@ -940,10 +920,7 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
                 openAndroidPage(`${chinesePoliciesUrl}/collected-personal-information.html`)
               }
             />
-            <Row
-              label={tr('应用权限', 'App Permissions')}
-              onClick={() => openAndroidPage(`${chinesePoliciesUrl}/app-permissions.html`)}
-            />
+            <Row label={tr('应用权限', 'App Permissions')} onClick={() => android?.openAppPermissions()} />
           </Group>
         ) : null}
       </div>
@@ -955,7 +932,7 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
               <Switch
                 label={follow}
                 checked={fontSize === null}
-                toggle={() => setFontSize(fontSize === null ? 2 : null)}
+                toggle={() => setFontSize(fontSize === null ? systemFontStep : null)}
               />
             }
           />
@@ -976,7 +953,7 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
               min="0"
               max="6"
               step="1"
-              value={fontSize ?? 2}
+              value={fontSize ?? systemFontStep}
               onChange={(event) => setFontSize(event.target.valueAsNumber)}
             />
           </div>
@@ -995,9 +972,7 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
           fields={languages}
           confirmLabel={tr('确认', 'Confirm')}
           confirm={(value) => {
-            if (value === 'system' || value === 'zh-CN' || value === 'en-US') {
-              setLocale(value)
-            }
+            setLocale(value)
             setPopup(null)
           }}
           dismiss={back}
@@ -1034,19 +1009,22 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
                 const dx =
                   event.changedTouches[0].clientX - Number(event.currentTarget.dataset.swipeX)
                 if (Math.abs(dx) > 32) {
-                  selectTone(dx > 0 ? -1 : 1)
+                  setTone(dx > 0 ? 'stella' : 'tide')
                 }
               }}
             >
               <div className={styles.voiceArt} data-tone={tone} aria-hidden="true" />
               <div>{currentTone.label}</div>
               <small>{currentTone.description}</small>
-              <div className={styles.dots} aria-hidden="true">
+              <div className={styles.dots} role="radiogroup" aria-label={voice}>
                 {tones.map((item) => (
-                  <span
+                  <button
                     key={item.id}
-                    className={styles.dot}
-                    data-selected={tone === item.id ? 'true' : undefined}
+                    type="button"
+                    role="radio"
+                    aria-label={item.label}
+                    aria-checked={tone === item.id}
+                    onClick={() => setTone(item.id)}
                   />
                 ))}
               </div>

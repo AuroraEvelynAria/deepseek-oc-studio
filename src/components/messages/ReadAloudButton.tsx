@@ -1,3 +1,4 @@
+import { android } from '../../app/android.js'
 import { useTranslate } from '../../i18n/index.js'
 import {
   describeReadAloudError,
@@ -14,12 +15,10 @@ export const ReadAloudButton = ({
   messageId,
   text,
   className,
-  androidA11yKey,
 }: {
   messageId: string
   text: string
   className?: string
-  androidA11yKey?: string
 }) => {
   const t = useTranslate()
   const status = useReadAloud((state) => (state.messageId === messageId ? state.status : 'idle'))
@@ -30,14 +29,8 @@ export const ReadAloudButton = ({
       tooltip={label}
       tooltipPlacement="bottom"
       className={className}
-      data-android-a11y={androidA11yKey}
-      data-android-a11y-label={androidA11yKey ? label : undefined}
-      data-android-a11y-checkable={androidA11yKey ? 'false' : undefined}
-      data-android-a11y-role={androidA11yKey ? 'button' : undefined}
-      data-android-a11y-label-kind={androidA11yKey ? 'none' : undefined}
-      data-android-a11y-touch-through={androidA11yKey ? 'true' : undefined}
-      tabIndex={androidA11yKey ? -1 : undefined}
-      onMouseDown={androidA11yKey ? (event) => event.preventDefault() : undefined}
+      tabIndex={android ? -1 : undefined}
+      onMouseDown={android ? (event) => event.preventDefault() : undefined}
       onClick={() =>
         toggleReadAloud(messageId, text, (error) => showToast(describeReadAloudError(error)))
       }

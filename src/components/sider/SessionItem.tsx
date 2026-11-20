@@ -96,12 +96,6 @@ export const SessionItem = memo(function SessionItem({
     <>
       <div
         className={clsx(styles.item, active && styles.active, tapHighlight && styles.tapHighlight)}
-        data-android-a11y={android ? `sidebar-session-${session.id}` : undefined}
-        data-android-a11y-label={displayTitle}
-        data-android-a11y-checkable="false"
-        data-android-a11y-long-clickable="true"
-        data-android-a11y-label-kind="text"
-        data-android-a11y-touch-through="true"
         onContextMenu={(event) => {
           if (android) {
             event.preventDefault()
@@ -116,16 +110,14 @@ export const SessionItem = memo(function SessionItem({
           }
         }}
       >
-        <div className={styles.title} data-android-a11y-label-node="">
-          {displayTitle}
-        </div>
+        <div className={styles.title}>{displayTitle}</div>
         <div
           ref={actionsRef}
           className={clsx(styles.action, active && styles.actionActive)}
           onClick={(event) => event.stopPropagation()}
         >
           <Menu
-            androidA11yPrefix={android ? 'sidebar-session-menu' : undefined}
+            variant={android ? 'sidebar' : undefined}
             options={[
               {
                 key: 'rename',
@@ -160,17 +152,12 @@ export const SessionItem = memo(function SessionItem({
                   <button
                     type="button"
                     className={clsx(styles.actionTrigger, styles.activeTrigger)}
-                    aria-hidden="true"
+                    aria-label={t('androidShowMenu')}
                     tabIndex={-1}
-                    data-android-a11y={`sidebar-session-more-${session.id}`}
-                    data-android-a11y-label={t('androidShowMenu')}
-                    data-android-a11y-checkable="false"
-                    data-android-a11y-label-kind="description"
-                    data-android-a11y-touch-through="true"
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={toggle}
                   >
-                    <span className={styles.activeTriggerIcon} data-android-a11y-label-node="">
+                    <span className={styles.activeTriggerIcon}>
                       <IconEllipsisOutline16 />
                     </span>
                   </button>

@@ -349,18 +349,6 @@
   color: rgb(142 144 148);
 }
 
-[data-android] .searchPlaceholder {
-  left: 37.3333px;
-
-  > span {
-    display: block;
-    width: max-content;
-    color: rgb(142 144 148);
-    font-size: 15.053px;
-    line-height: 22.4px;
-  }
-}
-
 .selectChats {
   position: absolute;
   top: -7.1111px;
@@ -388,6 +376,10 @@
     background: var(--dsw-alias-bg-base);
     box-shadow: 0 1px 8px #0002;
   }
+}
+
+[data-android] .drawer .selectionHeader {
+  padding-inline: 16px;
 }
 
 .selectionActions {
@@ -419,7 +411,6 @@
 }
 
 .search {
-  position: relative;
   display: flex;
   align-items: center;
   flex-shrink: 0;
@@ -441,18 +432,4 @@
     font: inherit;
     font-size: 16px;
   }
-}
-
-.searchPlaceholder {
-  position: absolute;
-  top: 50%;
-  left: 38px;
-  max-width: calc(100% - 52px);
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  pointer-events: none;
-  transform: translateY(-50%);
-  font-size: 16px;
-  line-height: 22px;
 }

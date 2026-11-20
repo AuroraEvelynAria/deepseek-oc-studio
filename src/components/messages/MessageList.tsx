@@ -14,7 +14,6 @@ import { IconChevronDownOutline14 } from '../base/icons.js'
 import { AssistantMessage } from './AssistantMessage.js'
 import { ScrollToBottomContext } from './scrollContext.js'
 import { UserMessage } from './UserMessage.js'
-import { MessageShareView } from './MessageShareView.js'
 import type { Message } from '../../services/chat/types.js'
 
 /**
@@ -73,7 +72,6 @@ export const MessageList = ({
   const [previousVersions, setPreviousVersions] = useState(() =>
     buildMessageVersions(session, new Map())
   )
-  const [sharing, setSharing] = useState(false)
   const versions = useMemo(
     () => buildMessageVersions(session, previousVersions),
     [session, previousVersions]
@@ -201,7 +199,6 @@ export const MessageList = ({
   }, [session.id, lastMessageId, scrollToBottom])
 
   useEffect(closeSearchPanel, [session.id, lastMessageId])
-  useEffect(() => setSharing(false), [session.id])
   useEffect(() => () => cancelAnimationFrame(jumpFrameRef.current), [])
 
   const selectVersion = useCallback(
@@ -267,7 +264,6 @@ export const MessageList = ({
                     busy={streaming}
                     versions={versions.get(message.id) ?? EMPTY_VERSIONS}
                     onSelectVersion={selectVersion}
-                    onShare={() => setSharing(true)}
                   />
                 ) : (
                   <AssistantMessage
@@ -279,7 +275,6 @@ export const MessageList = ({
                     busy={streaming}
                     versions={versions.get(message.id) ?? EMPTY_VERSIONS}
                     onSelectVersion={selectVersion}
-                    onShare={() => setSharing(true)}
                   />
                 )
               })}
@@ -290,16 +285,11 @@ export const MessageList = ({
               type="button"
               className={styles.jumpToBottom}
               aria-label={t('jumpToBottom')}
-              data-android-a11y="chat-jump-bottom"
-              data-android-a11y-label={t('jumpToBottom')}
-              data-android-a11y-checkable="false"
-              data-android-a11y-label-kind="description"
-              data-android-a11y-touch-through="true"
               tabIndex={-1}
               onMouseDown={(event) => event.preventDefault()}
               onClick={jumpToBottom}
             >
-              <span className={styles.jumpToBottomIcon} data-android-a11y-label-node="">
+              <span className={styles.jumpToBottomIcon}>
                 <IconChevronDownOutline14 />
               </span>
             </button>
@@ -307,7 +297,6 @@ export const MessageList = ({
         </div>
         {footer}
       </div>
-      {sharing ? <MessageShareView session={session} onClose={() => setSharing(false)} /> : null}
     </ScrollToBottomContext.Provider>
   )
 }

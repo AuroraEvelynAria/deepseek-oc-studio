@@ -143,13 +143,8 @@ const initialThemePreference = (): ThemePreference => {
   return saved === 'light' || saved === 'dark' ? saved : 'system'
 }
 
-/** 未保存过时使用官方默认音色贝壳；旧版本保存的两个音色保持原选择。 */
-const initialTtsVoice = (): TtsVoice => {
-  const saved = read(KEYS.ttsVoice)
-  return saved === 'shell' || saved === 'wave' || saved === 'stella' || saved === 'tide'
-    ? saved
-    : 'shell'
-}
+/** 未保存过时使用服务端默认音色 stella（海星） */
+const initialTtsVoice = (): TtsVoice => (read(KEYS.ttsVoice) === 'tide' ? 'tide' : 'stella')
 
 export const useSettings = create<Settings>(() => ({
   apiKey: android ? android.readApiKey() : read(KEYS.apiKey),
