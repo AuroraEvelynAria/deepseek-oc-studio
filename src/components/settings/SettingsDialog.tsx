@@ -2,6 +2,7 @@ import clsx from 'clsx'
 import { android, saveAndroidHistory } from '../../app/android.js'
 import { useRef, useState, type ReactNode } from 'react'
 import {
+  IconChevronRightOutline14,
   IconDarkOutline16,
   IconDataOutline16,
   IconDownloadOutline16,
@@ -34,6 +35,7 @@ import { Modal } from '../base/Modal.js'
 import { Select } from '../base/Select.js'
 import { showToast } from '../base/toastState.js'
 import { ApiKeyConfirm, ApiKeyField, useApiKeyEditor } from './ApiKeyField.js'
+import { AdvancedApiDialog } from './AdvancedApiSettings.js'
 import { ProfileIcon } from './ProfileAvatar.js'
 import { ProfileEditor } from './ProfileEditor.js'
 import { closeSettings, useSettingsDialog, type SettingsSection } from './settingsDialogState.js'
@@ -61,6 +63,7 @@ const sections: { value: SettingsSection; label: TranslationKey; icon: ReactNode
 const SettingsContent = () => {
   const t = useTranslate()
   const isMobile = useIsMobile()
+  const model = useSettings((state) => state.chatConfig.model)
   // 打开时按调用方指定的分组选中，之后在弹窗内切换
   const [section, setSection] = useState(() => useSettingsDialog.getState().section)
   // 切换分组不丢失正在输入的 API Key 与导入状态
@@ -69,6 +72,9 @@ const SettingsContent = () => {
   const historyDelete = useHistoryDelete()
   const replacingHistory = useChatStore((state) => state.importingHistory)
   const historyBusy = historyImport.busy || historyDelete.busy || replacingHistory
+  if (section === 'advanced') {
+    return <AdvancedApiDialog onClose={() => setSection('data')} />
+  }
   return (
     <>
       <Modal
@@ -110,6 +116,21 @@ const SettingsContent = () => {
           ) : (
             <>
               <ApiKeyField editor={apiKeyEditor} />
+              <SettingCell
+                label={t('advancedSettings')}
+                description={model || undefined}
+                status={null}
+                action={
+                  <Button
+                    aria-label={t('advancedSettings')}
+                    variant="outlined"
+                    size="m"
+                    onClick={() => setSection('advanced')}
+                  >
+                    <IconChevronRightOutline14 />
+                  </Button>
+                }
+              />
               <ImportHistory historyImport={historyImport} disabled={historyBusy} />
               <ExportHistory disabled={historyBusy} />
               <SettingCell

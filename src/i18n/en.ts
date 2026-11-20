@@ -160,6 +160,24 @@ export const en = {
   avatarMenuSettingsDialogThemeSelectDarkOption: 'Dark',
   avatarMenuSettingsDialogThemeSelectSystemOption: 'System',
   apiKeyStart: 'Enter an API Key to get started',
+  advancedSettings: 'Advanced settings',
+  advancedModel: 'Model name',
+  advancedEndpoint: 'Custom endpoint',
+  advancedProtocol: 'Endpoint format',
+  advancedEndpointKey: 'Endpoint API key (optional)',
+  advancedDefaultHint:
+    'Leave the endpoint blank to use DeepSeek with the selected format. Leave the model blank to use DeepSeek Flash.',
+  advancedEndpointHint:
+    'Enter an HTTP or HTTPS base URL. The app adds the request path for the selected format.',
+  advancedProviderHint:
+    'Use the API key for this endpoint. Reasoning and web search capabilities depend on the provider.',
+  advancedInvalidEndpoint:
+    'Enter a valid HTTP or HTTPS base URL without credentials or a fragment.',
+  advancedSaveFailed: 'Unable to save advanced settings on this device.',
+  advancedConnectionChanged: 'Unable to use this endpoint. Check advanced settings and try again.',
+  advancedAttachmentUnsupported: 'This endpoint format cannot send “{name}”.',
+  advancedSave: 'Save',
+  advancedReset: 'Restore defaults',
   apiKeyGet: 'Get an API Key',
   apiKeyEdit: 'Edit API Key',
   accountManagement: 'Account management',

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { android } from '../app/android.js'
+import { DEFAULT_CHAT_CONFIG, readChatConfig, type ChatConfig } from './api/chatConfig.js'
 import type { TtsVoice } from './api/speech.js'
 import { normalizeLocation, type UserLocation } from './location.js'
 
@@ -17,6 +18,7 @@ type AccountProfile = {
 /** 本机设置，Android 上的 API Key 和账号资料交给原生层存储。 */
 type Settings = {
   apiKey: string | null
+  chatConfig: ChatConfig
   accountProfile: AccountProfile
   locale: Locale
   localePreference: LocalePreference
@@ -34,6 +36,7 @@ type Settings = {
 
 const KEYS = {
   apiKey: 'chat-demo:api-key',
+  chatConfig: 'replica:chat-config',
   accountProfile: 'replica:account-profile',
   locale: 'chat-demo:locale',
   location: 'chat-demo:location',
@@ -145,6 +148,9 @@ const initialTtsVoice = (): TtsVoice => (read(KEYS.ttsVoice) === 'tide' ? 'tide'
 
 export const useSettings = create<Settings>(() => ({
   apiKey: android ? android.readApiKey() : read(KEYS.apiKey),
+  chatConfig: readChatConfig(
+    android ? (android.readChatConfig?.() ?? null) : read(KEYS.chatConfig)
+  ),
   accountProfile: initialAccountProfile(),
   locale: resolveLocale(initialLocalePreference()),
   localePreference: initialLocalePreference(),
@@ -220,6 +226,18 @@ export const setApiKey = (apiKey: string | null) => {
   }
   useSettings.setState({ apiKey })
   return true
+}
+
+export const setChatConfig = (chatConfig: ChatConfig) => {
+  const value =
+    chatConfig.model || chatConfig.endpoint || chatConfig.format !== DEFAULT_CHAT_CONFIG.format
+      ? JSON.stringify(chatConfig)
+      : null
+  const persisted = android ? android.writeChatConfig(value) : write(KEYS.chatConfig, value)
+  if (persisted) {
+    useSettings.setState({ chatConfig })
+  }
+  return persisted
 }
 
 export const setThinking = (thinking: boolean) => {

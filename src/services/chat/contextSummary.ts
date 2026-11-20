@@ -1,7 +1,15 @@
 import { readBlobBuffer } from '../../utils/blob.js'
-import { streamMessage } from '../api/client.js'
+import { DEFAULT_CHAT_CONFIG, DEFAULT_CHAT_MODEL, type ChatConfig } from '../api/chatConfig.js'
+import { streamChatMessage } from '../api/client.js'
 import { isContextOverflow } from '../api/errors.js'
-import type { FileBlockParam, MessageParam, TextBlockParam } from '../api/types.js'
+import type {
+  CreateMessageRequest,
+  FileBlockParam,
+  InlineFileBlockParam,
+  MessageParam,
+  TextBlockParam,
+  UserBlockParam,
+} from '../api/types.js'
 import { getFileExt, getUploadPurpose } from '../attachments.js'
 import {
   estimatePrefixTokens,
@@ -27,27 +35,25 @@ type SummaryInput = {
   previous?: string
   excerpts: string[]
   focus?: string
-  file?: FileBlockParam
+  file?: FileBlockParam | InlineFileBlockParam
 }
 
 export const createContextSummarizer =
-  (apiKey: string, signal: AbortSignal) =>
+  (apiKey: string, signal: AbortSignal, config: ChatConfig = DEFAULT_CHAT_CONFIG) =>
   async ({ previous, excerpts, focus, file }: SummaryInput): Promise<string | null> => {
     const material = JSON.stringify({ previous, excerpts, focus })
     const text: TextBlockParam = { type: 'text', text: material }
     let summary = ''
     let completed = false
-    for await (const event of streamMessage(
-      apiKey,
-      {
-        model: 'deepseek-flash',
-        max_tokens: SUMMARY_OUTPUT_TOKENS,
-        system: SUMMARY_SYSTEM,
-        messages: [{ role: 'user', content: file ? [file, text] : material }],
-        thinking: { type: 'disabled' },
-      },
-      signal
-    )) {
+    const body: CreateMessageRequest = {
+      model: config.model || DEFAULT_CHAT_MODEL,
+      max_tokens: SUMMARY_OUTPUT_TOKENS,
+      system: SUMMARY_SYSTEM,
+      messages: [{ role: 'user', content: file ? [file, text] : material }],
+      thinking: { type: 'disabled' },
+    }
+    const events = streamChatMessage(config, apiKey, body, signal)
+    for await (const event of events) {
       if (event.type === 'content_block_start' && event.content_block.type === 'text') {
         summary += event.content_block.text
       } else if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
@@ -82,7 +88,7 @@ export const includeContextSummary = (messages: MessageParam[], summary?: string
   const first = messages.findIndex(({ role }) => role === 'user')
   const message = messages[first]
   if (message?.role === 'user') {
-    const content: (TextBlockParam | FileBlockParam)[] =
+    const content: UserBlockParam[] =
       typeof message.content === 'string'
         ? [{ type: 'text', text: message.content }]
         : message.content
@@ -113,7 +119,7 @@ const textTail = (text: string, budget: number) => {
   return /^[\uDC00-\uDFFF]/u.test(tail) ? tail.slice(1) : tail
 }
 
-const readPlainText = async (
+export const readPlainText = async (
   file: FileAttachment,
   loadFile: (id: string) => Promise<Blob | undefined>
 ) => {
@@ -145,6 +151,7 @@ export const summarizeCurrentInput = async ({
   summarize,
   loadFile,
   signal,
+  inlineFiles,
 }: {
   apiKey: string
   question: UserMessage
@@ -152,13 +159,14 @@ export const summarizeCurrentInput = async ({
   summarize: (request: SummaryInput) => Promise<string | null>
   loadFile: (id: string) => Promise<Blob | undefined>
   signal: AbortSignal
+  inlineFiles?: (InlineFileBlockParam | TextBlockParam)[]
 }): Promise<{ question: UserMessage; prefix?: AssistantMessage } | null> => {
   const shortenQuestion = estimateTextTokens(question.content) > INPUT_EXCERPT_TOKENS
   const shortenPrefix = estimatePrefixTokens(prefix) > PREFIX_TAIL_TOKENS
-  const files = question.files.flatMap((file) =>
-    file.serverId ? [{ file, serverId: file.serverId }] : []
-  )
-  if (!shortenQuestion && !shortenPrefix && !files.length) {
+  const files = inlineFiles
+    ? []
+    : question.files.flatMap((file) => (file.serverId ? [{ file, serverId: file.serverId }] : []))
+  if (!shortenQuestion && !shortenPrefix && !files.length && !inlineFiles?.length) {
     return null
   }
   const excerptBudget = INPUT_EXCERPT_TOKENS / 2
@@ -198,6 +206,24 @@ export const summarizeCurrentInput = async ({
   }
   if (shortenQuestion && !(await summarizeText(question.content, '本轮用户输入'))) {
     return null
+  }
+  for (const file of inlineFiles ?? []) {
+    if (file.type === 'text') {
+      if (!(await summarizeText(file.text, '附件'))) {
+        return null
+      }
+    } else {
+      const summary = await summarize({
+        previous,
+        excerpts: ['附件'],
+        focus,
+        file,
+      })
+      if (!summary) {
+        return null
+      }
+      previous = summary
+    }
   }
   for (const { file, serverId } of files) {
     signal.throwIfAborted()

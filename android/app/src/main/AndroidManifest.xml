@@ -27,7 +27,7 @@
         android:icon="@mipmap/ic_launcher"
         android:label="DeepSeek Replica"
         android:theme="@style/AppTheme"
-        android:usesCleartextTraffic="false">
+        android:usesCleartextTraffic="true">
         <provider
             android:name=".CaptureProvider"
             android:authorities="${applicationId}.capture"

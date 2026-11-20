@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { createId } from '../../utils/id.js'
-import { ApiError, streamMessage } from '../api/client.js'
-import type { ChatModel, CreateMessageRequest, MessageParam } from '../api/types.js'
+import { DEFAULT_CHAT_MODEL } from '../api/chatConfig.js'
+import { ApiError, streamChatMessage } from '../api/client.js'
+import type { CreateMessageRequest, MessageParam } from '../api/types.js'
 import {
   extractFileIds,
   getFileErrorCode,
@@ -32,6 +33,7 @@ import {
   includeContextSummary,
   summarizeCurrentInput,
 } from './contextSummary.js'
+import { prepareCustomAttachments } from './customAttachments.js'
 import * as db from './db.js'
 import {
   clearAllDrafts,
@@ -58,10 +60,10 @@ import {
   type UserMessage,
 } from './types.js'
 
-/** deepseek-flash 同时支持深度思考与图片输入 */
-const MODEL: ChatModel = 'deepseek-flash'
 /** DeepSeek Flash 和 Pro 的官方最大输出预算（384K，含思考）。 */
 const MAX_OUTPUT_TOKENS = 393_216
+const CUSTOM_OUTPUT_TOKENS = 4_096
+const CUSTOM_CONTEXT_WINDOW = 128 * 1024
 /** 所有生成请求统一携带的助手身份说明 */
 const SYSTEM_PROMPT = '该助手为DeepSeek，由深度求索公司创造。'
 /** 保留最近打开的详情；当前会话、生成中及尚未成功保存的会话不淘汰。 */
@@ -288,15 +290,16 @@ export const bindChatPersistence = () => {
 
 /** 按当前开关创建回复：深度思考对应 thinking，智能搜索控制 deepseek_web_search。 */
 const createReply = (): AssistantMessage => {
-  const { thinking, search } = useSettings.getState()
+  const { thinking, search, chatConfig } = useSettings.getState()
+  const customEndpoint = Boolean(chatConfig.endpoint)
   return {
     id: createId(),
     role: 'assistant',
     createdAt: Date.now(),
-    model: MODEL,
-    thinking,
-    search,
-    prefix: true,
+    model: chatConfig.model || DEFAULT_CHAT_MODEL,
+    thinking: !customEndpoint && thinking,
+    search: !customEndpoint && search,
+    prefix: !customEndpoint && chatConfig.format === 'messages',
     status: 'pending',
     blocks: [],
   }
@@ -590,7 +593,12 @@ export const sendMessage = (targetSessionId: string | null) => {
   if (get().importingHistory || !get().ready) {
     return false
   }
-  const prepared = prepareDraftMessage(getDraft(targetSessionId), useUploads.getState().tasks)
+  const customEndpoint = Boolean(useSettings.getState().chatConfig.endpoint)
+  const prepared = prepareDraftMessage(
+    getDraft(targetSessionId),
+    useUploads.getState().tasks,
+    customEndpoint
+  )
   if (!prepared) {
     return false
   }
@@ -652,7 +660,7 @@ export const sendMessage = (targetSessionId: string | null) => {
     ])
   }
   persist(sessionId)
-  clearSentDraft(targetSessionId)
+  clearSentDraft(targetSessionId, customEndpoint)
   void streamReply(sessionId, reply, { history, question })
   return true
 }
@@ -729,7 +737,13 @@ export const selectMessageVersion = (sessionId: string, messageId: string) => {
 
 /** 继续最后一条未完成的回答：保留原消息与开关，仅将新流的内容追加到原块之后。 */
 export const continueReply = (sessionId: string, messageId: string) => {
-  if (get().importingHistory || deletingSessions.has(sessionId)) {
+  const { chatConfig } = useSettings.getState()
+  if (
+    get().importingHistory ||
+    deletingSessions.has(sessionId) ||
+    chatConfig.endpoint ||
+    chatConfig.format !== 'messages'
+  ) {
     return
   }
   const session = getSession(sessionId)
@@ -751,7 +765,7 @@ export const continueReply = (sessionId: string, messageId: string) => {
   const reply: AssistantMessage = {
     ...previous,
     // 未记录请求配置的回复，续写时使用默认模型和当前开关。
-    model: previous.model ?? MODEL,
+    model: previous.model ?? (chatConfig.model || DEFAULT_CHAT_MODEL),
     thinking: previous.thinking ?? thinking,
     search: previous.search ?? search,
     status: 'pending',
@@ -990,11 +1004,12 @@ const repairRejectedImage = async (
     return false
   }
   const block = message.content[position.block]
-  if (block?.type !== 'image') {
+  if (block?.type !== 'image' || block.source.type !== 'file') {
     return false
   }
+  const { file_id: fileId } = block.source
   const images = getRequestImages(refreshRequest(sessionId, request))
-  const file = images.find(({ serverId }) => serverId === block.source.file_id)
+  const file = images.find(({ serverId }) => serverId === fileId)
   const maxEdge = images.length >= MANY_IMAGES_COUNT ? MANY_IMAGES_MAX_EDGE : MAX_IMAGE_EDGE
   if (!file || (file.serverImage?.converted && file.serverImage.maxEdge <= maxEdge)) {
     return false
@@ -1094,6 +1109,9 @@ const waitForRetry = (attempt: number, signal: AbortSignal) =>
  * 服务端拒绝附件时尝试重新补传后重发。失效的 file_id 退避重试，图片按报错中指明的位置修复。
  */
 const streamReply = async (sessionId: string, initial: AssistantMessage, request: Request) => {
+  const { apiKey: storedKey, chatConfig } = useSettings.getState()
+  const apiKey = storedKey ?? ''
+  const custom = Boolean(chatConfig.endpoint)
   const controller = new AbortController()
   const stopped = new Promise<false>((resolve) => {
     controller.signal.addEventListener('abort', () => resolve(false), { once: true })
@@ -1102,7 +1120,15 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
     titleRequests.add(controller)
   }
   set((state) => ({ streaming: { ...state.streaming, [sessionId]: controller } }))
-  let reply = initial
+  let reply = custom
+    ? {
+        ...initial,
+        model: chatConfig.model || DEFAULT_CHAT_MODEL,
+        thinking: false,
+        search: false,
+        prefix: false,
+      }
+    : initial
   let frame = 0
   const flush = () => {
     cancelAnimationFrame(frame)
@@ -1112,9 +1138,10 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
   streamFlushes.set(sessionId, flush)
 
   const signal = controller.signal
-  const apiKey = useSettings.getState().apiKey ?? ''
-  const summarize = createContextSummarizer(apiKey, signal)
-  const budget = contextBudget(MAX_OUTPUT_TOKENS)
+  const summarize = createContextSummarizer(apiKey, signal, chatConfig)
+  const initialOutputTokens = custom ? CUSTOM_OUTPUT_TOKENS : MAX_OUTPUT_TOKENS
+  const window = custom ? CUSTOM_CONTEXT_WINDOW : undefined
+  const budget = contextBudget(initialOutputTokens, window)
   let historyBudget = Math.max(
     0,
     budget.input - estimateQuestionTokens(request.question) - estimatePrefixTokens(request.prefix)
@@ -1122,7 +1149,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
   let historyRetries = 0
   let historySummaryRequests = 0
   let context: HistoryContext | undefined
-  let maxOutputTokens = MAX_OUTPUT_TOKENS
+  let maxOutputTokens = initialOutputTokens
   let reduceInput = false
   let reducedInput: Awaited<ReturnType<typeof summarizeCurrentInput>> = null
   let invalidatedRetries = 0
@@ -1154,9 +1181,21 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         })
         signal.throwIfAborted()
         attempt = { ...request, history: context.history }
-        preparing = true
-        const prepared = await prepareFiles(sessionId, attempt, signal)
-        preparing = false
+        let prepared = attempt
+        if (!custom) {
+          preparing = true
+          prepared = await prepareFiles(sessionId, attempt, signal)
+          preparing = false
+        }
+        const inlineFiles = custom
+          ? await prepareCustomAttachments(
+              chatConfig.format,
+              prepared.history,
+              reducedInput?.question ?? prepared.question,
+              (id) => loadOriginalFile(sessionId, id),
+              signal
+            )
+          : undefined
         if (reduceInput && !reducedInput) {
           reducedInput = await summarizeCurrentInput({
             apiKey,
@@ -1165,6 +1204,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
             summarize,
             loadFile: (id) => loadOriginalFile(sessionId, id),
             signal,
+            inlineFiles: inlineFiles?.get(prepared.question.id),
           })
           if (!reducedInput) {
             throw new ApiError('protocol', { key: 'replyInputTooLong' })
@@ -1173,7 +1213,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
             0,
             Math.min(
               budget.recent,
-              contextBudget(maxOutputTokens).input -
+              contextBudget(maxOutputTokens, window).input -
                 estimateQuestionTokens(reducedInput.question) -
                 estimatePrefixTokens(reducedInput.prefix)
             )
@@ -1182,9 +1222,11 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           continue
         }
         // 附件就绪后获取本轮信息；续写沿用原回答快照，重新生成的快照独立保存。
-        const latestReminder = prepared.prefix
-          ? prepared.prefix.latestReminder
-          : createLatestReminder(useSettings.getState())
+        const latestReminder = custom
+          ? undefined
+          : prepared.prefix
+            ? prepared.prefix.latestReminder
+            : createLatestReminder(useSettings.getState())
         reply = { ...reply, latestReminder }
         updateReply(sessionId, reply)
         persist(sessionId)
@@ -1193,23 +1235,21 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           reducedInput?.question ?? prepared.question,
           reducedInput ? reducedInput.prefix : prepared.prefix,
           initial.thinking ?? false,
-          latestReminder
+          latestReminder,
+          inlineFiles
         )
         includeContextSummary(messages, context.summary)
-        const events = streamMessage(
-          apiKey,
-          {
-            model: initial.model ?? MODEL,
-            max_tokens: maxOutputTokens,
-            system: SYSTEM_PROMPT,
-            messages,
-            thinking: { type: initial.thinking ? 'enabled' : 'disabled' },
-            safety_check: SAFETY_CHECK,
-            tools: serverTools(initial.search ?? false),
-            ...(titleRequests.has(controller) ? { title: { enabled: true } } : {}),
-          },
-          controller.signal
-        )
+        const body: CreateMessageRequest = {
+          model: reply.model ?? DEFAULT_CHAT_MODEL,
+          max_tokens: maxOutputTokens,
+          system: custom ? '' : SYSTEM_PROMPT,
+          messages,
+          thinking: { type: initial.thinking ? 'enabled' : 'disabled' },
+          safety_check: SAFETY_CHECK,
+          tools: serverTools(initial.search ?? false),
+          ...(titleRequests.has(controller) ? { title: { enabled: true } } : {}),
+        }
+        const events = streamChatMessage(chatConfig, apiKey, body, signal)
         const blockIndexes = new Map<number, number>()
         for await (const event of events) {
           receivedContent ||= event.type === 'content_block_start'
@@ -1233,6 +1273,20 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           }
         }
         reply = settleReply(reply, 'done', Date.now())
+        if (
+          (custom || chatConfig.format !== 'messages') &&
+          titleRequests.has(controller) &&
+          !get().importingHistory
+        ) {
+          const title =
+            request.question.content.trim().split(/\r?\n/, 1)[0] || request.question.files[0]?.name
+          if (title) {
+            const preview = Array.from(title).slice(0, 64).join('')
+            updateSession(sessionId, (session) =>
+              session.title ? session : { ...session, title: preview }
+            )
+          }
+        }
         break
       } catch (error) {
         if (controller.signal.aborted) {
@@ -1258,8 +1312,8 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
               context = undefined
               continue
             }
-            if (maxOutputTokens === MAX_OUTPUT_TOKENS) {
-              maxOutputTokens = initial.thinking ? 65_536 : 8_192
+            if (maxOutputTokens === initialOutputTokens) {
+              maxOutputTokens = custom ? 1_024 : initial.thinking ? 65_536 : 8_192
               continue
             }
             if (!reduceInput) {
@@ -1273,21 +1327,23 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
             })
             break
           }
-          if (
-            invalidatedRetries < FILE_RETRY_LIMIT &&
-            reuploadInvalidatedFiles(sessionId, attempt, error)
-          ) {
-            await waitForRetry(invalidatedRetries++, controller.signal)
-            if (!controller.signal.aborted) {
-              continue
-            }
-          } else {
-            const repaired = await Promise.race([
-              stopped,
-              repairRejectedImage(sessionId, attempt, messages, error, signal).catch(() => false),
-            ])
-            if (repaired) {
-              continue
+          if (!custom) {
+            if (
+              invalidatedRetries < FILE_RETRY_LIMIT &&
+              reuploadInvalidatedFiles(sessionId, attempt, error)
+            ) {
+              await waitForRetry(invalidatedRetries++, controller.signal)
+              if (!controller.signal.aborted) {
+                continue
+              }
+            } else if (chatConfig.format === 'messages') {
+              const repaired = await Promise.race([
+                stopped,
+                repairRejectedImage(sessionId, attempt, messages, error, signal).catch(() => false),
+              ])
+              if (repaired) {
+                continue
+              }
             }
           }
         }

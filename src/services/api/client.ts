@@ -1,4 +1,7 @@
+import { android } from '../../app/android.js'
 import { translate, type TranslationMessage } from '../../i18n/index.js'
+import { CHAT_API_PATHS, type ChatConfig } from './chatConfig.js'
+import { openAIRequest, readOpenAIFrame } from './openaiChat.js'
 import { readMessageEvent } from './parseEvent.js'
 import { readServerSentEvents } from './sse.js'
 import type {
@@ -7,6 +10,8 @@ import type {
   FileObject,
   FilePurpose,
   MessageStreamEvent,
+  MessageUsage,
+  StopReason,
 } from './types.js'
 
 /** 构建期 API 地址，默认 https://api.deepseek.com；本地开发支持开发服务器代理 */
@@ -141,8 +146,9 @@ export const deleteFile = async (
 const hasFile = (body: CreateMessageRequest) =>
   body.messages.some(
     (message) =>
+      message.role === 'user' &&
       typeof message.content !== 'string' &&
-      message.content.some((block) => block.type === 'image' || block.type === 'document')
+      message.content.some((block) => block.type !== 'text' && block.source.type === 'file')
   )
 
 const openMessageStream = (apiKey: string, body: CreateMessageRequest, signal: AbortSignal) =>
@@ -157,16 +163,11 @@ const openMessageStream = (apiKey: string, body: CreateMessageRequest, signal: A
     signal,
   })
 
-/**
- * POST /anthropic/v1/messages（stream: true），逐个产出流式事件，收到 message_stop 时结束。
- * ping、保活注释与无法解析的内容不产出；中止请求时抛出 signal 的 AbortError。
- */
-export async function* streamMessage(
-  apiKey: string,
+const withDeepSeekExtensionsFallback = (
   body: CreateMessageRequest,
-  signal: AbortSignal
-): AsyncGenerator<MessageStreamEvent> {
-  const response = await openMessageStream(apiKey, body, signal).catch((error: unknown) => {
+  send: (requestBody: CreateMessageRequest) => Promise<Response>
+) =>
+  send(body).catch((error: unknown) => {
     if (
       !(body.tools?.length || body.safety_check || body.title?.enabled) ||
       !(error instanceof ApiError) ||
@@ -175,18 +176,32 @@ export async function* streamMessage(
     ) {
       throw error
     }
-    // 扩展模式在生成前拒绝长输入时，用基础 Messages API 发送同一上下文。
-    return openMessageStream(
-      apiKey,
-      { ...body, tools: undefined, safety_check: undefined, title: undefined },
-      signal
-    )
+    // 扩展模式在生成前拒绝长输入时，用同一协议的基础模式发送同一上下文。
+    return send({ ...body, tools: undefined, safety_check: undefined, title: undefined })
   })
+
+/**
+ * POST /anthropic/v1/messages（stream: true），逐个产出流式事件，收到 message_stop 时结束。
+ * ping、保活注释与无法解析的内容不产出；中止请求时抛出 signal 的 AbortError。
+ */
+async function* streamMessage(apiKey: string, body: CreateMessageRequest, signal: AbortSignal) {
+  const response = await withDeepSeekExtensionsFallback(body, (requestBody) =>
+    openMessageStream(apiKey, requestBody, signal)
+  )
+  yield* readAnthropicStream(response, signal)
+}
+
+async function* readStreamPayloads(response: Response, signal: AbortSignal) {
   const contentType = response.headers.get('Content-Type') ?? ''
-  if (!response.body || !contentType.includes('text/event-stream')) {
+  if (!response.body || !contentType.toLowerCase().includes('text/event-stream')) {
     throw await readErrorResponse(response, 'protocol', '')
   }
   for await (const { event: eventName, data } of readServerSentEvents(response.body, signal)) {
+    signal.throwIfAborted()
+    if (data === '[DONE]') {
+      yield { done: true } as const
+      return
+    }
     let payload: unknown
     try {
       payload = JSON.parse(data)
@@ -199,8 +214,29 @@ export async function* streamMessage(
       const { message, code } = payload.error
       throw new ApiError('stream', message, undefined, typeof code === 'string' ? code : undefined)
     }
-    if (eventName === 'error') {
+    if (eventName === 'error' && !payload) {
       throw new ApiError('stream', data)
+    }
+    yield { done: false, payload, eventName, data } as const
+  }
+  signal.throwIfAborted()
+}
+
+async function* readAnthropicStream(response: Response, signal: AbortSignal) {
+  for await (const frame of readStreamPayloads(response, signal)) {
+    if (frame.done) {
+      break
+    }
+    const { payload, eventName, data } = frame
+    if (eventName === 'error') {
+      const detail = payload as { error?: { message?: unknown; type?: unknown } } | null
+      const error = detail?.error
+      throw new ApiError(
+        'stream',
+        typeof error?.message === 'string' ? error.message : data,
+        undefined,
+        typeof error?.type === 'string' ? error.type : undefined
+      )
     }
     const event = readMessageEvent(payload)
     if (!event) {
@@ -213,4 +249,244 @@ export async function* streamMessage(
   }
   // 服务端没有提供错误内容时保持为空，不推测断流原因。
   throw new ApiError('interrupted', '')
+}
+
+const customMessagesRequest = ({ model, system, messages, max_tokens }: CreateMessageRequest) => ({
+  model,
+  system: system || undefined,
+  max_tokens,
+  messages: messages.flatMap((message): CreateMessageRequest['messages'] => {
+    if (message.role === 'latest_reminder') {
+      return []
+    }
+    if (message.role === 'assistant') {
+      const content = message.content.filter((block) => block.type === 'text')
+      return content.length ? [{ ...message, content }] : []
+    }
+    return [message]
+  }),
+  stream: true,
+})
+
+type NativeChatEvent = { id: string } & (
+  | { type: 'headers'; status: number; mime: string }
+  | { type: 'data'; bytes: string }
+  | { type: 'end' | 'error' }
+)
+
+const openAndroidChat = (
+  device: NonNullable<typeof android>,
+  config: ChatConfig,
+  body: string,
+  signal: AbortSignal
+) => {
+  let id: string | null = null
+  let headersReceived = false
+  let receiver: ReadableStreamDefaultController<Uint8Array>
+  let resolve: (response: Response) => void
+  let reject: (error: unknown) => void
+  const response = new Promise<Response>((accept, fail) => {
+    resolve = accept
+    reject = fail
+  })
+  const close = () => {
+    window.removeEventListener('android-custom-chat', onChunk)
+    signal.removeEventListener('abort', onAbort)
+    if (id) {
+      device.cancelChatRequest(id)
+      id = null
+    }
+  }
+  const stream = new ReadableStream<Uint8Array>({
+    start: (controller) => {
+      receiver = controller
+    },
+    cancel: close,
+  })
+  const fail = (error: unknown) => {
+    close()
+    if (headersReceived) {
+      receiver.error(error)
+    } else {
+      reject(error)
+    }
+  }
+  const onAbort = () => fail(signal.reason)
+  const onChunk = (event: Event) => {
+    const chunk = (event as CustomEvent<NativeChatEvent>).detail
+    if (chunk?.id !== id) {
+      return
+    }
+    switch (chunk.type) {
+      case 'headers': {
+        headersReceived = true
+        const bodyStream = chunk.status === 204 || chunk.status === 205 ? null : stream
+        resolve(
+          new Response(bodyStream, {
+            status: chunk.status,
+            headers: { 'Content-Type': chunk.mime },
+          })
+        )
+        break
+      }
+      case 'data':
+        receiver.enqueue(Uint8Array.from(atob(chunk.bytes), (char) => char.charCodeAt(0)))
+        break
+      case 'end':
+        close()
+        receiver.close()
+        break
+      case 'error':
+        fail(new ApiError('network', ''))
+        break
+    }
+  }
+  window.addEventListener('android-custom-chat', onChunk)
+  signal.addEventListener('abort', onAbort, { once: true })
+  id = device.beginChatRequest(config.endpoint, config.format, body)
+  if (!id) {
+    fail(new ApiError('protocol', { key: 'advancedConnectionChanged' }))
+  }
+  return { response, close }
+}
+
+export const streamChatMessage = (
+  config: ChatConfig,
+  apiKey: string,
+  body: CreateMessageRequest,
+  signal: AbortSignal
+) => {
+  if (config.endpoint) {
+    return streamCompatibleMessage(config, body, signal, false)
+  }
+  if (config.format === 'messages') {
+    return streamMessage(apiKey, body, signal)
+  }
+  const endpoint = `${API_ORIGIN}${CHAT_API_PATHS[config.format]}`
+  return streamCompatibleMessage({ ...config, endpoint, apiKey }, body, signal, true)
+}
+
+async function* streamCompatibleMessage(
+  config: ChatConfig,
+  body: CreateMessageRequest,
+  signal: AbortSignal,
+  deepSeek: boolean
+): AsyncGenerator<MessageStreamEvent> {
+  const { endpoint, format, apiKey } = config
+  const serialize = (requestBody: CreateMessageRequest) =>
+    JSON.stringify(
+      format === 'messages'
+        ? customMessagesRequest(requestBody)
+        : openAIRequest(format, requestBody, deepSeek)
+    )
+  signal.throwIfAborted()
+  const native =
+    android && !deepSeek ? openAndroidChat(android, config, serialize(body), signal) : undefined
+  try {
+    const send = (requestBody: CreateMessageRequest) =>
+      request(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+          ...(format === 'messages'
+            ? {
+                'anthropic-version': '2023-06-01',
+                ...(apiKey ? { 'x-api-key': apiKey } : {}),
+                ...(new URL(endpoint).hostname === 'api.anthropic.com'
+                  ? { 'anthropic-dangerous-direct-browser-access': 'true' }
+                  : {}),
+              }
+            : apiKey
+              ? { Authorization: `Bearer ${apiKey}` }
+              : {}),
+        },
+        body: serialize(requestBody),
+        credentials: 'omit',
+        redirect: 'error',
+        signal,
+      })
+    const response = native
+      ? await native.response
+      : deepSeek
+        ? await withDeepSeekExtensionsFallback(body, send)
+        : await send(body)
+    if (!response.ok) {
+      throw await readErrorResponse(response, 'http', `HTTP ${response.status}`)
+    }
+    if (format === 'messages') {
+      yield* readAnthropicStream(response, signal)
+      return
+    }
+    let block: 'text' | 'thinking' | undefined
+    let index = -1
+    let stop: StopReason | undefined
+    let usage: MessageUsage | undefined
+    let title: string | undefined
+    let complete = false
+    for await (const packet of readStreamPayloads(response, signal)) {
+      if (packet.done) {
+        complete = format === 'chat' && (index >= 0 || stop !== undefined)
+        break
+      }
+      const frame = readOpenAIFrame(format, packet.payload)
+      if (frame.error) {
+        throw new ApiError('stream', frame.error.message, undefined, frame.error.code)
+      }
+      if (packet.eventName === 'error') {
+        throw new ApiError('stream', packet.data)
+      }
+      const deltas = [
+        ['thinking', frame.thinking],
+        ['text', frame.text],
+      ] as const
+      for (const [type, delta] of deltas) {
+        if (!delta) {
+          continue
+        }
+        if (block !== type) {
+          if (block) {
+            yield { type: 'content_block_stop', index }
+          }
+          block = type
+          index += 1
+          yield {
+            type: 'content_block_start',
+            index,
+            content_block:
+              type === 'text' ? { type, text: '' } : { type, thinking: '', signature: '' },
+          }
+        }
+        yield {
+          type: 'content_block_delta',
+          index,
+          delta:
+            type === 'text'
+              ? { type: 'text_delta', text: delta }
+              : { type: 'thinking_delta', thinking: delta },
+        }
+      }
+      stop = frame.stop ?? stop
+      usage = frame.usage ?? usage
+      title = frame.title ?? title
+      if (frame.done) {
+        complete = true
+        break
+      }
+    }
+    if (!complete && !(format === 'chat' && stop)) {
+      throw new ApiError('interrupted', '')
+    }
+    if (block) {
+      yield { type: 'content_block_stop', index }
+    }
+    yield {
+      type: 'message_delta',
+      delta: { stop_reason: stop ?? 'end_turn', stop_sequence: null, title },
+      usage,
+    }
+    yield { type: 'message_stop' }
+  } finally {
+    native?.close()
+  }
 }

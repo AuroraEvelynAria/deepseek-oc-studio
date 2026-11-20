@@ -14,9 +14,12 @@ export const SUMMARY_OUTPUT_TOKENS = 4_096
 const SUMMARY_BATCH_TOKENS = 96 * 1024
 const CHECKPOINT_LIMIT = 16
 
-export const contextBudget = (outputTokens: number) => ({
-  input: Math.min(Math.floor(WINDOW_TOKENS * 0.8), WINDOW_TOKENS - outputTokens - HEADROOM_TOKENS),
-  recent: Math.floor((WINDOW_TOKENS - outputTokens) * 0.16),
+export const contextBudget = (outputTokens: number, window = WINDOW_TOKENS) => ({
+  input: Math.min(
+    Math.floor(window * 0.8),
+    window - outputTokens - Math.min(HEADROOM_TOKENS, window / 8)
+  ),
+  recent: Math.floor((window - outputTokens) * 0.16),
 })
 
 /** 文件和阅读链接会在服务端展开。这里只估算，实际超限由 API 响应兜底。 */

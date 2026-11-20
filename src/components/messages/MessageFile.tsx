@@ -168,7 +168,7 @@ export const MessageFile = ({
               canDownload
               onClose={() => setViewedUrl(undefined)}
               onConfirm={(cropped) => {
-                if (useChatStore.getState().importingHistory || !ensureApiKey()) {
+                if (useChatStore.getState().importingHistory || !ensureApiKey(true)) {
                   setViewedUrl(undefined)
                   return null
                 }

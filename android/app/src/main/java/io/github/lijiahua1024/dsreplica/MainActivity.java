@@ -47,6 +47,8 @@ public final class MainActivity extends Activity {
     private WebView webView;
     private FrameLayout frame;
     private ApiKeyStore keys;
+    private ApiKeyStore chatConfig;
+    private final CustomChatTransport customChat = new CustomChatTransport();
     private SharedPreferences profilePreferences;
     private ValueCallback<Uri[]> fileCallback;
     private boolean choosingPhotos;
@@ -69,6 +71,7 @@ public final class MainActivity extends Activity {
     public void onCreate(Bundle state) {
         super.onCreate(state);
         keys = new ApiKeyStore(this);
+        chatConfig = new ApiKeyStore(this, "custom-chat");
         profilePreferences = getSharedPreferences("account_profile", MODE_PRIVATE);
         recentPhotos = new RecentPhotos(getContentResolver());
         historyExport = new FileExport(getContentResolver());
@@ -412,6 +415,7 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        customChat.close();
         inAppBack.setEnabled(false);
         photoExecutor.shutdownNow();
         updater.close();
@@ -475,6 +479,26 @@ public final class MainActivity extends Activity {
 
         @JavascriptInterface
         public boolean writeApiKey(String value) { return keys.write(value); }
+
+        @JavascriptInterface
+        public String readChatConfig() { return chatConfig.read(); }
+
+        @JavascriptInterface
+        public boolean writeChatConfig(String value) { return chatConfig.write(value); }
+
+        @JavascriptInterface
+        public String beginChatRequest(String endpoint, String format, String body) {
+            return customChat.begin(chatConfig.read(), endpoint, format, body, payload ->
+                runOnUiThread(() -> {
+                    if (isDestroyed()) return;
+                    webView.evaluateJavascript(
+                        "window.dispatchEvent(new CustomEvent('android-custom-chat',{detail:"
+                        + payload + "}))", null);
+                }));
+        }
+
+        @JavascriptInterface
+        public void cancelChatRequest(String id) { if (id != null) customChat.cancel(id); }
 
         @JavascriptInterface
         public String readAccountProfile() { return profilePreferences.getString(PROFILE_KEY, null); }

@@ -51,6 +51,9 @@ export const AssistantMessage = memo(function AssistantMessage({
   onSelectVersion: SelectMessageVersion
 }) {
   const t = useTranslate()
+  const customEndpoint = useSettings((state) => Boolean(state.chatConfig.endpoint))
+  const format = useSettings((state) => state.chatConfig.format)
+  const canReadAloud = useSettings((state) => Boolean(state.apiKey))
   const view = useReplyView(message, streaming)
   const panelEntry = useSearchPanel((state) => state.entry)
   const notice = streaming ? null : describeReply(message)
@@ -67,6 +70,7 @@ export const AssistantMessage = memo(function AssistantMessage({
       android &&
       wasStreaming.current &&
       !streaming &&
+      !customEndpoint &&
       isLast &&
       responseText &&
       message.stopReason === 'end_turn' &&
@@ -75,7 +79,7 @@ export const AssistantMessage = memo(function AssistantMessage({
       toggleReadAloud(message.id, responseText, (error) => showToast(describeReadAloudError(error)))
     }
     wasStreaming.current = streaming
-  }, [isLast, message.id, message.stopReason, responseText, streaming])
+  }, [customEndpoint, isLast, message.id, message.stopReason, responseText, streaming])
   const waiting =
     streaming && view.steps.length === 0 && !view.answer && (android || !message.thinking)
   const summaryEntry = `${message.id}-summary`
@@ -125,13 +129,13 @@ export const AssistantMessage = memo(function AssistantMessage({
                 <button
                   type="button"
                   className={styles.noticeAction}
-                  onClick={() => openSettings('data')}
+                  onClick={() => openSettings(customEndpoint ? 'advanced' : 'data')}
                 >
                   {t('changeApiKey')}
                 </button>
               </>
             ) : null}
-            {notice.action === 'topUp' ? (
+            {notice.action === 'topUp' && !customEndpoint ? (
               <>
                 {' '}
                 <a
@@ -175,7 +179,7 @@ export const AssistantMessage = memo(function AssistantMessage({
           <BranchSwitcher versions={versions} disabled={busy} onSelect={onSelectVersion} />
           <div className={clsx(styles.actions, isLast && styles.alwaysShow)}>
             {copyText ? <CopyButton text={copyText} /> : null}
-            {responseText && !refused ? (
+            {responseText && !refused && (!customEndpoint || canReadAloud) ? (
               <ReadAloudButton messageId={message.id} text={responseText} />
             ) : null}
             <IconButton
@@ -189,7 +193,7 @@ export const AssistantMessage = memo(function AssistantMessage({
               }}
             />
           </div>
-          {isLast && canContinueReply(message) ? (
+          {isLast && !customEndpoint && format === 'messages' && canContinueReply(message) ? (
             <Button
               variant="outlined"
               size="s"

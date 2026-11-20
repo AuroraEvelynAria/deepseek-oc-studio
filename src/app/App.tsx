@@ -98,8 +98,8 @@ const ChatContent = memo(function ChatContent({
 export const App = () => {
   const t = useTranslate()
   const isMobile = useIsMobile()
-  const apiKey = useSettings((state) => state.apiKey)
-  const needsApiKey = Boolean(android && !apiKey)
+  const configured = useSettings((state) => Boolean(state.apiKey || state.chatConfig.endpoint))
+  const needsApiKey = Boolean(android && !configured)
   const drawerOpen = useMobileSider((state) => state.open)
   const drawerGesture = useAndroidDrawerGesture()
   const locale = useSettings((state) => state.locale)

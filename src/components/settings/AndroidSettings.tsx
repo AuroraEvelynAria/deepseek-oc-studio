@@ -40,6 +40,7 @@ import {
 import { showToast } from '../base/toastState.js'
 import { closeMobileSider } from '../sider/mobileSiderState.js'
 import { ApiKeyConfirm, ApiKeyField, useApiKeyEditor } from './ApiKeyField.js'
+import { AdvancedApiSettings } from './AdvancedApiSettings.js'
 import { createSettingsPageMotion } from './androidSettingsMotion.js'
 import { ProfileIcon } from './ProfileAvatar.js'
 import { ProfileEditor } from './ProfileEditor.js'
@@ -71,12 +72,21 @@ type UpdateStatus = {
   message?: keyof typeof updateMessages
 }
 
-type Page = 'root' | 'account' | 'data' | 'export' | 'font' | 'personalization' | 'agreements'
+type Page =
+  | 'root'
+  | 'account'
+  | 'advanced'
+  | 'data'
+  | 'export'
+  | 'font'
+  | 'personalization'
+  | 'agreements'
 type Popup = 'locale' | 'theme' | 'voice' | 'logout' | 'delete' | 'import'
 
 const parentPage: Record<Page, Page | null> = {
   root: null,
   account: 'root',
+  advanced: 'account',
   data: 'root',
   export: 'data',
   font: 'root',
@@ -237,7 +247,7 @@ export const AndroidSettings = ({ chatFrame }: { chatFrame: RefObject<HTMLDivEle
   const section = useSettingsDialog((state) => state.section)
   return open ? (
     <Settings
-      start={section === 'general' ? 'root' : 'account'}
+      start={section === 'general' ? 'root' : section === 'advanced' ? 'advanced' : 'account'}
       chatFrame={chatFrame}
       key={section}
     />
@@ -246,8 +256,15 @@ export const AndroidSettings = ({ chatFrame }: { chatFrame: RefObject<HTMLDivEle
 
 const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTMLDivElement> }) => {
   const t = useTranslate()
-  const { locale, localePreference, themePreference, fontSize, foldThinking, ttsVoice } =
-    useSettings()
+  const {
+    locale,
+    localePreference,
+    themePreference,
+    fontSize,
+    foldThinking,
+    ttsVoice,
+    chatConfig,
+  } = useSettings()
   const tr = (chinese: string, english: string) => (locale === 'zh-CN' ? chinese : english)
   const [page, setPage] = useState<Page>(start)
   const [popup, setPopup] = useState<Popup | null>(null)
@@ -294,6 +311,7 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
   const labels: Record<Page, string> = {
     root: t('settings'),
     account: t('accountManagement'),
+    advanced: t('advancedSettings'),
     data: tr('数据管理', 'Data management'),
     export: t('exportAllLabel'),
     font: tr('字体大小', 'Text size'),
@@ -616,9 +634,11 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
                 onClick={() => openAndroidPage(faqUrl, { showBrowserAction: false })}
               />
             </Group>
-            <Group spaced>
-              <Row label={logout} danger arrow={false} onClick={() => setPopup('logout')} />
-            </Group>
+            {editor.apiKey ? (
+              <Group spaced>
+                <Row label={logout} danger arrow={false} onClick={() => setPopup('logout')} />
+              </Group>
+            ) : null}
           </>
         ) : null}
         {screen === 'account' ? (
@@ -630,7 +650,7 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
               <Row
                 label="DeepSeek API Key"
                 icon={<ProfileIcon />}
-                value="••••••••"
+                value={editor.apiKey ? '••••••••' : undefined}
                 onClick={() => editor.setEditing(true)}
               />
               {editor.editing ? (
@@ -639,6 +659,11 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
                   <ApiKeyConfirm editor={editor} />
                 </div>
               ) : null}
+              <Row
+                label={labels.advanced}
+                value={chatConfig.model}
+                onClick={() => openPage('advanced')}
+              />
               <Row
                 label={tr('开放平台', 'Open platform')}
                 href="https://platform.deepseek.com/api_keys"
@@ -649,6 +674,11 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
               />
             </Group>
           </>
+        ) : null}
+        {screen === 'advanced' ? (
+          <Group>
+            <AdvancedApiSettings onSave={back} />
+          </Group>
         ) : null}
         {screen === 'data' ? (
           <>
