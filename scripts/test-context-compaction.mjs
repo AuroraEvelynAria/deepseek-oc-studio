@@ -68,6 +68,7 @@ const {
   stopReply,
   useChatStore,
 } = await import('../src/services/chat/store.ts')
+const { readSessionFile } = await import('../src/services/chat/history/schema.ts')
 const { toSessionFile } = await import('../src/services/chat/history/toArchive.ts')
 const { sessions, files, loadFile } = await import(databaseMock)
 const { useSettings } = await import('../src/services/settings.ts')
@@ -620,6 +621,29 @@ test('发送入口在同一会话压缩重试，保存检查点和完整原始�
   const archive = JSON.stringify(toSessionFile(saved, assert.fail))
   assert.ok(archive.includes(long))
   assert.ok(!archive.includes('旧历史的记忆'))
+})
+
+test('导出保留有效用量，异常用量不会导致归档无法导入', () => {
+  const messages = [user('question', '问题'), reply('reply', '回答')]
+  const session = { id: 'export-test', title: '', createdAt: 0, updatedAt: 0, messages }
+  for (const [input, expected] of [
+    [10, 16],
+    [10.5, 0],
+    [-10, 0],
+    [undefined, 0],
+    [Number.MAX_SAFE_INTEGER, 0],
+  ]) {
+    messages[1].usage = {
+      input_tokens: input,
+      cache_creation_input_tokens: 1,
+      cache_read_input_tokens: 2,
+      output_tokens: 3,
+    }
+    const exported = JSON.parse(JSON.stringify(toSessionFile(session, assert.fail)))
+    const imported = readSessionFile(exported)
+    assert.equal(imported.messages[1].accumulated_token_usage, expected)
+    assert.deepEqual(imported.messages[1].fragments, [{ type: 'RESPONSE', content: '回答' }])
+  }
 })
 
 test('本地预算触发预压缩，首次正式请求保留近期原文和完整输出预算', async () => {
