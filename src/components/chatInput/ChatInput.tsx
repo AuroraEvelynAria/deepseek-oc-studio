@@ -526,6 +526,9 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
                     onClick={() => {
                       voice.cancel()
                       useVoiceMode.setState({ enabled: !voiceMode })
+                      if (voiceMode) {
+                        focusComposer()
+                      }
                     }}
                   />
                 )}
