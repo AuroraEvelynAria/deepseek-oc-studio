@@ -14,11 +14,11 @@
 }
 
 [data-android] .container {
-  padding-bottom: 20px;
+  padding-bottom: 10.37px;
 }
 
 [data-android] .container.isFirst {
-  padding-top: 22px;
+  padding-top: 16.62px;
 }
 
 .files {
@@ -51,11 +51,85 @@
 [data-android] .bubble {
   position: relative;
   max-width: calc(100% - 48px);
-  margin-right: -4px;
-  padding-block: 10px;
+  margin-right: -5.07px;
+  padding: 10.13px 14.93px;
+  border-left: 0.2px solid transparent;
   border-radius: 22px 22px 4px 22px;
-  line-height: 26px;
+  background-color: transparent;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 24.53px;
+  isolation: isolate;
   user-select: none;
+
+  &::before {
+    position: absolute;
+    z-index: 0;
+    inset: 0.71px 0 1.07px -0.16px;
+    border-radius: 20.2px 18.8px 4.6px 20.8px;
+    background-color: var(--dsw-specific-bubble);
+    content: '';
+  }
+}
+
+[data-android] .bubble[data-selecting='true'] {
+  user-select: text;
+
+  .bubbleText {
+    background-color: rgb(191 219 254 / 70%);
+  }
+}
+
+.bubbleText {
+  display: inline-block;
+  max-width: 100%;
+  position: relative;
+  z-index: 1;
+  line-height: inherit;
+  vertical-align: top;
+}
+
+[data-android] .selectionHandle {
+  position: absolute;
+  z-index: 4;
+  bottom: -18px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #4d8dff;
+  pointer-events: none;
+
+  &::before {
+    position: absolute;
+    bottom: 14px;
+    left: 50%;
+    width: 2.4px;
+    height: 9px;
+    background: #4d8dff;
+    content: '';
+    transform: translateX(-50%);
+  }
+}
+
+[data-android] .selectionHandleStart {
+  left: -9px;
+}
+
+[data-android] .selectionHandleEnd {
+  right: -9px;
+}
+
+.menuAnchor {
+  position: absolute;
+  top: 100%;
+  right: -3.5556px;
+  width: 0;
+  height: 0;
+}
+
+.menuCopyIcon {
+  display: flex;
+  transform: scaleY(1.05);
 }
 
 .menuTrigger {
@@ -68,6 +142,48 @@
   border: 0;
   opacity: 0;
   pointer-events: none;
+}
+
+[data-android] .selectionToolbar {
+  position: absolute;
+  z-index: 5;
+  top: -3px;
+  right: -2px;
+  display: flex;
+  padding: 0;
+  border-radius: 12px;
+  background: var(--dsw-specific-menu);
+  box-shadow:
+    0 0 1px rgb(0 0 0 / 20%),
+    0 12px 32px rgb(0 0 0 / 8%);
+  white-space: nowrap;
+
+  button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    width: 70px;
+    height: 47px;
+    padding: 3px 8px;
+    border: 0;
+    border-radius: 8px;
+    color: var(--dsw-alias-label-primary);
+    background: transparent;
+    font: inherit;
+    font-size: 14.93px;
+    line-height: 22.4px;
+
+    &:active {
+      background: var(--dsw-alias-interactive-bg-hover);
+    }
+
+    svg {
+      width: 16px;
+      height: 16px;
+    }
+  }
 }
 
 @media not all and (min-width: 440px) {

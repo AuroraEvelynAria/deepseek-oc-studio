@@ -32,24 +32,32 @@
   padding: 0 12px var(--android-composer-bottom);
 }
 
+[data-android] .welcome:has([data-photo-suggestions]) {
+  padding-bottom: 12.49px;
+}
+
 [data-android] .container {
   touch-action: none;
 }
 
 [data-android] .greeting {
   flex-direction: column;
-  gap: 15px;
+  gap: 13.8444px;
   margin: auto 0;
-  transform: translateY(-2.7px);
-  font-size: 20px;
-  line-height: 28px;
+  transform: translateY(-8.4889px);
+  font-size: 18.6667px;
+  line-height: 26.3111px;
   font-weight: 600;
 
   img {
     display: block;
-    width: 42px;
+    width: 39.55px;
     height: auto;
   }
+}
+
+[data-android] .greetingText {
+  display: block;
 }
 
 @media (max-width: 439px) {

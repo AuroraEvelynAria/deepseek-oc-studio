@@ -180,7 +180,7 @@ a.row:active,
   padding: 0;
   border: 0;
   border-radius: 20px;
-  background: #e4e4e4;
+  background: #e5e5e5;
   transition: background-color 160ms;
 
   span {
@@ -195,7 +195,7 @@ a.row:active,
   }
 
   &[aria-checked='true'] {
-    background: #24c466;
+    background: #22c55e;
 
     span {
       transform: translateX(20px);
@@ -213,6 +213,15 @@ a.row:active,
     color: inherit;
     text-decoration: underline;
   }
+}
+
+.legal {
+  margin: 24px 16px 0;
+  color: var(--settings-muted);
+  font-size: 13px;
+  line-height: 21px;
+  text-align: center;
+  white-space: pre-line;
 }
 
 .credentials {
@@ -244,23 +253,81 @@ a.row:active,
   .row {
     padding-inline: 3px;
   }
-
-  input {
-    display: block;
-    width: 100%;
-    margin: 5px 0 0;
-    accent-color: #aaa;
-  }
 }
 
 .fontLabels {
+  position: relative;
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   margin-top: 14px;
 
   span {
+    position: absolute;
+    left: calc(14px + (100% - 28px) / 3);
     font-size: 12px;
+    transform: translateX(-50%);
+  }
+}
+
+.rangeWrap {
+  position: relative;
+  height: 28px;
+  margin-top: 8px;
+
+  &::before {
+    position: absolute;
+    top: 50%;
+    right: 14px;
+    left: 14px;
+    height: 2px;
+    margin-top: -1px;
+    border-radius: 1px;
+    background: #b8b8b8;
+    content: '';
+  }
+
+  input {
+    position: relative;
+    z-index: 1;
+    display: block;
+    width: 100%;
+    height: 28px;
+    margin: 0;
+    padding: 0;
+    appearance: none;
+    background: transparent;
+
+    &::-webkit-slider-runnable-track {
+      height: 2px;
+      background: transparent;
+    }
+
+    &::-webkit-slider-thumb {
+      width: 28px;
+      height: 28px;
+      margin-top: -13px;
+      border-radius: 50%;
+      appearance: none;
+      background: white;
+      box-shadow: 0 2px 8px rgb(0 0 0 / 14%);
+    }
+  }
+}
+
+.rangeTicks {
+  position: absolute;
+  inset: 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+
+  span {
+    width: 2px;
+    height: 10px;
+    border-radius: 1px;
+    background: #b8b8b8;
   }
 }
 
@@ -435,34 +502,48 @@ a.row:active,
   margin-bottom: 8px;
   border-radius: 60px;
   background:
-    radial-gradient(ellipse at 14% 82%, #e7f8fb 0%, transparent 63%),
-    radial-gradient(ellipse at 72% 18%, #ecfaff 18%, transparent 59%),
-    linear-gradient(130deg, #bde6fb, #97bce2, #6587c4);
+    radial-gradient(ellipse at 18% 22%, #f7fdff 0%, transparent 58%),
+    radial-gradient(ellipse at 76% 72%, #b5cff2 6%, transparent 53%),
+    linear-gradient(130deg, #d9f2ff, #e2edff 38%, #a8c4ef 74%, #d9f7ff);
+
+  &[data-tone='wave'] {
+    background:
+      radial-gradient(ellipse at 12% 42%, #f0f3ff 0%, transparent 46%),
+      radial-gradient(ellipse at 80% 66%, #8fa5df 7%, transparent 54%),
+      linear-gradient(112deg, #c7d1ff, #a6b9f5 42%, #7897dc 71%, #e0e5ff);
+  }
+
+  &[data-tone='stella'] {
+    background:
+      radial-gradient(ellipse at 12% 44%, #ffd27a 0%, transparent 45%),
+      radial-gradient(ellipse at 84% 70%, #f5e4c9 4%, transparent 58%),
+      linear-gradient(118deg, #fff8ee, #ffe6a9 54%, #fff9f1);
+  }
 
   &[data-tone='tide'] {
     background:
-      radial-gradient(ellipse at 20% 15%, #d0edff 8%, transparent 57%),
-      radial-gradient(ellipse at 80% 84%, #96a1ed 6%, transparent 71%),
-      linear-gradient(135deg, #768fd4, #51649c, #83bbde);
+      radial-gradient(ellipse at 12% 52%, #91adb7 0%, transparent 35%),
+      radial-gradient(ellipse at 78% 30%, #e6ffff 8%, transparent 57%),
+      linear-gradient(125deg, #b4d3d9, #efffff 50%, #8faeb8);
   }
 }
 
 .dots {
   display: flex;
+  align-items: center;
+  gap: 4.3333px;
   margin-top: 18px;
+}
 
-  button {
-    width: 22px;
-    height: 22px;
-    padding: 7px;
-    border: 0;
-    border-radius: 50%;
-    background: #ccc content-box;
-  }
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #ccc;
+}
 
-  button[aria-checked='true'] {
-    background-color: var(--dsw-alias-brand-text);
-  }
+.dot[data-selected='true'] {
+  background-color: var(--dsw-alias-brand-text);
 }
 
 .primary {

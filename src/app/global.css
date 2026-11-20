@@ -35,6 +35,14 @@ body {
   --scroll-color-hover: rgba(0, 0, 0, 0.15);
 }
 
+#android-overlays {
+  display: contents;
+}
+
+#android-overlays:empty {
+  display: none;
+}
+
 body.dark {
   color-scheme: dark;
 }

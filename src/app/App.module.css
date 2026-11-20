@@ -21,14 +21,14 @@
 }
 
 [data-android] .frame {
-  --drawer-edge: calc(100% - 68.4px);
+  --drawer-edge: calc(100% - 79.6px);
   --drawer-progress: 0;
   --drawer-radius: 0px;
   --drawer-transition: 150ms cubic-bezier(0.18, 0.23, 0.32, 1);
   touch-action: pan-y;
 }
 
-@media (min-width: 448.4px) {
+@media (min-width: 459.6px) {
   [data-android] .frame {
     --drawer-edge: 380px;
   }
@@ -77,7 +77,7 @@
 
 [data-android] .frame::after,
 [data-android] .main {
-  transform-origin: left center;
+  transform-origin: center;
   transform: var(--drawer-transform, none);
 }
 

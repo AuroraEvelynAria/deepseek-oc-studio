@@ -12,7 +12,124 @@
 }
 
 [data-android] .message {
-  padding-left: 4px;
+  padding: 11.38px 0 0 4px;
+
+  :global(.ds-assistant-message-main-content) {
+    width: fit-content;
+    max-width: calc(100% + 1.6px);
+    margin-left: -1.6px;
+    font-size: calc(16px * var(--android-chat-font-scale, 1));
+    line-height: calc(26.31px * var(--android-chat-font-scale, 1));
+  }
+
+  :global(.ds-assistant-message-main-content .ds-markdown-paragraph) {
+    width: fit-content;
+    max-width: 100%;
+    line-height: inherit;
+  }
+}
+
+.selectable {
+  position: relative;
+}
+
+[data-android] .selecting :global(.ds-assistant-message-main-content p),
+[data-android] .selecting :global(.ds-assistant-message-main-content li),
+[data-android] .selecting :global(.ds-assistant-message-main-content h1),
+[data-android] .selecting :global(.ds-assistant-message-main-content h2),
+[data-android] .selecting :global(.ds-assistant-message-main-content h3),
+[data-android] .selecting :global(.ds-assistant-message-main-content h4),
+[data-android] .selecting :global(.ds-assistant-message-main-content h5),
+[data-android] .selecting :global(.ds-assistant-message-main-content h6),
+[data-android] .selecting :global(.ds-assistant-message-main-content blockquote),
+[data-android] .selecting :global(.ds-assistant-message-main-content td),
+[data-android] .selecting :global(.ds-assistant-message-main-content th),
+[data-android] .selecting :global(.ds-assistant-message-main-content pre),
+[data-android] .selecting :global(.ds-assistant-message-main-content code) {
+  background-color: rgb(191 219 254 / 70%);
+}
+
+.menuAnchor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+}
+
+.menuTrigger {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+[data-android] .selectionHandle {
+  position: absolute;
+  z-index: 4;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #4d8dff;
+  pointer-events: none;
+  transform: translate(-50%, -2px);
+
+  &::before {
+    position: absolute;
+    bottom: 14px;
+    left: 50%;
+    width: 2.4px;
+    height: 9px;
+    background: #4d8dff;
+    content: '';
+    transform: translateX(-50%);
+  }
+}
+
+[data-android] .selectionToolbar {
+  position: absolute;
+  z-index: 6;
+  left: 0;
+  display: flex;
+  padding: 0;
+  border-radius: 12px;
+  background: var(--dsw-specific-menu);
+  box-shadow:
+    0 0 1px rgb(0 0 0 / 20%),
+    0 12px 32px rgb(0 0 0 / 8%);
+  white-space: nowrap;
+
+  button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    width: 58px;
+    height: 47px;
+    padding: 3px 6px;
+    border: 0;
+    border-radius: 8px;
+    color: var(--dsw-alias-label-primary);
+    background: transparent;
+    font: inherit;
+    font-size: 14.93px;
+    line-height: 22.4px;
+
+    &:active {
+      background: var(--dsw-alias-interactive-bg-hover);
+    }
+
+    svg {
+      width: 16px;
+      height: 16px;
+    }
+  }
 }
 
 .waiting {
@@ -99,6 +216,7 @@
 .actions {
   display: flex;
   align-items: center;
+  flex: 1;
   gap: 10px;
   opacity: 0;
   transition: opacity var(--ds-transition-duration) var(--ds-ease-in-out);
@@ -106,6 +224,155 @@
 
 .alwaysShow {
   opacity: 1;
+}
+
+[data-android] .bottom {
+  width: calc(100% + 16.755556px);
+  margin-top: -13.055556px;
+  padding-bottom: 2.844444px;
+}
+
+[data-android] .actions {
+  align-items: flex-start;
+  gap: 0;
+  height: 44.8px;
+}
+
+[data-android] .actions button,
+[data-android] .actions > .reaction {
+  position: relative;
+  flex-shrink: 0;
+}
+
+[data-android] .actions button {
+  width: 37.333333px;
+  height: 44.8px;
+  margin-top: 0;
+}
+
+[data-android] .actions .actionCopy {
+  margin-left: -6.622222px;
+}
+
+[data-android] .actions > .actionLike {
+  width: 37.333333px;
+  height: 44.8px;
+  margin-left: 0;
+  margin-top: 0;
+}
+
+[data-android] .actions .actionDislike {
+  width: 37.333333px;
+  height: 44.8px;
+  margin-top: 0;
+}
+
+[data-android] .actions .actionRead,
+[data-android] .actions .actionShare {
+  margin-left: 0;
+}
+
+[data-android] .actions .actionShare {
+  width: 44.8px;
+}
+
+[data-android] .actions .actionRegenerate {
+  width: 44.8px;
+}
+
+[data-android] .actions .actionRead > svg {
+  position: absolute;
+  top: 14.222222px;
+  left: 14.222222px;
+  pointer-events: none;
+  overflow: visible;
+  transform: scaleX(1.047);
+}
+
+[data-android] .actionIcon {
+  position: absolute;
+  top: 12.8px;
+  left: 12.8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18.844444px;
+  height: 18.844444px;
+  pointer-events: none;
+
+  > svg {
+    flex-shrink: 0;
+    overflow: visible;
+  }
+}
+
+[data-android] .actionLike .actionIcon > svg {
+  transform: translate(1.066667px, -0.711111px) scale(1.286);
+}
+
+[data-android] .actionDislike .actionIcon > svg {
+  transform: translate(1.066667px, 0.888889px) scale(1.286);
+}
+
+[data-android] .actionCopy .actionIcon > svg {
+  transform: scale(1, 1.023);
+}
+
+[data-android] .actionShare .actionIcon > svg {
+  transform: scale(1.216, 1.433);
+}
+
+[data-android] .actionRegenerate .actionIcon > svg {
+  transform: translate(0.5px, 0) scaleX(0.9773);
+}
+
+[data-android] .actions button,
+[data-android] .actions > .reaction {
+  color: #8e9094;
+}
+
+[data-android] .actions button:disabled {
+  color: var(--dsw-alias-label-caption);
+}
+
+.reaction {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--ds-control-height-xs);
+  height: var(--ds-control-height-xs);
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  transition: background-color var(--ds-transition-duration) var(--ds-ease-in-out);
+
+  &[data-checked='true'] {
+    color: #8e9094;
+  }
+
+  &[data-disabled='true'] {
+    color: var(--dsw-alias-label-caption);
+    cursor: not-allowed;
+  }
+
+  input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+  }
+
+  &:active:not([data-disabled='true']) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    border-radius: 50%;
+  }
+}
+
+.regenerate {
+  margin-left: auto;
 }
 
 .continueButton {

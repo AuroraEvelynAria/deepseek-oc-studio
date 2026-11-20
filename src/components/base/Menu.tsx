@@ -16,29 +16,45 @@ export type MenuOption = {
 export const Menu = ({
   options,
   children,
+  androidA11yPrefix,
+  variant,
+  anchorClassName,
 }: {
   options: MenuOption[]
   children: (props: { open: boolean; toggle: () => void }) => ReactNode
+  androidA11yPrefix?: string
+  variant?: 'userMessage' | 'assistantMessage'
+  anchorClassName?: string
 }) => {
   const [open, setOpen] = useState(false)
   const close = () => setOpen(false)
+  const sidebarMenu = Boolean(androidA11yPrefix?.startsWith('sidebar-session-menu'))
+  const userMessageMenu = variant === 'userMessage'
+  const assistantMessageMenu = variant === 'assistantMessage'
   // 左侧对齐并再左移 5px，让菜单文字与触发元素图标对齐
   const { anchorRef, floatingRef, position } = useAnchoredPosition<HTMLSpanElement, HTMLDivElement>(
     open,
-    { align: 'start', alignOffset: -5, offset: 4 }
+    userMessageMenu
+      ? { align: 'end', alignOffset: 0, offset: -7.8222 }
+      : { align: 'start', alignOffset: -5, offset: sidebarMenu ? 6.4 : 4 }
   )
   useDismiss(open, [anchorRef, floatingRef], close)
 
   return (
     <>
-      <span ref={anchorRef} className={styles.anchor}>
+      <span ref={anchorRef} className={clsx(styles.anchor, anchorClassName)}>
         {children({ open, toggle: () => setOpen((value) => !value) })}
       </span>
       {open
         ? createPortal(
             <div
               ref={floatingRef}
-              className={styles.menu}
+              className={clsx(
+                styles.menu,
+                sidebarMenu && styles.sidebarMenu,
+                userMessageMenu && styles.userMessageMenu,
+                assistantMessageMenu && styles.assistantMessageMenu
+              )}
               style={position ?? undefined}
               role="menu"
             >
@@ -47,13 +63,23 @@ export const Menu = ({
                   key={option.key}
                   role="menuitem"
                   className={clsx(styles.option, option.danger && styles.danger)}
-                  onClick={() => {
+                  data-android-a11y={
+                    androidA11yPrefix ? `${androidA11yPrefix}-${option.key}` : undefined
+                  }
+                  data-android-a11y-label={option.label}
+                  data-android-a11y-checkable="false"
+                  data-android-a11y-label-kind="text"
+                  data-android-a11y-touch-through={
+                    androidA11yPrefix ? 'true' : undefined
+                  }
+                  onClick={(event) => {
+                    event.stopPropagation()
                     setOpen(false)
                     option.onSelect()
                   }}
                 >
                   <span className={styles.icon}>{option.icon}</span>
-                  {option.label}
+                  <span data-android-a11y-label-node="">{option.label}</span>
                 </div>
               ))}
             </div>,

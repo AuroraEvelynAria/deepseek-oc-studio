@@ -8,7 +8,16 @@ type AndroidBridge = {
   updateStatus: () => string
   checkForUpdate: () => void
   installUpdate: () => void
-  openSourcePage: (url: string, dark: boolean, closeLabel: string, browserLabel: string) => void
+  getMusicVolume?: () => number
+  openSourcePage: (
+    url: string,
+    dark: boolean,
+    closeLabel: string,
+    browserLabel: string,
+    loadingLabel: string,
+    errorLabel: string,
+    retryLabel: string
+  ) => void
   readApiKey: () => string | null
   writeApiKey: (value: string | null) => boolean
   readChatConfig: () => string | null
@@ -32,6 +41,8 @@ type AndroidBridge = {
   requestRecording: () => void
   finishRecording: (keep: boolean) => boolean
   recordingLevel: () => number
+  setA11yTargets: (payload: string) => void
+  a11yEnabled: () => boolean
 }
 
 export const android = (window as Window & { DeepSeekAndroid?: AndroidBridge }).DeepSeekAndroid

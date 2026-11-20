@@ -39,8 +39,10 @@ export const SessionView = memo(function SessionView({
         footer={
           <div className={styles.inputContainer}>
             <ChatInput sessionId={session.id} />
-            <div className={styles.caveat}>
-              {t(android ? 'androidContentCaveat' : 'contentCaveat')}
+            <div className={styles.caveatSlot}>
+              <div className={styles.caveat}>
+                {t(android ? 'androidContentCaveat' : 'contentCaveat')}
+              </div>
             </div>
           </div>
         }

@@ -8,7 +8,17 @@ import { ApiError, API_ORIGIN, request } from './client.js'
  */
 const TOOLS_BASE_URL = `${API_ORIGIN}/v1/tools`
 
-export type TtsVoice = 'stella' | 'tide'
+export type TtsVoice = 'shell' | 'wave' | 'stella' | 'tide'
+
+type BackendTtsVoice = 'stella' | 'tide'
+
+/** 官方音色列表多于当前 TTS 接口支持的音色，保留可观察选项并映射到两个后端音色。 */
+const BACKEND_TTS_VOICE: Record<TtsVoice, BackendTtsVoice> = {
+  shell: 'stella',
+  wave: 'tide',
+  stella: 'stella',
+  tide: 'tide',
+}
 
 /** TTS 输出的裸 PCM 参数：24kHz、单声道、16-bit 小端 */
 export const TTS_SAMPLE_RATE = 24000
@@ -55,7 +65,12 @@ export const synthesize = async (
   const response = await request(`${TOOLS_BASE_URL}/tts`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, voice_id: voice, format: 'pcm', filter_markdown: true }),
+    body: JSON.stringify({
+      text,
+      voice_id: BACKEND_TTS_VOICE[voice],
+      format: 'pcm',
+      filter_markdown: true,
+    }),
     signal,
   })
   if (!response.body) {

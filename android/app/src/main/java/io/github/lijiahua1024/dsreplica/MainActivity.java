@@ -12,11 +12,16 @@ import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.MediaStore;
-import android.provider.Settings;
+import android.view.View;
+import android.view.accessibility.AccessibilityManager;
+import android.view.accessibility.AccessibilityNodeInfo;
 import android.webkit.JavascriptInterface;
 import android.webkit.MimeTypeMap;
 import android.webkit.ValueCallback;
@@ -27,13 +32,20 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
+import android.widget.TextView;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.io.OutputStream;
 import java.util.Arrays;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 public final class MainActivity extends Activity {
     private static final String ASSET_HOST = "appassets.androidplatform.net";
@@ -65,7 +77,18 @@ public final class MainActivity extends Activity {
     private boolean backPreviewEnabled;
     private final InAppBackCallback inAppBack = new InAppBackCallback(this, this::handleBack,
         this::reportBackPreview);
+    private final Map<String, A11yProxy> a11yProxies = new LinkedHashMap<>();
     private final ExecutorService photoExecutor = Executors.newSingleThreadExecutor();
+    private final Handler ui = new Handler(Looper.getMainLooper());
+    private AccessibilityManager accessibility;
+    private final AccessibilityManager.AccessibilityStateChangeListener accessibilityState =
+        enabled -> {
+            ui.post(() -> {
+                if (enabled) primeAccessibility();
+                webView.evaluateJavascript(
+                    "window.dispatchEvent(new Event('android-a11y-state'))", null);
+            });
+        };
 
     @Override
     public void onCreate(Bundle state) {
@@ -99,6 +122,8 @@ public final class MainActivity extends Activity {
             }
         });
         setContentView(frame);
+        accessibility = getSystemService(AccessibilityManager.class);
+        accessibility.addAccessibilityStateChangeListener(accessibilityState);
         setBars((getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
             == Configuration.UI_MODE_NIGHT_YES);
         WebView.setWebContentsDebuggingEnabled(
@@ -118,6 +143,398 @@ public final class MainActivity extends Activity {
             webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('android-update', {detail: "
                 + status + "}))", null));
         webView.loadUrl(HOME);
+    }
+
+    private void primeAccessibility() {
+        if (webView == null) return;
+        webView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+        AccessibilityNodeInfo host = webView.createAccessibilityNodeInfo();
+        if (host != null) host.recycle();
+    }
+
+    private void updateA11yTargets(String payload) {
+        try {
+            JSONArray items = new JSONArray(payload);
+            Set<String> live = new HashSet<>();
+            for (int index = 0; index < items.length(); index++) {
+                JSONObject item = items.getJSONObject(index);
+                String key = item.getString("key");
+                JSONArray bounds = item.getJSONArray("bounds");
+                JSONArray labelBounds = item.optJSONArray("labelBounds");
+                A11yProxy proxy = a11yProxies.get(key);
+                if (proxy == null) {
+                    proxy = new A11yProxy(key);
+                    a11yProxies.put(key, proxy);
+                    frame.addView(proxy);
+                }
+                proxy.update(
+                    item.getString("label"),
+                    item.optBoolean("checked"),
+                    !item.optBoolean("disabled"),
+                    bounds.getInt(0),
+                    bounds.getInt(1),
+                    bounds.getInt(2),
+                    bounds.getInt(3),
+                    labelBounds,
+                    item.optString("labelKind"),
+                    item.optString("role", "view"),
+                    item.optInt("labelDepth", 1),
+                    item.optBoolean("checkable", true),
+                    item.optBoolean("clickable", true),
+                    item.optBoolean("longClickable"),
+                    item.optBoolean("scrollable"),
+                    item.optBoolean("focusable", true),
+                    item.optBoolean("touchThrough"),
+                    item.optBoolean("extraButton")
+                );
+                live.add(key);
+            }
+            for (String key : new HashSet<>(a11yProxies.keySet())) {
+                if (!live.contains(key)) {
+                    frame.removeView(a11yProxies.remove(key));
+                }
+            }
+        } catch (Exception ignored) {
+            // A malformed bridge payload must not affect the rendered page.
+        }
+    }
+
+    private void forwardA11yClick(String key) {
+        webView.evaluateJavascript(
+            "window.dispatchEvent(new CustomEvent('android-a11y-click', {detail: "
+                + JSONObject.quote(key) + "}))",
+            null
+        );
+    }
+
+    private void forwardA11yLongClick(String key) {
+        webView.evaluateJavascript(
+            "window.dispatchEvent(new CustomEvent('android-a11y-long-click', {detail: "
+                + JSONObject.quote(key) + "}))",
+            null
+        );
+    }
+
+    private void forwardA11yScroll(String key, int direction) {
+        webView.evaluateJavascript(
+            "window.dispatchEvent(new CustomEvent('android-a11y-scroll', {detail: {key: "
+                + JSONObject.quote(key) + ", direction: " + direction + "}}))",
+            null
+        );
+    }
+
+    private final class A11yProxy extends FrameLayout {
+        private final String key;
+        private View label;
+        private View labelHost;
+        private FrameLayout hintContainer;
+        private TextView hintText;
+        private TextView extraButton;
+        private String childrenShape = "";
+        private String description = "";
+        private String role = "view";
+        private boolean textLabel;
+        private boolean checked;
+        private boolean checkable = true;
+        private boolean clickable = true;
+        private boolean longClickable;
+        private boolean scrollable;
+        private boolean focusable = true;
+        private boolean touchThrough;
+        private boolean selfDescription;
+        private boolean selfText;
+        private boolean enabled = true;
+
+        A11yProxy(String key) {
+            super(MainActivity.this);
+            this.key = key;
+            setWillNotDraw(true);
+            setClickable(true);
+            setFocusable(false);
+            setOnClickListener(ignored -> forwardA11yClick(key));
+            setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+            setAccessibilityDelegate(new AccessibilityDelegate() {
+                @Override
+                public void onInitializeAccessibilityNodeInfo(View host, AccessibilityNodeInfo info) {
+                    super.onInitializeAccessibilityNodeInfo(host, info);
+                    info.setClassName(
+                        "editText".equals(A11yProxy.this.role)
+                            ? "android.widget.EditText"
+                            : "textView".equals(A11yProxy.this.role)
+                                ? "android.widget.TextView"
+                                : "button".equals(A11yProxy.this.role)
+                                    ? "android.widget.Button"
+                                    : "android.view.View");
+                    info.setText(A11yProxy.this.selfText ? A11yProxy.this.description : "");
+                    info.setContentDescription(
+                        A11yProxy.this.selfDescription ? A11yProxy.this.description : "");
+                    info.setCheckable(A11yProxy.this.checkable);
+                    info.setChecked(
+                        A11yProxy.this.checkable && A11yProxy.this.checked);
+                    info.setEnabled(A11yProxy.this.enabled);
+                    info.setClickable(
+                        A11yProxy.this.enabled && A11yProxy.this.clickable);
+                    info.setLongClickable(
+                        A11yProxy.this.enabled && A11yProxy.this.longClickable);
+                    info.setScrollable(
+                        A11yProxy.this.enabled && A11yProxy.this.scrollable);
+                    info.setFocusable(
+                        A11yProxy.this.enabled && A11yProxy.this.focusable);
+                    info.setVisibleToUser(true);
+                    if (A11yProxy.this.enabled && A11yProxy.this.clickable) {
+                        info.addAction(AccessibilityNodeInfo.ACTION_CLICK);
+                    }
+                    if (A11yProxy.this.enabled && A11yProxy.this.longClickable) {
+                        info.addAction(AccessibilityNodeInfo.ACTION_LONG_CLICK);
+                    }
+                    if (A11yProxy.this.enabled && A11yProxy.this.scrollable) {
+                        info.addAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
+                        info.addAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD);
+                    }
+                }
+
+                @Override
+                public boolean performAccessibilityAction(View host, int action, Bundle arguments) {
+                    if (action == AccessibilityNodeInfo.ACTION_CLICK
+                        && A11yProxy.this.enabled
+                        && A11yProxy.this.clickable) {
+                        forwardA11yClick(A11yProxy.this.key);
+                        return true;
+                    }
+                    if (action == AccessibilityNodeInfo.ACTION_LONG_CLICK
+                        && A11yProxy.this.enabled
+                        && A11yProxy.this.longClickable) {
+                        forwardA11yLongClick(A11yProxy.this.key);
+                        return true;
+                    }
+                    if (action == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
+                        && A11yProxy.this.enabled
+                        && A11yProxy.this.scrollable) {
+                        forwardA11yScroll(A11yProxy.this.key, 1);
+                        return true;
+                    }
+                    if (action == AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+                        && A11yProxy.this.enabled
+                        && A11yProxy.this.scrollable) {
+                        forwardA11yScroll(A11yProxy.this.key, -1);
+                        return true;
+                    }
+                    return super.performAccessibilityAction(host, action, arguments);
+                }
+            });
+        }
+
+        void update(String text, boolean isChecked, boolean isEnabled,
+                    int left, int top, int right, int bottom,
+                    JSONArray labelBounds, String labelKind, String nextRole,
+                    int nextLabelDepth,
+                    boolean nextCheckable, boolean nextClickable,
+                    boolean nextLongClickable, boolean nextScrollable,
+                    boolean nextFocusable, boolean nextTouchThrough,
+                    boolean nextExtraButton) {
+            checked = isChecked;
+            enabled = isEnabled;
+            description = text;
+            role = nextRole;
+            checkable = nextCheckable;
+            clickable = nextClickable;
+            longClickable = nextLongClickable;
+            scrollable = nextScrollable;
+            focusable = nextFocusable;
+            touchThrough = nextTouchThrough;
+            selfDescription = "none".equals(labelKind);
+            selfText = "selfText".equals(labelKind);
+            setClickable(nextClickable && !nextTouchThrough);
+            setLongClickable(nextLongClickable && !nextTouchThrough);
+            setFocusable(nextFocusable && !nextTouchThrough);
+
+            String shape = role + "|" + labelKind + "|" + nextExtraButton + "|"
+                + nextLabelDepth;
+            if (!shape.equals(childrenShape)) {
+                removeAllViews();
+                label = null;
+                labelHost = null;
+                hintContainer = null;
+                hintText = null;
+                extraButton = null;
+                textLabel = "text".equals(labelKind);
+                childrenShape = shape;
+                if (nextExtraButton) {
+                    extraButton = new TextView(MainActivity.this);
+                    extraButton.setTextColor(Color.TRANSPARENT);
+                    extraButton.setImportantForAccessibility(
+                        View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+                    extraButton.setClickable(false);
+                    extraButton.setFocusable(false);
+                    extraButton.setAccessibilityDelegate(new AccessibilityDelegate() {
+                        @Override
+                        public void onInitializeAccessibilityNodeInfo(
+                            View host, AccessibilityNodeInfo info) {
+                            super.onInitializeAccessibilityNodeInfo(host, info);
+                            info.setClassName("android.widget.Button");
+                            info.setText("");
+                            info.setContentDescription("");
+                            info.setClickable(false);
+                            info.setFocusable(false);
+                        }
+                    });
+                    addView(extraButton);
+                }
+                if ("hint".equals(labelKind)) {
+                    buildHintLabel();
+                } else if (!selfDescription && !selfText) {
+                    buildLabel(textLabel, nextLabelDepth);
+                }
+            }
+            if (hintText != null) {
+                hintText.setText(text);
+            } else if (label instanceof TextView) {
+                ((TextView) label).setText(text);
+            } else if (label != null) {
+                label.setContentDescription(text);
+            }
+            FrameLayout.LayoutParams params =
+                new FrameLayout.LayoutParams(right - left, bottom - top);
+            params.leftMargin = left;
+            params.topMargin = top;
+            setLayoutParams(params);
+            int labelLeft = left;
+            int labelTop = top;
+            int labelRight = right;
+            int labelBottom = bottom;
+            if (labelBounds != null) {
+                labelLeft = labelBounds.optInt(0, left);
+                labelTop = labelBounds.optInt(1, top);
+                labelRight = labelBounds.optInt(2, right);
+                labelBottom = labelBounds.optInt(3, bottom);
+            }
+            if (label != null) {
+                label.setLayoutParams(new FrameLayout.LayoutParams(
+                    Math.max(1, labelRight - labelLeft),
+                    Math.max(1, labelBottom - labelTop)
+                ));
+                ((FrameLayout.LayoutParams) label.getLayoutParams()).leftMargin =
+                    labelLeft - left;
+                ((FrameLayout.LayoutParams) label.getLayoutParams()).topMargin =
+                    labelTop - top;
+            }
+            if (hintContainer != null) {
+                int inset = Math.min(42, Math.max(0, (right - left) / 4));
+                int vertical = Math.min(32, Math.max(0, (bottom - top) / 4));
+                FrameLayout.LayoutParams hintParams = new FrameLayout.LayoutParams(
+                    Math.max(1, right - left - inset * 2),
+                    Math.max(1, bottom - top - vertical * 2)
+                );
+                hintParams.leftMargin = inset;
+                hintParams.topMargin = vertical;
+                hintContainer.setLayoutParams(hintParams);
+                int hintHeight = Math.min(116, hintParams.height);
+                hintText.setLayoutParams(
+                    new FrameLayout.LayoutParams(hintParams.width, hintHeight));
+                View marker = hintContainer.getChildAt(1);
+                marker.setLayoutParams(new FrameLayout.LayoutParams(
+                    Math.min(294, hintParams.width),
+                    Math.min(58, hintParams.height)
+                ));
+            }
+            if (extraButton != null) {
+                if ("description".equals(labelKind)) {
+                    int size = 79;
+                    FrameLayout.LayoutParams extraParams =
+                        new FrameLayout.LayoutParams(size, size);
+                    extraParams.leftMargin = Math.max(0, (right - left - size) / 2);
+                    extraParams.topMargin = Math.max(0, (bottom - top - size) / 2);
+                    extraButton.setLayoutParams(extraParams);
+                } else {
+                    extraButton.setLayoutParams(
+                        new FrameLayout.LayoutParams(right - left, bottom - top));
+                }
+            }
+            requestLayout();
+            invalidate();
+        }
+
+        private void buildLabel(boolean wantsText, int depth) {
+            if (wantsText) {
+                TextView content = new TextView(MainActivity.this);
+                content.setTextColor(Color.TRANSPARENT);
+                label = content;
+            } else {
+                label = new View(MainActivity.this);
+            }
+            label.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+            label.setClickable(false);
+            label.setFocusable(false);
+            if (depth > 1) {
+                FrameLayout container = new FrameLayout(MainActivity.this);
+                container.setImportantForAccessibility(
+                    View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+                container.setClickable(false);
+                container.setFocusable(false);
+                container.setAccessibilityDelegate(new AccessibilityDelegate() {
+                    @Override
+                    public void onInitializeAccessibilityNodeInfo(
+                        View host, AccessibilityNodeInfo info) {
+                        super.onInitializeAccessibilityNodeInfo(host, info);
+                        info.setClassName("android.view.View");
+                        info.setText("");
+                        info.setContentDescription("");
+                        info.setClickable(false);
+                        info.setFocusable(false);
+                    }
+                });
+                container.addView(label);
+                labelHost = container;
+                addView(container);
+            } else {
+                labelHost = label;
+                addView(label);
+            }
+        }
+
+        private void buildHintLabel() {
+            hintContainer = new FrameLayout(MainActivity.this);
+            hintContainer.setImportantForAccessibility(
+                View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+            hintContainer.setClickable(false);
+            hintContainer.setFocusable(false);
+            hintContainer.setAccessibilityDelegate(new AccessibilityDelegate() {
+                @Override
+                public void onInitializeAccessibilityNodeInfo(
+                    View host, AccessibilityNodeInfo info) {
+                    super.onInitializeAccessibilityNodeInfo(host, info);
+                    info.setClassName("android.view.View");
+                    info.setText("");
+                    info.setContentDescription("");
+                    info.setClickable(false);
+                    info.setFocusable(false);
+                }
+            });
+            hintText = new TextView(MainActivity.this);
+            hintText.setTextColor(Color.TRANSPARENT);
+            hintText.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+            hintText.setClickable(false);
+            hintText.setFocusable(false);
+            hintContainer.addView(hintText);
+            View marker = new View(MainActivity.this);
+            marker.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+            marker.setClickable(false);
+            marker.setFocusable(false);
+            hintContainer.addView(marker);
+            label = hintContainer;
+            labelHost = hintContainer;
+            addView(hintContainer);
+        }
+
+        @Override
+        public void addChildrenForAccessibility(ArrayList<View> children) {
+            if (labelHost != null) {
+                children.add(labelHost);
+            }
+            if (extraButton != null) {
+                children.add(extraButton);
+            }
+        }
     }
 
     @Override
@@ -162,6 +579,16 @@ public final class MainActivity extends Activity {
         public void onPageStarted(WebView view, String url, Bitmap favicon) {
             backPreviewEnabled = false;
             inAppBack.setEnabled(false);
+        }
+
+        @Override
+        public void onPageFinished(WebView view, String url) {
+            super.onPageFinished(view, url);
+            if (accessibility != null && accessibility.isEnabled()) {
+                primeAccessibility();
+                view.evaluateJavascript(
+                    "window.dispatchEvent(new Event('android-a11y-state'))", null);
+            }
         }
 
         @Override
@@ -417,12 +844,19 @@ public final class MainActivity extends Activity {
     protected void onDestroy() {
         customChat.close();
         inAppBack.setEnabled(false);
+        if (accessibility != null) {
+            accessibility.removeAccessibilityStateChangeListener(accessibilityState);
+        }
         photoExecutor.shutdownNow();
         updater.close();
         if (fileCallback != null) fileCallback.onReceiveValue(null);
         recorder.finish(false);
         historyExport.close();
         imageSave.finish(false);
+        for (A11yProxy proxy : a11yProxies.values()) {
+            frame.removeView(proxy);
+        }
+        a11yProxies.clear();
         frame.removeView(webView);
         webView.destroy();
         super.onDestroy();
@@ -451,9 +885,9 @@ public final class MainActivity extends Activity {
         public float systemFontScale() { return getResources().getConfiguration().fontScale; }
 
         @JavascriptInterface
-        public void openAppPermissions() {
-            runOnUiThread(() -> startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                Uri.fromParts("package", getPackageName(), null))));
+        public int getMusicVolume() {
+            AudioManager audio = getSystemService(AudioManager.class);
+            return audio == null ? -1 : audio.getStreamVolume(AudioManager.STREAM_MUSIC);
         }
 
         @JavascriptInterface
@@ -466,12 +900,15 @@ public final class MainActivity extends Activity {
         public void installUpdate() { runOnUiThread(() -> updater.update()); }
 
         @JavascriptInterface
-        public void openSourcePage(String url, boolean dark, String closeLabel, String browserLabel) {
+        public void openSourcePage(String url, boolean dark, String closeLabel, String browserLabel,
+                                   String loadingLabel, String errorLabel, String retryLabel) {
             Uri uri = SourceBrowserActivity.webUri(url);
             if (uri == null) return;
             runOnUiThread(() -> startActivity(new Intent(MainActivity.this, SourceBrowserActivity.class)
                 .setData(uri).putExtra("dark", dark)
-                .putExtra("closeLabel", closeLabel).putExtra("browserLabel", browserLabel)));
+                .putExtra("closeLabel", closeLabel).putExtra("browserLabel", browserLabel)
+                .putExtra("loadingLabel", loadingLabel).putExtra("errorLabel", errorLabel)
+                .putExtra("retryLabel", retryLabel)));
         }
 
         @JavascriptInterface
@@ -583,5 +1020,15 @@ public final class MainActivity extends Activity {
 
         @JavascriptInterface
         public double recordingLevel() { return recorder.level(); }
+
+        @JavascriptInterface
+        public boolean a11yEnabled() {
+            return accessibility != null && accessibility.isEnabled();
+        }
+
+        @JavascriptInterface
+        public void setA11yTargets(String payload) {
+            runOnUiThread(() -> updateA11yTargets(payload));
+        }
     }
 }

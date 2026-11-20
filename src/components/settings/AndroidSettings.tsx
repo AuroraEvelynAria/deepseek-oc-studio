@@ -27,7 +27,6 @@ import {
   type LocalePreference,
   type ThemePreference,
 } from '../../services/settings.js'
-import { AndroidSound } from '../base/AndroidIcons.js'
 import {
   IconChevronRightOutline14,
   IconCloseOutline16,
@@ -37,7 +36,6 @@ import {
   IconLightOutline16,
   IconLinkOutline16,
   IconRefreshOutline16,
-  IconSettingsOutline16,
 } from '../base/icons.js'
 import { showToast } from '../base/toastState.js'
 import { closeMobileSider } from '../sider/mobileSiderState.js'
@@ -95,6 +93,67 @@ const parentPage: Record<Page, Page | null> = {
   personalization: 'root',
   agreements: 'root',
 }
+
+const PersonalizationIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
+    <path
+      fillRule="evenodd"
+      d="M6.374 5.017 4.897 4.499c-.247-.086-.484.151-.398.398l.518 1.477c.349.992.174 2.093-.463 2.929l-.95 1.244c-.158.208-.006.508.256.502l1.564-.037c1.052-.024 2.045.481 2.643 1.346l.89 1.287c.149.216.481.163.556-.088l.448-1.499a3.32 3.32 0 0 1 2.097-2.097l1.499-.448c.251-.075.304-.407.088-.556l-1.287-.89a3.32 3.32 0 0 1-1.346-2.643l.037-1.564c.006-.262-.294-.414-.502-.256l-1.244.95a3.32 3.32 0 0 1-2.929.463Zm-1.573-2.207c-1.236-.433-2.424.755-1.991 1.991l.734 2.09a1.32 1.32 0 0 1-.232 1.465l-1.344 1.761c-.794 1.041-.031 2.539 1.279 2.508l2.214-.052c.526-.012 1.022.241 1.321.674l1.26 1.821c.745 1.078 2.405.815 2.781-.44l.635-2.122c.15-.504.544-.898 1.048-1.048l2.122-.635c1.255-.376 1.518-2.036.44-2.781l-1.821-1.26a1.32 1.32 0 0 1-.674-1.321l.052-2.214c.031-1.31-1.467-2.073-2.509-1.279l-1.76 1.344a1.32 1.32 0 0 1-1.465.232l-2.09-.734Z"
+    />
+    <path d="M12.387 13.729a.9.9 0 1 1 1.344-1.344l3.384 2.722a1.5 1.5 0 1 1-1.885 2.007l-2.72-3.385Z" />
+  </svg>
+)
+
+const PolicyIcon = () => (
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 18 18"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M4.4 2.75h6.8c.8 0 1.4.6 1.4 1.4v5.9" />
+    <path d="M4.4 2.75c-.8 0-1.4.6-1.4 1.4v9.1c0 .8.6 1.4 1.4 1.4h2.9" />
+    <path d="M6 5.8h5M6 8.5h3.3" />
+    <path d="m10.1 13.3 3.65-3.65 1.55 1.55-3.65 3.65-2.05.5.5-2.05Z" />
+  </svg>
+)
+
+const LogoutIcon = () => (
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 18 18"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M8.2 3H5.6A1.6 1.6 0 0 0 4 4.6v8.8A1.6 1.6 0 0 0 5.6 15h2.6" />
+    <path d="M10.7 5.7 14 9l-3.3 3.3M7.5 9H14" />
+  </svg>
+)
+
+const VoiceIcon = () => (
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 18 18"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M3.2 7.2h2.1l3.1-2.5v8.6L5.3 10.8H3.2V7.2Z" />
+    <path d="M11 6.1c1.55 1.6 1.55 4.2 0 5.8" />
+    <path d="M12.6 4.5c2 2.5 2 6.5 0 9" />
+  </svg>
+)
 
 const Info = ({ glyph = 'i' }: { glyph?: string }) => <span className={styles.info}>{glyph}</span>
 
@@ -197,6 +256,7 @@ const Choice = <T extends string>({
   icon,
   value,
   fields,
+  confirmLabel,
   confirm,
   dismiss,
 }: {
@@ -204,6 +264,7 @@ const Choice = <T extends string>({
   icon?: ReactNode
   value: T
   fields: ReadonlyArray<{ id: T; label: string }>
+  confirmLabel?: string
   confirm: (value: T) => void
   dismiss: () => void
 }) => {
@@ -237,7 +298,7 @@ const Choice = <T extends string>({
           ))}
         </div>
         <button type="button" className={styles.confirm} onClick={() => confirm(next)}>
-          {t('confirm')}
+          {confirmLabel ?? t('confirm')}
         </button>
       </section>
     </div>
@@ -333,25 +394,46 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
     { id: 'light', label: tr('浅色', 'Light') },
     { id: 'dark', label: tr('深色', 'Dark') },
   ]
-  const languages: { id: LocalePreference; label: string }[] = [
+  const languages: { id: LocalePreference | 'am' | 'ar' | 'hy'; label: string }[] = [
     { id: 'system', label: tr('系统', 'System') },
-    { id: 'zh-CN', label: '中文（简体中文）' },
+    { id: 'zh-CN', label: '中文 (简体中文)' },
     { id: 'en-US', label: 'English' },
+    { id: 'am', label: 'አማርኛ' },
+    { id: 'ar', label: 'العربية' },
+    { id: 'hy', label: 'հայերեն' },
   ]
   const tones: { id: TtsVoice; label: string; description: string }[] = [
     {
+      id: 'shell',
+      label: t('settingsTtsVoiceShell'),
+      description: t('settingsTtsVoiceShellDescription'),
+    },
+    {
+      id: 'wave',
+      label: t('settingsTtsVoiceWave'),
+      description: t('settingsTtsVoiceWaveDescription'),
+    },
+    {
       id: 'stella',
       label: t('settingsTtsVoiceStella'),
-      description: tr('清晰明亮', 'Clear and bright'),
+      description: t('settingsTtsVoiceStellaDescription'),
     },
     {
       id: 'tide',
       label: t('settingsTtsVoiceTide'),
-      description: tr('沉稳自然', 'Calm and natural'),
+      description: t('settingsTtsVoiceTideDescription'),
     },
   ]
   const currentTone = tones.find((item) => item.id === tone) ?? tones[0]
-  const languageLabel = languages.find((item) => item.id === locale)?.label
+  const selectTone = (direction: -1 | 1) => {
+    const index = Math.max(
+      0,
+      tones.findIndex((item) => item.id === tone)
+    )
+    setTone(tones[Math.max(0, Math.min(tones.length - 1, index + direction))].id)
+  }
+  const languageLabel =
+    locale === 'zh-CN' ? '中文 (简体中文)' : languages.find((item) => item.id === locale)?.label
   const themeLabel = themes.find((item) => item.id === themePreference)?.label
   const localizedPoliciesUrl = `${policiesUrl}/${locale}`
 
@@ -567,14 +649,14 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
               />
               <Row
                 label={labels.personalization}
-                icon={<IconSettingsOutline16 />}
+                icon={<PersonalizationIcon />}
                 onClick={() => openPage('personalization')}
               />
             </Group>
             <Group label={tr('语音', 'Voice')}>
               <Row
                 label={voice}
-                icon={<AndroidSound muted={false} />}
+                icon={<VoiceIcon />}
                 arrow={false}
                 onClick={() => {
                   setTone(ttsVoice)
@@ -623,7 +705,7 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
               ) : null}
               <Row
                 label={labels.agreements}
-                icon={<IconLinkOutline16 />}
+                icon={<PolicyIcon />}
                 onClick={() => openPage('agreements')}
               />
             </Group>
@@ -636,7 +718,13 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
             </Group>
             {editor.apiKey ? (
               <Group spaced>
-                <Row label={logout} danger arrow={false} onClick={() => setPopup('logout')} />
+                <Row
+                  label={logout}
+                  icon={<LogoutIcon />}
+                  danger
+                  arrow={false}
+                  onClick={() => setPopup('logout')}
+                />
               </Group>
             ) : null}
           </>
@@ -673,6 +761,12 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
                 href="https://api-docs.deepseek.com/zh-cn/"
               />
             </Group>
+            <p className={styles.legal}>
+              {`模型名称：Deepseek Chat
+备案号：Beijing-DeepseekChat-202404280016
+浙ICP备2023025841号-3A
+内容由 AI 生成，请仔细甄别，并合法使用`}
+            </p>
           </>
         ) : null}
         {screen === 'advanced' ? (
@@ -785,7 +879,7 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
           <div
             className={styles.preview}
             style={{
-              fontSize: `${16 * (fontSize === null ? (android?.systemFontScale() ?? 1) : 1 + (fontSize - 3) * 0.09)}px`,
+              fontSize: `${16 * (fontSize === null ? (android?.systemFontScale() ?? 1) : 1 + (fontSize - 2) * 0.1)}px`,
             }}
           >
             <span>{tr('预览文字大小', 'Preview text size')}</span>
@@ -848,7 +942,7 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
             />
             <Row
               label={tr('应用权限', 'App Permissions')}
-              onClick={() => android?.openAppPermissions()}
+              onClick={() => openAndroidPage(`${chinesePoliciesUrl}/app-permissions.html`)}
             />
           </Group>
         ) : null}
@@ -861,7 +955,7 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
               <Switch
                 label={follow}
                 checked={fontSize === null}
-                toggle={() => setFontSize(fontSize === null ? 3 : null)}
+                toggle={() => setFontSize(fontSize === null ? 2 : null)}
               />
             }
           />
@@ -870,16 +964,22 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
             <span>{tr('标准', 'Standard')}</span>
             <strong>A</strong>
           </div>
-          <input
-            type="range"
-            aria-label={labels.font}
-            min="0"
-            max="6"
-            step="1"
-            value={fontSize ?? 3}
-            disabled={fontSize === null}
-            onChange={(event) => setFontSize(event.target.valueAsNumber)}
-          />
+          <div className={styles.rangeWrap}>
+            <div className={styles.rangeTicks} aria-hidden="true">
+              {Array.from({ length: 7 }, (_, step) => (
+                <span key={step} />
+              ))}
+            </div>
+            <input
+              type="range"
+              aria-label={labels.font}
+              min="0"
+              max="6"
+              step="1"
+              value={fontSize ?? 2}
+              onChange={(event) => setFontSize(event.target.valueAsNumber)}
+            />
+          </div>
         </div>
       ) : null}
     </>
@@ -893,8 +993,11 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
           icon={<IconGlobeLanguageOutline14 />}
           value={localePreference}
           fields={languages}
+          confirmLabel={tr('确认', 'Confirm')}
           confirm={(value) => {
-            setLocale(value)
+            if (value === 'system' || value === 'zh-CN' || value === 'en-US') {
+              setLocale(value)
+            }
             setPopup(null)
           }}
           dismiss={back}
@@ -905,6 +1008,7 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
           title={appearance}
           value={themePreference}
           fields={themes}
+          confirmLabel={tr('确认', 'Confirm')}
           confirm={(value) => {
             setThemePreference(value)
             setPopup(null)
@@ -930,22 +1034,19 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
                 const dx =
                   event.changedTouches[0].clientX - Number(event.currentTarget.dataset.swipeX)
                 if (Math.abs(dx) > 32) {
-                  setTone(dx > 0 ? 'stella' : 'tide')
+                  selectTone(dx > 0 ? -1 : 1)
                 }
               }}
             >
               <div className={styles.voiceArt} data-tone={tone} aria-hidden="true" />
               <div>{currentTone.label}</div>
               <small>{currentTone.description}</small>
-              <div className={styles.dots} role="radiogroup" aria-label={voice}>
+              <div className={styles.dots} aria-hidden="true">
                 {tones.map((item) => (
-                  <button
+                  <span
                     key={item.id}
-                    type="button"
-                    role="radio"
-                    aria-label={item.label}
-                    aria-checked={tone === item.id}
-                    onClick={() => setTone(item.id)}
+                    className={styles.dot}
+                    data-selected={tone === item.id ? 'true' : undefined}
                   />
                 ))}
               </div>
@@ -958,7 +1059,7 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
                 setPopup(null)
               }}
             >
-              {t('confirm')}
+              {tr('确认', 'Confirm')}
             </button>
           </section>
         </div>

@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client'
 import { App } from './app/App.js'
 import { android } from './app/android.js'
+import { startAndroidA11ySync } from './app/androidA11y.js'
 import { setupTheme } from './app/theme.js'
 import { ensureKatex } from './services/markdown/katex.js'
 import './app/theme.css'
@@ -9,6 +10,7 @@ import './app/android.css'
 
 ensureKatex()
 if (android) {
+  document.title = ''
   const root = document.documentElement
   const buttonNavigationInset = android.buttonNavigationInset()
   root.dataset.android = ''
@@ -19,3 +21,4 @@ if (android) {
 setupTheme()
 
 createRoot(document.getElementById('root') as HTMLElement).render(<App />)
+startAndroidA11ySync()

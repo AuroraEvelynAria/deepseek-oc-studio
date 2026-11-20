@@ -16,6 +16,135 @@
     0 12px 32px rgba(0, 0, 0, 0.08);
 }
 
+[data-android] .sidebarMenu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3556px;
+  left: 101px !important;
+  width: 194.1333px;
+  min-width: 0;
+  padding: 0;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 45.1556px,
+    rgb(212 212 212) 45.1556px,
+    rgb(212 212 212) 45.5112px,
+    transparent 45.5112px,
+    transparent 45.5112px
+  );
+
+  .option {
+    gap: 9.2444px;
+    height: 45.1556px;
+    padding: 0 0 0 17.7778px;
+    font-size: 14.9333px;
+    letter-spacing: 0.1185px;
+    line-height: 22.4px;
+  }
+
+  .danger {
+    color: rgb(239 68 68);
+  }
+
+  .icon {
+    width: 18.1333px;
+    height: 18.1333px;
+
+    svg {
+      display: block;
+      width: 18.1333px;
+      height: 18.1333px;
+    }
+  }
+}
+
+[data-android] .userMessageMenu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3556px;
+  width: 194.1333px;
+  min-width: 0;
+  padding: 0;
+  box-shadow: 0 4px 19px rgba(0, 0, 0, 0.15);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 45.1556px,
+    rgb(212 212 212) 45.1556px,
+    rgb(212 212 212) 45.5112px,
+    transparent 45.5112px,
+    transparent 45.5112px
+  );
+
+  .option {
+    gap: 10.6667px;
+    height: 45.1556px;
+    padding: 0 0 0 16.3556px;
+    font-size: 14.9333px;
+    letter-spacing: 0.1185px;
+    line-height: 22.4px;
+  }
+
+  .icon {
+    width: 18.1333px;
+    height: 18.1333px;
+
+    svg {
+      display: block;
+      width: 16px;
+      height: 16px;
+    }
+  }
+}
+
+[data-android] .assistantMessageMenu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3556px;
+  left: 13.6px !important;
+  width: 194.1333px;
+  min-width: 0;
+  padding: 0;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 45.1556px,
+    rgb(212 212 212) 45.1556px,
+    rgb(212 212 212) 45.5112px,
+    transparent 45.5112px,
+    transparent 45.5112px
+  );
+
+  .option {
+    gap: 10.6667px;
+    height: 45.1556px;
+    padding: 0 0 0 16.3556px;
+    font-size: 14.9333px;
+    letter-spacing: 0.1185px;
+    line-height: 22.4px;
+
+    &:hover {
+      background-color: transparent;
+    }
+
+    &:active {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+    }
+  }
+
+  .icon {
+    width: 18.1333px;
+    height: 18.1333px;
+
+    svg {
+      display: block;
+      width: 16px;
+      height: 16px;
+    }
+  }
+}
+
 .option {
   display: flex;
   align-items: center;
