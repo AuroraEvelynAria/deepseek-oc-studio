@@ -10,7 +10,7 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   [key: `data-android-a11y${string}`]: string | undefined
 }
 
-/** 复制成功后图标换成对勾 1 秒，期间再次点击不重复复制 */
+/** 复制成功后图标换成对勾 1 秒并提示，期间再次点击不重复复制 */
 export const CopyButton = ({
   text,
   className,
@@ -52,6 +52,7 @@ export const CopyButton = ({
           return
         }
         setCopied(true)
+        showToast({ key: 'copied' }, 1990)
         timerRef.current = setTimeout(() => setCopied(false), 1000)
       }}
     />
