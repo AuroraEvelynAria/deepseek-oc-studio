@@ -139,8 +139,10 @@
   user-select: none;
   outline: none;
 
-  &:hover {
-    background-color: var(--dsw-specific-sidebar-nav-item-hover);
+  @media (hover: hover) {
+    &:hover {
+      background-color: var(--dsw-specific-sidebar-nav-item-hover);
+    }
   }
 
   &:focus-visible {
@@ -290,6 +292,10 @@
 
   .settings {
     padding: 4px 0;
+
+    &:active {
+      background-color: var(--dsw-specific-sidebar-nav-item-hover);
+    }
   }
 
   .settingsLabel {
