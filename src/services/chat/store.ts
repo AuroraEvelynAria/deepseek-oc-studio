@@ -18,8 +18,9 @@ import {
   type AttachmentUpload,
 } from '../attachments.js'
 import { MANY_IMAGES_COUNT, MANY_IMAGES_MAX_EDGE, MAX_IMAGE_EDGE } from '../imageUpload.js'
-import { useSettings } from '../settings.js'
+import { setPinnedSessions, useSettings } from '../settings.js'
 import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from './branches.js'
+import type { ImportArchiveResult } from './history/importArchive.js'
 import {
   contextBudget,
   estimatePrefixTokens,
@@ -423,9 +424,27 @@ const waitForIdle = (sessionId?: string) =>
 
 let replacingHistory = false
 
+const dedupePinned = (ids: Iterable<string>, validIds: ReadonlySet<string>): string[] => {
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const id of ids) {
+    if (validIds.has(id) && !seen.has(id)) {
+      seen.add(id)
+      result.push(id)
+    }
+  }
+  return result
+}
+
+export type MergeHistorySummary = {
+  added: number
+  merged: number
+  unchanged: number
+}
+
 /** 先写入暂存。校验通过后暂停会话修改、停止生成，再原子替换历史。 */
 export const replaceHistory = async (
-  write: (importId: string) => Promise<SessionSummary[]>,
+  write: (importId: string) => Promise<ImportArchiveResult>,
   {
     onCommit,
     clearInBackground = false,
@@ -438,7 +457,7 @@ export const replaceHistory = async (
   let staging: db.HistoryStaging | undefined
   try {
     staging = await db.beginStaging()
-    const summaries = await write(staging.importId)
+    const { summaries, pinnedIds } = await write(staging.importId)
     onCommit?.()
     set({ importingHistory: true })
     for (const controller of Object.values(get().streaming)) {
@@ -455,6 +474,8 @@ export const replaceHistory = async (
     unsavedSessions.clear()
     pendingFiles.clear()
     clearAllDrafts()
+    const validIds = new Set(summaries.map((item) => item.id))
+    setPinnedSessions(dedupePinned(pinnedIds, validIds))
     set({
       ready: true,
       initError: false,
@@ -475,6 +496,94 @@ export const replaceHistory = async (
       retrySaveSessions()
       const { activeId, ready } = get()
       // 提交失败时恢复被取消的详情读取。
+      if (activeId !== null) {
+        void ensureSessionLoaded(activeId)
+      } else if (!ready) {
+        void initChat()
+      }
+    }
+  }
+}
+
+/** 先写入暂存。校验通过后暂停写入与生成，对重叠会话按树与消息语义合并提交，不清空草稿或重置当前会话。 */
+export const mergeHistory = async (
+  write: (importId: string) => Promise<ImportArchiveResult>,
+  {
+    onCommit,
+    clearInBackground = true,
+  }: { onCommit?: () => void; clearInBackground?: boolean } = {}
+): Promise<MergeHistorySummary> => {
+  if (replacingHistory) {
+    throw new Error('History replacement is already in progress')
+  }
+  replacingHistory = true
+  let staging: db.HistoryStaging | undefined
+  try {
+    staging = await db.beginStaging()
+    const { pinnedIds } = await write(staging.importId)
+    onCommit?.()
+    set({ importingHistory: true })
+    for (const controller of Object.values(get().streaming)) {
+      controller.abort()
+    }
+    await Promise.all(deletionTasks)
+    historyEpoch += 1
+    initTask = undefined
+    sessionLoads.clear()
+    await waitForIdle()
+
+    const localOverrides = new Map<string, { session: Session; files?: db.StoredFile[] }>()
+    for (const id of unsavedSessions) {
+      const session = getSession(id)
+      if (session) {
+        localOverrides.set(id, { session, files: pendingFiles.get(id) })
+      }
+    }
+
+    const result = await staging.commitMerge({ localOverrides, clearInBackground })
+    const { activeId, sessionCache, sessionLoadErrors, sessionSaveErrors } = get()
+    const refreshedCache = { ...sessionCache }
+    const updatedSet = new Set(result.updatedIds)
+
+    for (const id of result.updatedIds) {
+      unsavedSessions.delete(id)
+      pendingFiles.delete(id)
+      if (Object.hasOwn(refreshedCache, id) || id === activeId) {
+        const refreshed = await db.loadSession(id)
+        if (refreshed) {
+          touchSession(id)
+          refreshedCache[id] = refreshed
+        }
+      }
+    }
+
+    const validIds = new Set(result.summaries.map((item) => item.id))
+    setPinnedSessions(
+      dedupePinned([...useSettings.getState().pinnedSessions, ...pinnedIds], validIds)
+    )
+    set({
+      ready: true,
+      initError: false,
+      sessions: sortSessions(result.summaries),
+      sessionCache: refreshedCache,
+      sessionLoadErrors: Object.fromEntries(
+        Object.entries(sessionLoadErrors).filter(([id]) => !updatedSet.has(id))
+      ),
+      sessionSaveErrors: Object.fromEntries(
+        Object.entries(sessionSaveErrors).filter(([id]) => !updatedSet.has(id))
+      ),
+    })
+    trimSessionCache()
+    return { added: result.added, merged: result.merged, unchanged: result.unchanged }
+  } catch (error) {
+    await staging?.discard().catch(db.reportStorageError('clear unfinished history merge'))
+    throw error
+  } finally {
+    replacingHistory = false
+    if (get().importingHistory) {
+      set({ importingHistory: false })
+      retrySaveSessions()
+      const { activeId, ready } = get()
       if (activeId !== null) {
         void ensureSessionLoaded(activeId)
       } else if (!ready) {

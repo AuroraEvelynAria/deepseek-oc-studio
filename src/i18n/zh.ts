@@ -189,9 +189,18 @@ export const zh = {
   apiKeyVerificationFailed: '校验失败：{message}',
   historyImport: '导入历史对话',
   historyImportConfirm: '确认导入',
-  historyImportConfirmTitle: '确认导入历史对话？',
+  historyImportConfirmTitle: '导入历史对话',
   historyImportConfirmDescription: '上传的历史对话会覆盖当前所有对话记录，是否确认导入？',
-  historyImportDescription: '导入历史对话会覆盖全部本地对话和附件，支持 DeepSeek 导出的 ZIP 文件。',
+  historyImportDescription:
+    '支持 DeepSeek 导出的 ZIP 文件，默认合并保留现有对话，也可切换为覆盖导入。',
+  historyImportModeMerge: '合并到现有对话',
+  historyImportModeMergeDescription:
+    '保留当前对话、附件和草稿，自动追加新会话并合并同一会话的新消息与分支。',
+  historyImportModeReplace: '覆盖全部本地对话',
+  historyImportModeReplaceDescription:
+    '清空当前所有本地对话、附件和未发送草稿，仅保留导入文件里的记录。',
+  historyImportMergeConfirm: '开始合并',
+  historyImportReplaceConfirm: '覆盖导入',
   historyImporting: '正在导入历史对话…',
   historyImportProgress: '正在导入历史对话… {percent}% · 已处理 {count} 个对话',
   historyImportProgressEta:
@@ -199,9 +208,17 @@ export const zh = {
   historyImportEtaSeconds: '{seconds} 秒',
   historyImportEtaMinutes: '{minutes} 分钟',
   historyImportFinishing: '正在导入历史对话… 正在整理附件',
+  historyImportMerging: '正在导入历史对话… 正在合并本地记录',
   historyImportReplacing: '正在导入历史对话… 正在替换本地记录',
   historyImportedOne: '已导入 1 个对话',
   historyImported: '已导入 {count} 个对话',
+  historyMergedEmpty: '归档中没有可导入的对话',
+  historyMergedNoChange: '所有对话均已存在，未作更改（跳过 {unchanged} 个）',
+  historyMergedSummary: '合并完成：新增 {added} 个，更新 {merged} 个，跳过 {unchanged} 个',
+  historyMergedAddedOnly: '合并完成：新增 {added} 个对话',
+  historyMergedAddedOne: '合并完成：新增 1 个对话',
+  historyMergedUpdatedOnly: '合并完成：更新 {merged} 个对话',
+  historyMergedUpdatedOne: '合并完成：更新 1 个对话',
   historyImportFailed:
     '文件导入失败，可能是文件格式错误或使用了旧版的对话导出 ZIP 文件，请前往 DeepSeek 重新导出历史对话文件后再次导入。',
   historyExportFailed: '导出失败：{message}',

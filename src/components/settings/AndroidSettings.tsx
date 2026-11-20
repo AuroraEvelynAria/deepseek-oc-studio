@@ -11,7 +11,9 @@ import {
   BackupError,
   clearHistory,
   exportHistory,
+  formatImportResult,
   importHistory,
+  type ImportMode,
 } from '../../services/chat/backup.js'
 import { useChatStore } from '../../services/chat/store.js'
 import {
@@ -273,6 +275,7 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
   const [update, setUpdate] = useState<UpdateStatus>({ phase: 'idle' })
   const [updateFallback, setUpdateFallback] = useState(false)
   const [file, setFile] = useState<File | null>(null)
+  const [importMode, setImportMode] = useState<ImportMode>('merge')
   const [importStatus, setImportStatus] = useState<LinkedMessage | null>(null)
   const [archive, setArchive] = useState<Awaited<ReturnType<typeof exportHistory>> | null>(null)
   const importInput = useRef<HTMLInputElement>(null)
@@ -495,11 +498,8 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
         setPopup(null)
         setFile(null)
         setImportStatus({ key: 'historyImporting' })
-        const count = await importHistory(file, setImportStatus)
-        setImportStatus({
-          key: count === 1 ? 'historyImportedOne' : 'historyImported',
-          params: { count },
-        })
+        const result = await importHistory(file, setImportStatus, importMode)
+        setImportStatus(formatImportResult(result))
       } else if (popup === 'delete') {
         await clearHistory()
         showToast({ key: 'historyDeleted' })
@@ -720,6 +720,7 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
                   const selected = event.target.files?.[0]
                   event.target.value = ''
                   if (selected) {
+                    setImportMode('merge')
                     setFile(selected)
                     setPopup('import')
                   }
@@ -951,22 +952,82 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
           </section>
         </div>
       ) : null}
-      {popup === 'logout' || popup === 'delete' || popup === 'import' ? (
+      {popup === 'import' ? (
+        <div
+          className={styles.overlay}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              back()
+            }
+          }}
+        >
+          <section
+            className={styles.choice}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('historyImportConfirmTitle')}
+          >
+            <header>{t('historyImportConfirmTitle')}</header>
+            <div
+              className={styles.options}
+              role="radiogroup"
+              aria-label={t('historyImportConfirmTitle')}
+            >
+              <button
+                type="button"
+                role="radio"
+                aria-checked={importMode === 'merge'}
+                disabled={busy}
+                onClick={() => setImportMode('merge')}
+              >
+                {t('historyImportModeMerge')}
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={importMode === 'replace'}
+                disabled={busy}
+                onClick={() => setImportMode('replace')}
+              >
+                {t('historyImportModeReplace')}
+              </button>
+            </div>
+            <p className={styles.importDescription}>
+              {t(
+                importMode === 'merge'
+                  ? 'historyImportModeMergeDescription'
+                  : 'historyImportModeReplaceDescription'
+              )}
+            </p>
+            <div className={styles.confirmActions}>
+              <button type="button" className={styles.confirm} disabled={busy} onClick={back}>
+                {t('cancel')}
+              </button>
+              <button
+                type="button"
+                className={styles.confirm}
+                disabled={busy}
+                data-danger={importMode === 'replace'}
+                onClick={() => void confirmAction()}
+              >
+                {t(
+                  importMode === 'merge'
+                    ? 'historyImportMergeConfirm'
+                    : 'historyImportReplaceConfirm'
+                )}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+      {popup === 'logout' || popup === 'delete' ? (
         <div className={styles.overlay}>
           <section className={styles.choice} role="dialog" aria-modal="true">
-            <header>
-              {popup === 'logout'
-                ? logout
-                : popup === 'delete'
-                  ? clear
-                  : t('historyImportConfirmTitle')}
-            </header>
+            <header>{popup === 'logout' ? logout : clear}</header>
             <p className={styles.message}>
               {popup === 'logout'
                 ? tr('确认退出当前 API Key？', 'Sign out of this API Key?')
-                : popup === 'delete'
-                  ? t('deleteAllSessionsModalDescription')
-                  : t('historyImportConfirmDescription')}
+                : t('deleteAllSessionsModalDescription')}
             </p>
             <div className={styles.confirmActions}>
               <button className={styles.confirm} disabled={busy} onClick={back}>
@@ -975,10 +1036,10 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
               <button
                 className={styles.confirm}
                 disabled={busy}
-                data-danger={popup !== 'import'}
+                data-danger
                 onClick={() => void confirmAction()}
               >
-                {t(popup === 'import' ? 'historyImportConfirm' : 'confirm')}
+                {t('confirm')}
               </button>
             </div>
           </section>

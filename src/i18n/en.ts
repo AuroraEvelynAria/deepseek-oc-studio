@@ -205,14 +205,30 @@ export const en = {
   historyImportEtaSeconds: '{seconds} sec',
   historyImportEtaMinutes: '{minutes} min',
   historyImportFinishing: 'Importing chat history… Processing attachments',
+  historyImportMerging: 'Importing chat history… Merging with local history',
   historyImportReplacing: 'Importing chat history… Replacing local history',
-  historyImportConfirmTitle: 'Import chat history?',
+  historyImportConfirmTitle: 'Import chat history',
   historyImportConfirmDescription:
     'The uploaded chat history will replace all your current chats. Import anyway?',
   historyImportDescription:
-    'Importing chat history replaces all local chats and attachments. Supports ZIP files exported from DeepSeek.',
+    'Supports ZIP files exported from DeepSeek. Merges into existing chats by default, with an option to replace.',
+  historyImportModeMerge: 'Merge into existing chats',
+  historyImportModeMergeDescription:
+    'Keep current chats, attachments, and drafts. Add new chats and merge new messages or branches.',
+  historyImportModeReplace: 'Replace all local chats',
+  historyImportModeReplaceDescription:
+    'Clear all current local chats, attachments, and unsent drafts, keeping only the imported archive.',
+  historyImportMergeConfirm: 'Merge',
+  historyImportReplaceConfirm: 'Replace all',
   historyImportedOne: 'Imported 1 chat',
   historyImported: 'Imported {count} chats',
+  historyMergedEmpty: 'No chats found in archive',
+  historyMergedNoChange: 'All chats are already up to date ({unchanged} unchanged)',
+  historyMergedSummary: 'Merged: {added} added, {merged} updated, {unchanged} unchanged',
+  historyMergedAddedOnly: 'Merged: {added} chats added',
+  historyMergedAddedOne: 'Merged: 1 chat added',
+  historyMergedUpdatedOnly: 'Merged: {merged} chats updated',
+  historyMergedUpdatedOne: 'Merged: 1 chat updated',
   historyImportFailed:
     'File import failed. The file format may be invalid, or the ZIP file may use an older chat export format. Please export your chat history from DeepSeek again and retry the import.',
   historyExportFailed: 'Export failed: {message}',
