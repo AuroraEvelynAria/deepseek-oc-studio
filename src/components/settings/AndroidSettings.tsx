@@ -277,7 +277,7 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
   const [file, setFile] = useState<File | null>(null)
   const [importMode, setImportMode] = useState<ImportMode>('merge')
   const [importStatus, setImportStatus] = useState<LinkedMessage | null>(null)
-  const [archive, setArchive] = useState<Awaited<ReturnType<typeof exportHistory>> | null>(null)
+  const [exportSavedName, setExportSavedName] = useState<string | null>(null)
   const importInput = useRef<HTMLInputElement>(null)
   const pagesRef = useRef<HTMLDivElement>(null)
   const motionRef = useRef<ReturnType<typeof createSettingsPageMotion>>()
@@ -693,7 +693,14 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
               {tr('。', '.')}
             </p>
             <Group>
-              <Row label={labels.export} disabled={busy} onClick={() => openPage('export')} />
+              <Row
+                label={labels.export}
+                disabled={busy}
+                onClick={() => {
+                  setExportSavedName(null)
+                  openPage('export')
+                }}
+              />
             </Group>
             <Group>
               <Row
@@ -741,32 +748,36 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
           <>
             <Group>
               <Row
-                label={archive ? tr('重新导出', 'Export again') : tr('导出', 'Export')}
+                label={tr('保存到设备', 'Save to device')}
                 arrow={false}
                 disabled={busy || !sessions}
                 onClick={() =>
                   void runExportAction(async () => {
-                    setArchive(await exportHistory())
+                    setExportSavedName(null)
+                    const exported = await exportHistory()
+                    if (android) {
+                      if (await saveAndroidHistory(exported.name, exported.blob)) {
+                        setExportSavedName(exported.name)
+                      }
+                      return
+                    }
+                    const url = URL.createObjectURL(exported.blob)
+                    const link = document.createElement('a')
+                    link.href = url
+                    link.download = exported.name
+                    link.click()
+                    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+                    setExportSavedName(exported.name)
                   })
                 }
               />
             </Group>
-            {archive ? (
-              <Group>
-                <Row
-                  label={tr('保存到设备', 'Save to device')}
-                  arrow={false}
-                  disabled={busy}
-                  onClick={() =>
-                    void runExportAction(() => saveAndroidHistory(archive.name, archive.blob))
-                  }
-                />
-              </Group>
-            ) : null}
             <p className={styles.caption} role="status">
               {busy
-                ? tr('正在处理归档…', 'Working on the archive…')
-                : (archive?.name ?? t(sessions ? 'historyExportDescription' : 'androidNoChats'))}
+                ? t('historyExporting')
+                : exportSavedName
+                  ? t('historyExportSaved', { name: exportSavedName })
+                  : t(sessions ? 'historyExportDescription' : 'androidNoChats')}
             </p>
           </>
         ) : null}
