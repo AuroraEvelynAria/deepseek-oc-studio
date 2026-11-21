@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { android } from '../../app/android.js'
 import { useIsMobile } from '../../app/viewport.js'
 import {
   buildMessageVersions,
@@ -9,10 +8,10 @@ import {
 import { selectMessageVersion } from '../../services/chat/store.js'
 import type { Session } from '../../services/chat/types.js'
 import { closeSearchPanel } from '../search/searchPanelState.js'
-import { useTranslate } from '../../i18n/index.js'
-import { IconChevronDownOutline14 } from '../base/icons.js'
 import { AssistantMessage } from './AssistantMessage.js'
+import { JumpToBottomButton } from './JumpToBottomButton.js'
 import { ScrollToBottomContext } from './scrollContext.js'
+import { prefersReducedMotion, stepCriticallyDampedSpring, type SpringState } from './spring.js'
 import { UserMessage } from './UserMessage.js'
 import type { Message } from '../../services/chat/types.js'
 
@@ -34,7 +33,9 @@ import styles from './MessageList.module.css'
 
 /** 距底部小于该值时视为在底部，流式内容增长时跟随 */
 const STICKY_THRESHOLD = 40
-const JUMP_TO_BOTTOM_THRESHOLD = 44.8
+const JUMP_TO_BOTTOM_THRESHOLD = 48
+const JUMP_TO_BOTTOM_MIN_HEIGHT = 64
+const JUMP_SCROLL_STIFFNESS = 700
 const EMPTY_VERSIONS: MessageVersions = { ids: [], index: -1 }
 const INITIAL_MESSAGES = 4
 const OLDER_MESSAGES = 8
@@ -49,11 +50,13 @@ export const MessageList = ({
   streaming: boolean
   footer: React.ReactNode
 }) => {
-  const t = useTranslate()
   const isMobile = useIsMobile()
   const scrollRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
+  const desktopFooterRef = useRef<HTMLDivElement>(null)
+  const jumpSlotRef = useRef<HTMLDivElement>(null)
   const stickyRef = useRef(true)
+  const jumpingRef = useRef(false)
   const scrollTopRef = useRef(0)
   const jumpFrameRef = useRef(0)
   const restoreScrollRef = useRef<{ messageId: string; top: number } | null>(null)
@@ -80,59 +83,120 @@ export const MessageList = ({
     setPreviousVersions(versions)
   }
   const lastMessageId = messages.at(-1)?.id
+  const cancelJump = useCallback(() => {
+    cancelAnimationFrame(jumpFrameRef.current)
+    jumpFrameRef.current = 0
+    jumpingRef.current = false
+  }, [])
+  const updateJumpVisibility = useCallback(() => {
+    const el = scrollRef.current
+    if (!el || stickyRef.current || jumpingRef.current) {
+      setShowJumpToBottom(false)
+      return
+    }
+    const footerHeight =
+      !isMobile && desktopFooterRef.current ? desktopFooterRef.current.offsetHeight : 0
+    const availableHeight = Math.max(0, el.clientHeight - footerHeight)
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight
+    setShowJumpToBottom(
+      availableHeight >= JUMP_TO_BOTTOM_MIN_HEIGHT && distance > JUMP_TO_BOTTOM_THRESHOLD
+    )
+  }, [isMobile])
   const scrollToBottom = useCallback(() => {
     const el = scrollRef.current
-    if (el && stickyRef.current) {
+    if (el && stickyRef.current && !jumpingRef.current) {
       el.scrollTop = el.scrollHeight
       scrollTopRef.current = el.scrollTop
       setShowJumpToBottom(false)
     }
   }, [])
   const stopFollowing = useCallback(() => {
+    cancelJump()
     stickyRef.current = false
-  }, [])
+    updateJumpVisibility()
+  }, [cancelJump, updateJumpVisibility])
   const jumpToBottom = useCallback(() => {
     const el = scrollRef.current
-    if (!el) {
+    if (!el || jumpingRef.current) {
       return
     }
-    stickyRef.current = true
-    setShowJumpToBottom(false)
-    cancelAnimationFrame(jumpFrameRef.current)
-    const start = el.scrollTop
-    const target = el.scrollHeight - el.clientHeight
-    if (target <= start) {
+    const initialTarget = Math.max(0, el.scrollHeight - el.clientHeight)
+    if (el.scrollTop >= initialTarget - 0.5 || prefersReducedMotion()) {
       el.scrollTop = el.scrollHeight
       scrollTopRef.current = el.scrollTop
+      stickyRef.current = true
+      setShowJumpToBottom(false)
       return
     }
-    const started = performance.now()
+    cancelJump()
+    jumpingRef.current = true
+    // 到达底部前不恢复 stickyRef，避免流式增长触发 ResizeObserver 瞬间拉底打断弹簧动画。
+    stickyRef.current = false
+    setShowJumpToBottom(false)
+
+    let state: SpringState = { value: el.scrollTop, velocity: 0 }
+    let lastTime = performance.now()
     const step = (now: number) => {
-      const progress = Math.min(1, (now - started) / 337)
-      const eased = 1 - (1 - progress) ** 3
-      el.scrollTop = start + (target - start) * eased
-      scrollTopRef.current = el.scrollTop
-      if (progress < 1) {
-        jumpFrameRef.current = requestAnimationFrame(step)
-      } else {
+      if (!jumpingRef.current || scrollRef.current !== el) {
+        jumpFrameRef.current = 0
+        jumpingRef.current = false
+        return
+      }
+      const target = Math.max(0, el.scrollHeight - el.clientHeight)
+      if (target <= 0) {
         el.scrollTop = el.scrollHeight
         scrollTopRef.current = el.scrollTop
+        jumpingRef.current = false
+        jumpFrameRef.current = 0
+        stickyRef.current = true
+        setShowJumpToBottom(false)
+        return
       }
+      const stepTime = now > lastTime ? now : lastTime
+      const dt = Math.min(0.05, (stepTime - lastTime) / 1000)
+      lastTime = stepTime
+      state = stepCriticallyDampedSpring(state, target, JUMP_SCROLL_STIFFNESS, dt)
+      if (state.value >= target) {
+        state = { value: target, velocity: Math.min(0, state.velocity) }
+      }
+      el.scrollTop = state.value
+      scrollTopRef.current = el.scrollTop
+      if (Math.abs(target - state.value) <= 0.5 && Math.abs(state.velocity) < 12) {
+        el.scrollTop = el.scrollHeight
+        scrollTopRef.current = el.scrollTop
+        jumpingRef.current = false
+        jumpFrameRef.current = 0
+        stickyRef.current = true
+        setShowJumpToBottom(false)
+        return
+      }
+      jumpFrameRef.current = requestAnimationFrame(step)
     }
     jumpFrameRef.current = requestAnimationFrame(step)
-  }, [])
-  // 内容、键盘和输入框高度变化时，继续遵循当前跟随状态。
+  }, [cancelJump])
+  // 内容、键盘和输入框高度变化时，继续遵循当前跟随状态，或刷新回到底部按钮的显示状态。
   useLayoutEffect(() => {
     const content = contentRef.current
     const scroll = scrollRef.current
+    const desktopFooter = desktopFooterRef.current
     if (!content || !scroll) {
       return
     }
-    const observer = new ResizeObserver(scrollToBottom)
+    const handleResize = () => {
+      if (stickyRef.current && !jumpingRef.current) {
+        scrollToBottom()
+      } else {
+        updateJumpVisibility()
+      }
+    }
+    const observer = new ResizeObserver(handleResize)
     observer.observe(content)
     observer.observe(scroll)
+    if (!isMobile && desktopFooter) {
+      observer.observe(desktopFooter)
+    }
     return () => observer.disconnect()
-  }, [isMobile, scrollToBottom])
+  }, [isMobile, scrollToBottom, updateJumpVisibility])
 
   // 首屏从最近几条消息开始。向上浏览时逐批补齐，保持原来的阅读位置。
   useLayoutEffect(() => {
@@ -153,11 +217,14 @@ export const MessageList = ({
 
     let frame = 0
     const loadOlder = () => {
-      if (frame) {
+      if (frame || jumpingRef.current) {
         return
       }
       frame = requestAnimationFrame(() => {
         frame = 0
+        if (jumpingRef.current) {
+          return
+        }
         const fits = scroll.scrollHeight - scroll.clientHeight <= STICKY_THRESHOLD
         if (!fits && (stickyRef.current || scroll.scrollTop > OLDER_THRESHOLD)) {
           return
@@ -192,40 +259,50 @@ export const MessageList = ({
         scroll.scrollTop += switcher.getBoundingClientRect().top - anchor.top
       }
       restoreScrollRef.current = null
+      scrollTopRef.current = scroll.scrollTop
+      updateJumpVisibility()
       return
     }
+    cancelJump()
     stickyRef.current = true
     scrollToBottom()
-  }, [session.id, lastMessageId, scrollToBottom])
+  }, [session.id, lastMessageId, cancelJump, scrollToBottom, updateJumpVisibility])
 
   useEffect(closeSearchPanel, [session.id, lastMessageId])
-  useEffect(() => () => cancelAnimationFrame(jumpFrameRef.current), [])
+  useEffect(() => cancelJump, [cancelJump])
 
   const selectVersion = useCallback(
     (messageId: string, anchorTop: number) => {
       if (streaming) {
         return
       }
+      cancelJump()
       restoreScrollRef.current = { messageId, top: anchorTop }
       stickyRef.current = false
       closeSearchPanel()
       selectMessageVersion(session.id, messageId)
     },
-    [session.id, streaming]
+    [cancelJump, session.id, streaming]
   )
 
-  // 跨移动端断点时切换滚动层，并保持输入框及当前阅读位置。
+  // 跨移动端断点时切换滚动层，并保持输入框、当前阅读位置与回到底部按钮状态。
   useLayoutEffect(() => {
     const el = scrollRef.current
     if (!el) {
       return
     }
+    cancelJump()
     if (stickyRef.current) {
       scrollToBottom()
     } else {
       el.scrollTop = scrollTopRef.current
+      updateJumpVisibility()
     }
     const onScroll = () => {
+      if (jumpingRef.current) {
+        scrollTopRef.current = el.scrollTop
+        return
+      }
       const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < STICKY_THRESHOLD
       // 仅在用户向上滚动时停止跟随底部，布局或内容增高时保持跟随状态。
       if (nearBottom) {
@@ -234,17 +311,47 @@ export const MessageList = ({
         stickyRef.current = false
       }
       scrollTopRef.current = el.scrollTop
-      if (android && isMobile) {
-        const distance = el.scrollHeight - el.scrollTop - el.clientHeight
-        setShowJumpToBottom(distance > JUMP_TO_BOTTOM_THRESHOLD)
+      updateJumpVisibility()
+    }
+    const interruptJump = (event: Event) => {
+      if (!jumpingRef.current) {
+        return
       }
+      const target = event.target
+      if (
+        target instanceof Node &&
+        (desktopFooterRef.current?.contains(target) || jumpSlotRef.current?.contains(target))
+      ) {
+        return
+      }
+      cancelJump()
+      stickyRef.current = false
+      scrollTopRef.current = el.scrollTop
+      updateJumpVisibility()
     }
     el.addEventListener('scroll', onScroll, { passive: true })
-    return () => el.removeEventListener('scroll', onScroll)
-  }, [isMobile, scrollToBottom])
+    el.addEventListener('touchstart', interruptJump, { passive: true })
+    el.addEventListener('pointerdown', interruptJump, { passive: true })
+    el.addEventListener('wheel', interruptJump, { passive: true })
+    return () => {
+      cancelJump()
+      el.removeEventListener('scroll', onScroll)
+      el.removeEventListener('touchstart', interruptJump)
+      el.removeEventListener('pointerdown', interruptJump)
+      el.removeEventListener('wheel', interruptJump)
+    }
+  }, [isMobile, cancelJump, scrollToBottom, updateJumpVisibility])
 
   const lastIndex = messages.length - 1
   const uploadRetryId = getUploadRetryId(messages, streaming)
+  const jumpButton = (
+    <JumpToBottomButton
+      visible={showJumpToBottom}
+      streaming={streaming}
+      resetKey={session.id}
+      onClick={jumpToBottom}
+    />
+  )
   return (
     <ScrollToBottomContext.Provider value={stopFollowing}>
       <div ref={isMobile ? undefined : scrollRef} className={styles.container}>
@@ -280,22 +387,22 @@ export const MessageList = ({
               })}
             </div>
           </div>
-          {android && isMobile && showJumpToBottom ? (
-            <button
-              type="button"
-              className={styles.jumpToBottom}
-              aria-label={t('jumpToBottom')}
-              tabIndex={-1}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={jumpToBottom}
-            >
-              <span className={styles.jumpToBottomIcon}>
-                <IconChevronDownOutline14 />
-              </span>
-            </button>
+          {isMobile ? (
+            <div ref={jumpSlotRef} className={styles.mobileJumpSlot}>
+              {jumpButton}
+            </div>
           ) : null}
         </div>
-        {footer}
+        {isMobile ? (
+          footer
+        ) : (
+          <div ref={desktopFooterRef} className={styles.desktopFooter}>
+            <div ref={jumpSlotRef} className={styles.desktopJumpSlot}>
+              {jumpButton}
+            </div>
+            {footer}
+          </div>
+        )}
       </div>
     </ScrollToBottomContext.Provider>
   )

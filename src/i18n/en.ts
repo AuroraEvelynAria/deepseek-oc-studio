@@ -19,7 +19,7 @@ export const en = {
   androidAutoRead: 'Read replies aloud automatically',
   androidAutoReadEnabled: 'Automatic read aloud on',
   androidAutoReadDisabled: 'Automatic read aloud off',
-  jumpToBottom: 'Scroll to bottom',
+  jumpToBottom: 'Go to bottom',
   androidAlreadyInNewChat: 'Already in new chat',
   androidCamera: 'Camera',
   androidGallery: 'Photos',
