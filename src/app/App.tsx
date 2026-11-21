@@ -101,7 +101,6 @@ export const App = () => {
   const configured = useSettings((state) => Boolean(state.apiKey || state.chatConfig.endpoint))
   const needsApiKey = Boolean(android && !configured)
   const drawerOpen = useMobileSider((state) => state.open)
-  const drawerGesture = useAndroidDrawerGesture()
   const mainRef = useRef<HTMLElement>(null)
   const locale = useSettings((state) => state.locale)
   const fontSize = useSettings((state) => state.fontSize)
@@ -111,6 +110,10 @@ export const App = () => {
   const saveError = Object.values(saveErrors).some(Boolean)
   const importingHistory = useChatStore((state) => state.importingHistory)
   const frameRef = useMobileViewport(isMobile && !needsApiKey)
+  const drawerGesture = useAndroidDrawerGesture(
+    frameRef,
+    Boolean(android && isMobile && !needsApiKey)
+  )
   const activeId = useChatStore((state) => state.activeId)
 
   useAndroidBackInterception(drawerOpen)
