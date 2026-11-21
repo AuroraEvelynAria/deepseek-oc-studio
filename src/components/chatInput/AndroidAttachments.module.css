@@ -107,6 +107,7 @@
     height: 84px;
     border: 0;
     border-radius: 18px;
+    background: rgba(0, 0, 0, 0.05);
     background: color-mix(in srgb, currentColor 5%, transparent);
     color: inherit;
     font: inherit;
@@ -118,9 +119,20 @@
     }
 
     &:active {
+      background: rgba(0, 0, 0, 0.1);
       background: color-mix(in srgb, currentColor 10%, transparent);
     }
   }
+}
+
+body[data-ds-dark-theme] .actions button {
+  background: rgba(255, 255, 255, 0.05);
+  background: color-mix(in srgb, currentColor 5%, transparent);
+}
+
+body[data-ds-dark-theme] .actions button:active {
+  background: rgba(255, 255, 255, 0.1);
+  background: color-mix(in srgb, currentColor 10%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {
