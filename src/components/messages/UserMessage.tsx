@@ -116,6 +116,7 @@ export const UserMessage = memo(function UserMessage({
             ref={textareaRef}
             className={styles.textarea}
             aria-label={t('editMessage')}
+            enterKeyHint={android || isMobile ? 'enter' : undefined}
             autoFocus
             rows={1}
             value={draft}
@@ -127,7 +128,13 @@ export const UserMessage = memo(function UserMessage({
               }
               if (event.key === 'Escape') {
                 setEditing(false)
-              } else if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !isMobile) {
+              } else if (
+                event.key === 'Enter' &&
+                !event.shiftKey &&
+                !event.ctrlKey &&
+                !android &&
+                !isMobile
+              ) {
                 event.preventDefault()
                 sendEdit()
               }

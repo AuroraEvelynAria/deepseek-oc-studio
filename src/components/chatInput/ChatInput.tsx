@@ -421,8 +421,15 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
                   event.currentTarget.focus({ preventScroll: true })
                 }
               }}
+              enterKeyHint={android || isMobile ? 'enter' : undefined}
               onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                if (
+                  !android &&
+                  !isMobile &&
+                  event.key === 'Enter' &&
+                  !event.shiftKey &&
+                  !event.nativeEvent.isComposing
+                ) {
                   event.preventDefault()
                   send()
                 }
