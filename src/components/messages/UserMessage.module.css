@@ -56,9 +56,9 @@
   border-left: 0.2px solid transparent;
   border-radius: 22px 22px 4px 22px;
   background-color: transparent;
-  font-size: 15px;
+  font-size: calc(15px * var(--android-chat-font-scale, 1));
   font-weight: 500;
-  line-height: 24.53px;
+  line-height: calc(24.53px * var(--android-chat-font-scale, 1));
   isolation: isolate;
   user-select: none;
 
