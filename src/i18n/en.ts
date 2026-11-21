@@ -101,6 +101,7 @@ export const en = {
   send: 'Send',
   editMessage: 'Edit message',
   androidEditMessage: 'Edit',
+  androidEditingMessage: 'Editing message',
   regenerate: 'Regenerate',
   continueGenerating: 'Continue',
   changeApiKey: 'Change API Key',

@@ -53,10 +53,13 @@ export const AndroidDraftAttachments = ({
       return
     }
     // 草稿移除时原预览 URL 已释放，退出动画持有独立 URL。
-    const retained = displayed.map((item) => ({
-      ...item,
-      previewUrl: item.isImage ? URL.createObjectURL(item.file) : null,
-    }))
+    const retained = displayed.map((item) => {
+      const source = item.file ?? item.blob
+      return {
+        ...item,
+        previewUrl: item.isImage && source ? URL.createObjectURL(source) : null,
+      }
+    })
     setDisplayed(retained)
     const release = () => {
       retained.forEach((item) => {

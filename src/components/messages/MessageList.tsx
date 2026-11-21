@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { android } from '../../app/android.js'
 import { useIsMobile } from '../../app/viewport.js'
 import {
   buildMessageVersions,
   getVisibleMessages,
   type MessageVersions,
 } from '../../services/chat/branches.js'
+import { cancelMessageEdit, useDrafts } from '../../services/chat/drafts.js'
 import { selectMessageVersion } from '../../services/chat/store.js'
 import type { Session } from '../../services/chat/types.js'
 import { closeSearchPanel } from '../search/searchPanelState.js'
@@ -51,15 +53,22 @@ export const MessageList = ({
   footer: React.ReactNode
 }) => {
   const isMobile = useIsMobile()
+  const scrollAreaRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const desktopFooterRef = useRef<HTMLDivElement>(null)
   const jumpSlotRef = useRef<HTMLDivElement>(null)
   const stickyRef = useRef(true)
   const jumpingRef = useRef(false)
+  const programmaticScrollRef = useRef(false)
   const scrollTopRef = useRef(0)
   const jumpFrameRef = useRef(0)
   const restoreScrollRef = useRef<{ messageId: string; top: number } | null>(null)
+  const editingMessageId = useDrafts((state) =>
+    android && state.editing?.sessionId === session.id ? state.editing.messageId : null
+  )
+  const editingMessageIdRef = useRef(editingMessageId)
+  editingMessageIdRef.current = editingMessageId
   const messages = useMemo(() => getVisibleMessages(session), [session])
   const latestStart = Math.max(0, messages.length - INITIAL_MESSAGES)
   const [messageWindow, setMessageWindow] = useState({ sessionId: session.id, start: latestStart })
@@ -108,6 +117,42 @@ export const MessageList = ({
       el.scrollTop = el.scrollHeight
       scrollTopRef.current = el.scrollTop
       setShowJumpToBottom(false)
+    }
+  }, [])
+  const ensureEditedBubbleVisible = useCallback(() => {
+    const scroll = scrollRef.current
+    const content = contentRef.current
+    if (!scroll || !content || !editingMessageIdRef.current) {
+      return
+    }
+    const bubble = content.querySelector<HTMLElement>(
+      '[data-editing-target="true"] [data-editing-bubble="true"]'
+    )
+    if (!bubble) {
+      return
+    }
+    const scrollRect = scroll.getBoundingClientRect()
+    const bubbleRect = bubble.getBoundingClientRect()
+    if (scrollRect.height <= 0 || bubbleRect.height <= 0) {
+      return
+    }
+    const margin = 12
+    let delta = 0
+    if (bubbleRect.bottom > scrollRect.bottom - margin) {
+      delta = bubbleRect.bottom - (scrollRect.bottom - margin)
+      if (bubbleRect.top - delta < scrollRect.top + margin) {
+        delta = Math.max(0, bubbleRect.top - (scrollRect.top + margin))
+      }
+    } else if (bubbleRect.top < scrollRect.top + margin) {
+      delta = bubbleRect.top - (scrollRect.top + margin)
+    }
+    if (Math.abs(delta) > 0.5) {
+      programmaticScrollRef.current = true
+      scroll.scrollTop += delta
+      scrollTopRef.current = scroll.scrollTop
+      requestAnimationFrame(() => {
+        programmaticScrollRef.current = false
+      })
     }
   }, [])
   const stopFollowing = useCallback(() => {
@@ -183,6 +228,11 @@ export const MessageList = ({
       return
     }
     const handleResize = () => {
+      if (editingMessageIdRef.current) {
+        stickyRef.current = false
+        ensureEditedBubbleVisible()
+        return
+      }
       if (stickyRef.current && !jumpingRef.current) {
         scrollToBottom()
       } else {
@@ -196,7 +246,115 @@ export const MessageList = ({
       observer.observe(desktopFooter)
     }
     return () => observer.disconnect()
-  }, [isMobile, scrollToBottom, updateJumpVisibility])
+  }, [isMobile, ensureEditedBubbleVisible, scrollToBottom, updateJumpVisibility])
+
+  useLayoutEffect(() => {
+    if (!editingMessageId) {
+      updateJumpVisibility()
+      return
+    }
+    cancelJump()
+    stickyRef.current = false
+    setShowJumpToBottom(false)
+    ensureEditedBubbleVisible()
+  }, [cancelJump, editingMessageId, ensureEditedBubbleVisible, updateJumpVisibility])
+
+  useEffect(() => {
+    if (!android || !editingMessageId) {
+      return
+    }
+    const area = scrollAreaRef.current
+    const scroll = scrollRef.current
+    if (!area || !scroll) {
+      return
+    }
+    let pointerDown: { x: number; y: number; pointerId: number } | null = null
+    let touchStart: { x: number; y: number } | null = null
+    let touchActive = false
+    let dismissed = false
+    const dismiss = () => {
+      if (dismissed) {
+        return
+      }
+      dismissed = true
+      pointerDown = null
+      touchStart = null
+      touchActive = false
+      cancelMessageEdit()
+      window.dispatchEvent(new Event('android-close-attachments'))
+    }
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.pointerType === 'mouse' && event.button !== 0) {
+        return
+      }
+      pointerDown = { x: event.clientX, y: event.clientY, pointerId: event.pointerId }
+    }
+    const onPointerMove = (event: PointerEvent) => {
+      if (!pointerDown || event.pointerId !== pointerDown.pointerId) {
+        return
+      }
+      if (Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) > 8) {
+        dismiss()
+      }
+    }
+    const onPointerUp = (event: PointerEvent) => {
+      if (!pointerDown || event.pointerId !== pointerDown.pointerId) {
+        return
+      }
+      dismiss()
+    }
+    const onPointerCancel = () => {
+      pointerDown = null
+    }
+    const onTouchStart = (event: TouchEvent) => {
+      const touch = event.touches[0]
+      if (touch) {
+        touchStart = { x: touch.clientX, y: touch.clientY }
+        touchActive = true
+      }
+    }
+    const onTouchMove = (event: TouchEvent) => {
+      const touch = event.touches[0]
+      if (!touch || !touchStart) {
+        return
+      }
+      if (Math.hypot(touch.clientX - touchStart.x, touch.clientY - touchStart.y) > 8) {
+        dismiss()
+      }
+    }
+    const onTouchEnd = () => {
+      touchStart = null
+      touchActive = false
+    }
+    const onWheel = () => dismiss()
+    const onScroll = () => {
+      if (!programmaticScrollRef.current && (pointerDown || touchActive)) {
+        dismiss()
+      }
+    }
+    area.addEventListener('pointerdown', onPointerDown)
+    area.addEventListener('pointermove', onPointerMove)
+    area.addEventListener('pointerup', onPointerUp)
+    area.addEventListener('pointercancel', onPointerCancel)
+    area.addEventListener('touchstart', onTouchStart, { passive: true })
+    area.addEventListener('touchmove', onTouchMove, { passive: true })
+    area.addEventListener('touchend', onTouchEnd, { passive: true })
+    area.addEventListener('touchcancel', onTouchEnd, { passive: true })
+    scroll.addEventListener('wheel', onWheel, { passive: true })
+    scroll.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      area.removeEventListener('pointerdown', onPointerDown)
+      area.removeEventListener('pointermove', onPointerMove)
+      area.removeEventListener('pointerup', onPointerUp)
+      area.removeEventListener('pointercancel', onPointerCancel)
+      area.removeEventListener('touchstart', onTouchStart)
+      area.removeEventListener('touchmove', onTouchMove)
+      area.removeEventListener('touchend', onTouchEnd)
+      area.removeEventListener('touchcancel', onTouchEnd)
+      scroll.removeEventListener('wheel', onWheel)
+      scroll.removeEventListener('scroll', onScroll)
+    }
+  }, [editingMessageId])
 
   // 首屏从最近几条消息开始。向上浏览时逐批补齐，保持原来的阅读位置。
   useLayoutEffect(() => {
@@ -358,7 +516,7 @@ export const MessageList = ({
   const uploadRetryId = getUploadRetryId(messages, streaming)
   const jumpButton = (
     <JumpToBottomButton
-      visible={showJumpToBottom}
+      visible={showJumpToBottom && !editingMessageId}
       streaming={streaming}
       resetKey={session.id}
       onClick={jumpToBottom}
@@ -367,9 +525,13 @@ export const MessageList = ({
   return (
     <ScrollToBottomContext.Provider value={stopFollowing}>
       <div ref={isMobile ? undefined : scrollRef} className={styles.container}>
-        <div className={styles.scrollArea}>
+        <div ref={scrollAreaRef} className={styles.scrollArea}>
           <div ref={isMobile ? scrollRef : undefined} className={styles.scroll}>
-            <div ref={contentRef} className={styles.column}>
+            <div
+              ref={contentRef}
+              className={styles.column}
+              data-editing-session={editingMessageId ? 'true' : undefined}
+            >
               {messages.slice(start).map((message, offset) => {
                 const index = start + offset
                 return message.role === 'user' ? (
@@ -381,6 +543,7 @@ export const MessageList = ({
                     isFirst={index === 0}
                     isLast={index === lastIndex || index === lastIndex - 1}
                     busy={streaming}
+                    editingTarget={editingMessageId === message.id}
                     versions={versions.get(message.id) ?? EMPTY_VERSIONS}
                     onSelectVersion={selectVersion}
                   />

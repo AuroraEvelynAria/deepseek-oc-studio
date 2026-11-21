@@ -37,11 +37,14 @@ import {
 import { prepareCustomAttachments } from './customAttachments.js'
 import * as db from './db.js'
 import {
+  cancelMessageEdit,
   clearAllDrafts,
   clearDraft,
   clearSentDraft,
+  clearSentEdit,
   getDraft,
   prepareDraftMessage,
+  type DraftFilePayload,
 } from './drafts.js'
 import { createLatestReminder } from './latestReminder.js'
 import {
@@ -598,6 +601,7 @@ export const mergeHistory = async (
 
 export const newChat = () => {
   if (!get().importingHistory) {
+    cancelMessageEdit()
     set({ activeId: null })
     trimSessionCache()
   }
@@ -605,6 +609,7 @@ export const newChat = () => {
 
 export const selectSession = (id: string) => {
   if (!get().importingHistory && get().sessions.some((session) => session.id === id)) {
+    cancelMessageEdit()
     touchSession(id)
     set({ activeId: id })
     void ensureSessionLoaded(id)
@@ -697,6 +702,24 @@ const removeSessionData = async (id: string): Promise<boolean> => {
 
 export const stopReply = (sessionId: string) => getStreamController(sessionId)?.abort()
 
+const stripFileBlobs = (files: readonly DraftFilePayload[]): FileAttachment[] =>
+  files.map(({ id, serverId, serverImage, name, size, isImage, mimeType }) => ({
+    id,
+    serverId,
+    serverImage,
+    name,
+    size,
+    isImage,
+    mimeType,
+  }))
+
+const appendPendingFiles = (sessionId: string, files: readonly DraftFilePayload[]) => {
+  const added = files.flatMap((file) => (file.blob ? [{ id: file.id, blob: file.blob }] : []))
+  if (added.length > 0) {
+    pendingFiles.set(sessionId, [...(pendingFiles.get(sessionId) ?? []), ...added])
+  }
+}
+
 /**
  * 提交指定会话的最新草稿；null 表示新建会话。
  * 同步接收成功才清空草稿，附件原件由会话接管；保存失败仍通过保存入口重试。
@@ -749,31 +772,17 @@ export const sendMessage = (targetSessionId: string | null) => {
     id: createId(),
     role: 'user',
     content: text,
-    files: files.map(({ id, serverId, serverImage, name, size, isImage, mimeType }) => ({
-      id,
-      serverId,
-      serverImage,
-      name,
-      size,
-      isImage,
-      mimeType,
-    })),
+    files: stripFileBlobs(files),
     createdAt: now,
   }
   const reply = createReply()
+  cancelMessageEdit()
   updateSession(sessionId, (session) => ({
     ...appendBranch(session, history.at(-1)?.id ?? null, [question, reply]),
-    title:
-      session.title ||
-      (files.length === 0 && SIMPLE_ARITHMETIC.test(text) ? text.trim() : ''),
+    title: session.title || (files.length === 0 && SIMPLE_ARITHMETIC.test(text) ? text.trim() : ''),
     updatedAt: now,
   }))
-  if (files.length > 0) {
-    pendingFiles.set(sessionId, [
-      ...(pendingFiles.get(sessionId) ?? []),
-      ...files.map(({ id, blob }) => ({ id, blob })),
-    ])
-  }
+  appendPendingFiles(sessionId, files)
   persist(sessionId)
   clearSentDraft(targetSessionId, customEndpoint)
   void streamReply(sessionId, reply, { history, question })
@@ -796,6 +805,7 @@ export const regenerateReply = (sessionId: string, messageId?: string) => {
   if (question?.role !== 'user' || path[index]?.role !== 'assistant') {
     return
   }
+  cancelMessageEdit()
   const history = path.slice(0, index - 1)
   const reply = createReply()
   updateSession(sessionId, (s) => ({
@@ -806,8 +816,13 @@ export const regenerateReply = (sessionId: string, messageId?: string) => {
   void streamReply(sessionId, reply, { history, question })
 }
 
-/** 编辑提问后新增同父版本，保留原文件；旧问题的所有回答与后续对话仍可切回。 */
-export const editMessage = (sessionId: string, messageId: string, content: string): boolean => {
+/** 编辑提问后新增同父版本；未显式传入文件列表时保留原消息附件。 */
+export const editMessage = (
+  sessionId: string,
+  messageId: string,
+  content: string,
+  nextFiles?: DraftFilePayload[]
+): boolean => {
   if (get().importingHistory || deletingSessions.has(sessionId)) {
     return false
   }
@@ -818,15 +833,19 @@ export const editMessage = (sessionId: string, messageId: string, content: strin
   const path = getVisibleMessages(session)
   const index = path.findIndex((message) => message.id === messageId)
   const previous = path[index]
+  if (previous?.role !== 'user') {
+    return false
+  }
   const text = content.trim()
-  if (previous?.role !== 'user' || (!text && previous.files.length === 0)) {
+  const files = nextFiles ?? previous.files
+  if (!text && files.length === 0) {
     return false
   }
   const question: UserMessage = {
     id: createId(),
     role: 'user',
     content: text,
-    files: previous.files,
+    files: stripFileBlobs(files),
     createdAt: Date.now(),
   }
   const reply = createReply()
@@ -834,7 +853,9 @@ export const editMessage = (sessionId: string, messageId: string, content: strin
     ...appendBranch(s, path[index - 1]?.id ?? null, [question, reply]),
     updatedAt: Date.now(),
   }))
+  appendPendingFiles(sessionId, files)
   persist(sessionId)
+  clearSentEdit(sessionId, messageId, Boolean(useSettings.getState().chatConfig.endpoint))
   void streamReply(sessionId, reply, { history: path.slice(0, index), question })
   return true
 }
@@ -846,6 +867,7 @@ export const selectMessageVersion = (sessionId: string, messageId: string) => {
   if (getStreamController(sessionId)) {
     return
   }
+  cancelMessageEdit()
   updateSession(sessionId, (session) => selectVersion(session, messageId))
   persist(sessionId)
 }

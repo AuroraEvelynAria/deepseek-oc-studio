@@ -3,7 +3,7 @@ import { memo } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import { useUploads, type UploadTask } from '../../services/attachments.js'
 import type { DraftAttachment } from '../../services/chat/drafts.js'
-import { IconCloseFill14, IconRefreshOutline16 } from '../base/icons.js'
+import { IconCloseFill14, IconPhotoErrorFill20, IconRefreshOutline16 } from '../base/icons.js'
 import { Tooltip } from '../base/Tooltip.js'
 import { FileCard } from '../files/FileCard.js'
 import styles from './ChatInput.module.css'
@@ -61,31 +61,39 @@ const AttachmentItem = ({
 }) => {
   const t = useTranslate()
   const task = useUploads((state) => state.tasks[item.id] ?? UPLOADING)
-  const status = ready ? 'done' : task.status
-  const error = !ready && task.status === 'error' ? t(task.error.key, task.error.params) : undefined
+  const status = ready || item.existing ? 'done' : task.status
+  const error =
+    status === 'error' && task.status === 'error' ? t(task.error.key, task.error.params) : undefined
   // 过大、格式不支持等重试无效的失败只提示原因，需删除后再发送
-  const retry = !ready && task.status === 'error' && task.retryable ? onRetry : undefined
+  const retry =
+    status === 'error' && task.status === 'error' && task.retryable ? onRetry : undefined
   const failed = status === 'error'
   const retryLabel = t('uploadRetry', { message: error ?? t('uploadFileStatusFailed') })
   // 「上传失败」只显示重试图标，其余原因写在图片上：可重试时在图标下方，不可重试时贴底
   const showReason = failed && error !== undefined && error !== t('uploadFileStatusFailed')
-  return item.previewUrl ? (
+  return item.isImage ? (
     <div
       className={clsx(styles.attachment, failed && styles.attachmentFailed)}
-      title={error ?? item.file.name}
+      title={error ?? item.name}
     >
-      {onPreview ? (
-        <button
-          type="button"
-          className={styles.previewImage}
-          aria-label={t('androidPreviewDraftImage', { name: item.file.name })}
-          onClick={onPreview}
-        >
-          <img src={item.previewUrl} alt="" />
-        </button>
-      ) : (
-        <img src={item.previewUrl} alt={item.file.name} />
-      )}
+      {item.previewUrl ? (
+        onPreview ? (
+          <button
+            type="button"
+            className={styles.previewImage}
+            aria-label={t('androidPreviewDraftImage', { name: item.name })}
+            onClick={onPreview}
+          >
+            <img src={item.previewUrl} alt="" />
+          </button>
+        ) : (
+          <img src={item.previewUrl} alt={item.name} />
+        )
+      ) : item.blob === null ? (
+        <span className={styles.missingImage} role="img" aria-label={item.name}>
+          <IconPhotoErrorFill20 />
+        </span>
+      ) : null}
       {status === 'uploading' ? <div className={styles.uploading} /> : null}
       {failed && retry ? (
         <Tooltip content={retryLabel}>
@@ -111,8 +119,8 @@ const AttachmentItem = ({
     </div>
   ) : (
     <FileCard
-      name={item.file.name}
-      size={item.file.size}
+      name={item.name}
+      size={item.size}
       status={status}
       error={error}
       onRetry={retry}
