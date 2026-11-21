@@ -49,7 +49,17 @@ export const useAndroidDrawerGesture = (
 
   useEffect(() => {
     const frame = frameRef.current
+    const clearDrag = () => {
+      gesture.current = null
+      if (!frame) {
+        return
+      }
+      delete frame.dataset.drawerDragging
+      frame.style.removeProperty('--drawer-progress')
+      frame.style.removeProperty('--drawer-radius')
+    }
     if (!enabled || !frame) {
+      clearDrag()
       return
     }
     // 抽屉横向拖动接管手势后阻止默认 touchmove，避免松手后 WebView 产生残留 fling 吞掉首次点击。
@@ -60,7 +70,10 @@ export const useAndroidDrawerGesture = (
       }
     }
     frame.addEventListener('touchmove', onTouchMove, { passive: false, capture: true })
-    return () => frame.removeEventListener('touchmove', onTouchMove, { capture: true })
+    return () => {
+      clearDrag()
+      frame.removeEventListener('touchmove', onTouchMove, { capture: true })
+    }
   }, [enabled, frameRef])
 
   const onPointerDownCapture = (event: PointerEvent<HTMLDivElement>) => {

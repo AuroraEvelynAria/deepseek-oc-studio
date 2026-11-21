@@ -14,6 +14,7 @@
 }
 
 [data-android] .container {
+  contain: style;
   padding-bottom: 10.37px;
 }
 

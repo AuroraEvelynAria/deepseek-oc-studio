@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { openAndroidPage } from '../../app/openAndroidPage.js'
 import { useAndroidBackInterception } from '../../app/useAndroidBackInterception.js'
+import { useIsAndroidWide } from '../../app/viewport.js'
 import { useTranslate } from '../../i18n/index.js'
 import type { Source } from '../../services/chat/view.js'
 import { formatDate } from '../../utils/format.js'
@@ -40,9 +41,10 @@ const AndroidSource = ({
   )
 }
 
-/** Android 搜索来源以底部面板显示，关闭时保留内容直到退出动画结束。 */
+/** Android 搜索来源：窄屏底部面板，宽屏（>= 840dp）对齐官方以居中模态弹窗显示。 */
 export const AndroidSearchPanel = () => {
   const t = useTranslate()
+  const isDialog = useIsAndroidWide()
   const entry = useSearchPanel((state) => state.entry)
   const sources = useSearchPanel((state) => state.sources)
   const title = useSearchPanel((state) => state.title)
@@ -87,6 +89,12 @@ export const AndroidSearchPanel = () => {
     const sheet = sheetRef.current
     const content = contentRef.current
     if (!entry || !overlay || !sheet || !content) {
+      return
+    }
+    if (isDialog) {
+      delete overlay.dataset.dragging
+      overlay.style.removeProperty('--result-drag-offset')
+      overlay.style.removeProperty('--result-scrim-opacity')
       return
     }
 
@@ -186,13 +194,19 @@ export const AndroidSearchPanel = () => {
       sheet.removeEventListener('touchend', touchEnd)
       sheet.removeEventListener('touchcancel', touchEnd)
     }
-  }, [displayed?.entry, entry])
+  }, [displayed?.entry, entry, isDialog])
 
   if (!displayed) {
     return null
   }
   return (
-    <div ref={overlayRef} className={styles.overlay} data-open={open} data-drawer-gesture-ignore="">
+    <div
+      ref={overlayRef}
+      className={styles.overlay}
+      data-open={open}
+      data-layout={isDialog ? 'dialog' : 'sheet'}
+      data-drawer-gesture-ignore=""
+    >
       <div className={styles.scrim} onClick={closeSearchPanel} aria-hidden="true" />
       <section
         ref={sheetRef}

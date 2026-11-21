@@ -1,14 +1,34 @@
 import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
+import { android } from './android.js'
 
-/** 窄于 768px 按移动端布局 */
+/** Web 端窄于 768px 按移动端布局；Android 客户端始终保持移动端交互壳层 */
 const query = window.matchMedia('not all and (min-width: 768px)')
+
+/** 与官方 Android 客户端一致：窗口宽度达到 840dp 时切换为横屏/平板分栏布局 */
+const androidWideQuery = window.matchMedia('(min-width: 840px)')
+
+const subscribeNoop = () => () => {}
 
 const subscribe = (onChange: () => void) => {
   query.addEventListener('change', onChange)
   return () => query.removeEventListener('change', onChange)
 }
 
-export const useIsMobile = () => useSyncExternalStore(subscribe, () => query.matches)
+const subscribeAndroidWide = (onChange: () => void) => {
+  androidWideQuery.addEventListener('change', onChange)
+  return () => androidWideQuery.removeEventListener('change', onChange)
+}
+
+export const useIsMobile = () =>
+  useSyncExternalStore(
+    android ? subscribeNoop : subscribe,
+    () => Boolean(android) || query.matches
+  )
+
+export const isAndroidWide = () => Boolean(android && androidWideQuery.matches)
+
+export const useIsAndroidWide = () =>
+  useSyncExternalStore(android ? subscribeAndroidWide : subscribeNoop, isAndroidWide)
 
 const preventPageScroll = (event: TouchEvent) => {
   if (event.touches.length !== 1) {

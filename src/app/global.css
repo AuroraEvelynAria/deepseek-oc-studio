@@ -50,6 +50,14 @@ body.change-theme *::after {
   transition: none !important;
 }
 
+[data-android],
+[data-android] body,
+[data-android] #root {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior-y: none;
+}
+
 @media not all and (min-width: 768px) {
   html,
   body,

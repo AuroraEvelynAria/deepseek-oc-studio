@@ -551,3 +551,66 @@ a.row:active,
     transform: translateY(100%);
   }
 }
+
+@keyframes dialog-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+/* 与官方 VoiceSelectBottomSheet 一致：>= 600dp 切换为居中 AppModalDialog（Medium 560dp / Expanded 720dp） */
+@media (min-width: 600px) {
+  .overlay[data-sheet] {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .voiceSheet {
+    width: calc(100% - 32px);
+    max-width: 560px;
+    height: 460px;
+    max-height: calc(100% - 64px);
+    border-radius: 24px;
+    animation: dialog-enter 180ms cubic-bezier(0.2, 0, 0, 1);
+  }
+}
+
+@media (min-width: 600px) and (min-height: 444px) and (max-height: 479.98px) {
+  .voiceSheet {
+    max-height: 380px;
+  }
+}
+
+@media (min-width: 600px) and (max-height: 440px) {
+  .voiceArt {
+    width: 140px;
+    height: 76px;
+    margin-bottom: 4px;
+  }
+
+  .dots {
+    margin-top: 8px;
+  }
+}
+
+/* 与官方 SettingsPageProps（Li3a.b = 768dp，左右 16dp）一致：超宽时居中限宽 768dp */
+@media (min-width: 800px) {
+  .scroll {
+    padding-inline: calc((100% - 768px) / 2);
+  }
+
+  .fontPanel {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 768px;
+    margin-inline: auto;
+  }
+}
+
+@media (min-width: 840px) {
+  .voiceSheet {
+    max-width: 720px;
+  }
+}

@@ -243,9 +243,17 @@
   padding-top: var(--android-status-inset, 0px);
   background: var(--dsw-alias-bg-base);
   transform: translateX(calc((var(--drawer-progress) - 1) * 100%));
-  will-change: transform;
-  transition: transform var(--drawer-transition);
+  visibility: hidden;
+  transition:
+    transform var(--drawer-transition),
+    visibility var(--drawer-transition);
   box-sizing: border-box;
+}
+
+[data-android] [data-drawer-layout='modal'][data-drawer-open='true'] .drawer,
+[data-android] [data-drawer-layout='modal'][data-drawer-dragging] .drawer {
+  visibility: visible;
+  will-change: transform;
 }
 
 [data-android] .drawer::after {
@@ -261,6 +269,47 @@
 
 [data-android] .drawerMask {
   left: var(--drawer-edge);
+}
+
+/* Android 横屏/平板（>= 840px）：左侧 326dp 固定分栏，可通过顶栏按钮平滑展开/收起 */
+[data-android] [data-drawer-layout='side'] .drawer {
+  position: relative;
+  top: auto;
+  bottom: auto;
+  left: auto;
+  z-index: 3;
+  flex: 0 0 auto;
+  width: 326px;
+  height: 100%;
+  margin-left: -326px;
+  padding-top: var(--android-status-inset, 0px);
+  padding-bottom: var(--android-button-nav-inset, 0px);
+  border-right: 1px solid transparent;
+  transform: none;
+  visibility: hidden;
+  pointer-events: none;
+  will-change: auto;
+  transition:
+    margin-left 200ms cubic-bezier(0.2, 0, 0, 1),
+    border-right-color 200ms cubic-bezier(0.2, 0, 0, 1),
+    visibility 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+[data-android] [data-drawer-layout='side'][data-drawer-open='true'] .drawer {
+  margin-left: 0;
+  border-right-color: var(--dsw-alias-border-l2);
+  visibility: visible;
+  pointer-events: auto;
+}
+
+[data-android] [data-drawer-layout='side'] .drawer::after {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-android] [data-drawer-layout='side'] .drawer {
+    transition: none;
+  }
 }
 
 [data-android] .list {

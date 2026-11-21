@@ -427,6 +427,14 @@ public final class MainActivity extends Activity {
     }
 
     @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        if (frame != null) {
+            frame.requestApplyInsets();
+        }
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
         updater.resume();

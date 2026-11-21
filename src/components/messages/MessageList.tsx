@@ -299,19 +299,31 @@ export const MessageList = ({
       updateJumpVisibility()
     }
     const onScroll = () => {
+      const scrollTop = el.scrollTop
       if (jumpingRef.current) {
-        scrollTopRef.current = el.scrollTop
+        scrollTopRef.current = scrollTop
         return
       }
-      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < STICKY_THRESHOLD
+      const clientHeight = el.clientHeight
+      const scrollHeight = el.scrollHeight
+      const distance = scrollHeight - scrollTop - clientHeight
       // 仅在用户向上滚动时停止跟随底部，布局或内容增高时保持跟随状态。
-      if (nearBottom) {
+      if (distance < STICKY_THRESHOLD) {
         stickyRef.current = true
-      } else if (el.scrollTop < scrollTopRef.current) {
+      } else if (scrollTop < scrollTopRef.current) {
         stickyRef.current = false
       }
-      scrollTopRef.current = el.scrollTop
-      updateJumpVisibility()
+      scrollTopRef.current = scrollTop
+      if (stickyRef.current) {
+        setShowJumpToBottom(false)
+        return
+      }
+      const footerHeight =
+        !isMobile && desktopFooterRef.current ? desktopFooterRef.current.offsetHeight : 0
+      const availableHeight = Math.max(0, clientHeight - footerHeight)
+      setShowJumpToBottom(
+        availableHeight >= JUMP_TO_BOTTOM_MIN_HEIGHT && distance > JUMP_TO_BOTTOM_THRESHOLD
+      )
     }
     const interruptJump = (event: Event) => {
       if (!jumpingRef.current) {

@@ -38,7 +38,7 @@ import {
   IconRefreshOutline16,
 } from '../base/icons.js'
 import { showToast } from '../base/toastState.js'
-import { closeMobileSider } from '../sider/mobileSiderState.js'
+import { closeOverlaySider } from '../sider/mobileSiderState.js'
 import { ApiKeyConfirm, ApiKeyField, useApiKeyEditor } from './ApiKeyField.js'
 import { AdvancedApiSettings } from './AdvancedApiSettings.js'
 import { createSettingsPageMotion } from './androidSettingsMotion.js'
@@ -424,7 +424,7 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
     if (exiting.current) {
       return
     }
-    closeMobileSider()
+    closeOverlaySider()
     enterNext.current = true
     setPage(next)
   }
@@ -452,7 +452,7 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
       finish()
       return
     }
-    closeMobileSider()
+    closeOverlaySider()
     exiting.current = true
     void motion.play('back').then((finished) => {
       if (motionRef.current !== motion) {
@@ -487,7 +487,7 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
       void motion.play('enter').then((finished) => {
         if (finished && motionRef.current === motion && !exiting.current) {
           motion.cancel()
-          closeMobileSider()
+          closeOverlaySider()
         }
       })
     }
@@ -507,7 +507,7 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
     const unsubscribe = subscribeToAndroidBackPreview((preview) => {
       if (!exiting.current) {
         if (preview && !previewing) {
-          closeMobileSider()
+          closeOverlaySider()
         }
         previewing = Boolean(preview)
         motion.seek(preview?.progress ?? 0)
@@ -992,7 +992,15 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
         />
       ) : null}
       {popup === 'voice' ? (
-        <div className={styles.overlay} data-sheet="">
+        <div
+          className={styles.overlay}
+          data-sheet=""
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              back()
+            }
+          }}
+        >
           <section className={styles.voiceSheet} role="dialog" aria-modal="true" aria-label={voice}>
             <header>
               {voice}

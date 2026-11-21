@@ -12,6 +12,7 @@
 }
 
 [data-android] .message {
+  contain: layout style;
   padding: 11.38px 0 0 4px;
 
   :global(.ds-assistant-message-main-content) {

@@ -3,7 +3,13 @@ import { android } from './android.js'
 import { useAndroidBackInterception } from './useAndroidBackInterception.js'
 import { useTranslate } from '../i18n/index.js'
 import { useSettings } from '../services/settings.js'
-import { useIsMobile, useMobileViewport, usePreventPageScroll } from './viewport.js'
+import {
+  isAndroidWide,
+  useIsAndroidWide,
+  useIsMobile,
+  useMobileViewport,
+  usePreventPageScroll,
+} from './viewport.js'
 import {
   bindChatPersistence,
   initChat,
@@ -26,7 +32,11 @@ import { onUploadNotice } from '../services/attachments.js'
 import { Button } from '../components/base/Button.js'
 import { stopReadAloud } from '../services/speech/readAloud.js'
 import { CollapsedSider } from '../components/sider/CollapsedSider.js'
-import { closeMobileSider, useMobileSider } from '../components/sider/mobileSiderState.js'
+import {
+  closeMobileSider,
+  openMobileSider,
+  useMobileSider,
+} from '../components/sider/mobileSiderState.js'
 import { MobileSider, Sider } from '../components/sider/Sider.js'
 import { useAndroidDrawerGesture } from '../components/sider/useAndroidDrawerGesture.js'
 import styles from './App.module.css'
@@ -98,10 +108,13 @@ const ChatContent = memo(function ChatContent({
 export const App = () => {
   const t = useTranslate()
   const isMobile = useIsMobile()
+  const androidWide = useIsAndroidWide()
   const configured = useSettings((state) => Boolean(state.apiKey || state.chatConfig.endpoint))
   const needsApiKey = Boolean(android && !configured)
   const drawerOpen = useMobileSider((state) => state.open)
+  const modalDrawerOpen = drawerOpen && !androidWide
   const mainRef = useRef<HTMLElement>(null)
+  const prevAndroidWideRef = useRef(androidWide)
   const locale = useSettings((state) => state.locale)
   const fontSize = useSettings((state) => state.fontSize)
   // 移动端侧边栏以独立抽屉管理开合状态
@@ -109,14 +122,14 @@ export const App = () => {
   const saveErrors = useChatStore((state) => state.sessionSaveErrors)
   const saveError = Object.values(saveErrors).some(Boolean)
   const importingHistory = useChatStore((state) => state.importingHistory)
-  const frameRef = useMobileViewport(isMobile && !needsApiKey)
+  const frameRef = useMobileViewport(isMobile && !android && !needsApiKey)
   const drawerGesture = useAndroidDrawerGesture(
     frameRef,
-    Boolean(android && isMobile && !needsApiKey)
+    Boolean(android && !androidWide && !needsApiKey)
   )
   const activeId = useChatStore((state) => state.activeId)
 
-  useAndroidBackInterception(drawerOpen)
+  useAndroidBackInterception(modalDrawerOpen)
   usePreventPageScroll(isMobile && !android)
 
   useEffect(() => {
@@ -132,9 +145,9 @@ export const App = () => {
 
   useEffect(() => {
     if (mainRef.current) {
-      mainRef.current.inert = Boolean(android && isMobile && drawerOpen)
+      mainRef.current.inert = Boolean(android && modalDrawerOpen)
     }
-  }, [drawerOpen, isMobile])
+  }, [modalDrawerOpen])
 
   // 文件数、存储空间达到上限时，附件上只显示「上传失败」，原因用 toast 说明
   useEffect(() => onUploadNotice(showToast), [])
@@ -144,12 +157,24 @@ export const App = () => {
   useEffect(closeSearchPanel, [activeId])
   // 切换会话时停止朗读
   useEffect(stopReadAloud, [activeId])
-  // 移动端切换布局后收起抽屉；会话行点击负责在按压反馈后关闭
+  // Web 窄屏切换布局时收起抽屉；Android 跨 840dp 断点时与官方一致（窄→宽展开，宽→窄收起）
   useEffect(() => {
-    if (isMobile) {
+    if (!android) {
+      if (isMobile) {
+        closeMobileSider()
+      }
+      return
+    }
+    if (prevAndroidWideRef.current === androidWide) {
+      return
+    }
+    prevAndroidWideRef.current = androidWide
+    if (androidWide) {
+      openMobileSider()
+    } else {
       closeMobileSider()
     }
-  }, [isMobile])
+  }, [androidWide, isMobile])
 
   useEffect(() => {
     void initChat()
@@ -171,7 +196,7 @@ export const App = () => {
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
       } else if (useSearchPanel.getState().entry) {
         closeSearchPanel()
-      } else if (useMobileSider.getState().open) {
+      } else if (!isAndroidWide() && useMobileSider.getState().open) {
         closeMobileSider()
       } else {
         return
@@ -192,7 +217,8 @@ export const App = () => {
         ref={frameRef}
         className={styles.frame}
         data-drawer-open={drawerOpen}
-        {...(android && isMobile ? drawerGesture : {})}
+        data-drawer-layout={android ? (androidWide ? 'side' : 'modal') : undefined}
+        {...(android && !androidWide ? drawerGesture : {})}
       >
         {isMobile ? <MobileSider /> : siderCollapsed ? null : <Sider />}
         <main ref={mainRef} className={styles.main}>

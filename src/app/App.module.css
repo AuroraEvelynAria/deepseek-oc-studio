@@ -21,6 +21,9 @@
 }
 
 [data-android] .frame {
+  position: fixed;
+  inset: 0;
+  height: auto;
   --drawer-edge: calc(100% - 79.6px);
   --drawer-progress: 0;
   --drawer-radius: 0px;
@@ -28,9 +31,10 @@
   touch-action: pan-y;
 }
 
-@media (min-width: 459.6px) {
+/* 与官方 Android 端一致：抽屉宽度上限为 326dp（窄屏手机保持 calc(100% - 79.6px)） */
+@media (min-width: 405.6px) {
   [data-android] .frame {
-    --drawer-edge: 380px;
+    --drawer-edge: 326px;
   }
 }
 
@@ -55,23 +59,23 @@
   pointer-events: none;
 }
 
-[data-android] .frame[data-drawer-open='true'],
-[data-android] .frame[data-drawer-dragging] {
+[data-android] .frame[data-drawer-layout='modal'][data-drawer-open='true'],
+[data-android] .frame[data-drawer-layout='modal'][data-drawer-dragging] {
   --drawer-transform: translateX(calc(var(--drawer-edge) * var(--drawer-progress)))
     scale(calc(1 - 0.0504 * var(--drawer-progress)));
 }
 
-[data-android] .frame[data-drawer-open='true']::before,
-[data-android] .frame[data-drawer-dragging]::before {
+[data-android] .frame[data-drawer-layout='modal'][data-drawer-open='true']::before,
+[data-android] .frame[data-drawer-layout='modal'][data-drawer-dragging]::before {
   visibility: visible;
 }
 
-[data-android] .frame[data-drawer-open='true'] {
+[data-android] .frame[data-drawer-layout='modal'][data-drawer-open='true'] {
   --drawer-progress: 1;
   --drawer-radius: 36px;
 }
 
-[data-android] .frame[data-drawer-dragging] {
+[data-android] .frame[data-drawer-layout='modal'][data-drawer-dragging] {
   --drawer-transition: 0ms;
 }
 
@@ -81,7 +85,7 @@
   transform: var(--drawer-transform, none);
 }
 
-/* 单独绘制阴影，动画期间只改变它的位置和透明度。 */
+/* 单独绘制阴影，仅在抽屉展开或拖动期间可见并提升合成层，静止关闭时释放显存。 */
 [data-android] .frame::after {
   content: '';
   position: absolute;
@@ -90,11 +94,18 @@
   border-radius: 36px;
   box-shadow: -7px 3px 33px rgb(0 0 0 / 0.12);
   opacity: var(--drawer-progress);
+  visibility: hidden;
   pointer-events: none;
-  will-change: transform, opacity;
   transition:
     transform var(--drawer-transition),
-    opacity var(--drawer-transition);
+    opacity var(--drawer-transition),
+    visibility var(--drawer-transition);
+}
+
+[data-android] .frame[data-drawer-layout='modal'][data-drawer-open='true']::after,
+[data-android] .frame[data-drawer-layout='modal'][data-drawer-dragging]::after {
+  visibility: visible;
+  will-change: transform, opacity;
 }
 
 [data-android] .main {
@@ -111,8 +122,8 @@
     border-radius var(--drawer-transition);
 }
 
-[data-android] .frame[data-drawer-open='true'] .main,
-[data-android] .frame[data-drawer-dragging] .main {
+[data-android] .frame[data-drawer-layout='modal'][data-drawer-open='true'] .main,
+[data-android] .frame[data-drawer-layout='modal'][data-drawer-dragging] .main {
   will-change: transform;
 }
 
@@ -124,8 +135,38 @@
   border-radius: inherit;
   background: var(--dsw-alias-bg-base);
   opacity: calc(0.7 * var(--drawer-progress));
-  transition: opacity var(--drawer-transition);
+  visibility: hidden;
+  transition:
+    opacity var(--drawer-transition),
+    visibility var(--drawer-transition);
   pointer-events: none;
+}
+
+[data-android] .frame[data-drawer-layout='modal'][data-drawer-open='true'] .main::after,
+[data-android] .frame[data-drawer-layout='modal'][data-drawer-dragging] .main::after {
+  visibility: visible;
+}
+
+/* 横屏/平板（>= 840px）改为左右并排分栏，关闭模态抽屉圆角缩放、蒙层和全屏阴影。 */
+[data-android] .frame[data-drawer-layout='side'] {
+  --drawer-edge: 326px;
+  --drawer-progress: 0;
+  --drawer-radius: 0px;
+  --drawer-transform: none;
+  touch-action: auto;
+}
+
+[data-android] .frame[data-drawer-layout='side']::before,
+[data-android] .frame[data-drawer-layout='side']::after,
+[data-android] .frame[data-drawer-layout='side'] .main::after {
+  display: none;
+}
+
+[data-android] .frame[data-drawer-layout='side'] .main {
+  transform: none;
+  border-radius: 0;
+  will-change: auto;
+  transition: none;
 }
 
 .saveError {

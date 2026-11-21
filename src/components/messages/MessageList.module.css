@@ -41,7 +41,27 @@
   }
 }
 
+[data-android] .container {
+  overflow: hidden;
+  scrollbar-gutter: auto;
+}
+
+[data-android] .scrollArea {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
 [data-android] .scroll {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-color: var(--scroll-color) transparent;
   touch-action: pan-y;
 }
 
@@ -51,6 +71,18 @@
   bottom: 14px;
   z-index: 5;
   pointer-events: none;
+}
+
+[data-android] .mobileJumpSlot {
+  left: 50%;
+  right: auto;
+  display: flex;
+  justify-content: flex-end;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 808px;
+  padding-right: 22px;
+  transform: translateX(-50%);
 }
 
 .desktopFooter {
@@ -89,4 +121,12 @@
   max-width: calc(100% - 40px);
   margin: 0 auto;
   padding-bottom: 24px;
+}
+
+/* 与官方 Android 端一致：正文最大内容宽度 768dp（含左右各 20px 内边距共 808px） */
+[data-android] .column {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 808px;
+  padding: 0 20px 24px;
 }

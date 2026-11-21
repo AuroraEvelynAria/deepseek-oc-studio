@@ -1,6 +1,7 @@
 import clsx from 'clsx'
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { android } from '../../app/android.js'
+import { useIsAndroidWide } from '../../app/viewport.js'
 import { useTranslate } from '../../i18n/index.js'
 import {
   IconPanelLeftOutline16,
@@ -25,7 +26,7 @@ import { SessionItem } from './SessionItem.js'
 import { useSessionSearch } from './useSessionSearch.js'
 import styles from './Sider.module.css'
 
-const ROW_OVERSCAN = 8
+const ROW_OVERSCAN = 10
 
 /** 展开的侧边栏：名称与收起按钮、开启新对话、按时间分组的会话列表、底部设置；移动端放在抽屉里，收起按钮关闭抽屉 */
 export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean }) {
@@ -76,22 +77,35 @@ export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean 
     if (!list) {
       return
     }
-    const update = () => {
-      const top = list.scrollTop
+    const bucketSize = rowHeight * 2
+    let frame = 0
+    const sync = () => {
+      // 按两行高度量化滚动位置，避免 120Hz 滚动时每像素触发整个侧边栏重渲染。
+      const top = Math.floor(list.scrollTop / bucketSize) * bucketSize
       const height = list.clientHeight
       setViewport((previous) =>
         previous.top === top && previous.height === height ? previous : { top, height }
       )
     }
-    const observer = new ResizeObserver(update)
-    observer.observe(list)
-    list.addEventListener('scroll', update, { passive: true })
-    update()
-    return () => {
-      observer.disconnect()
-      list.removeEventListener('scroll', update)
+    const schedule = () => {
+      if (frame) {
+        return
+      }
+      frame = requestAnimationFrame(() => {
+        frame = 0
+        sync()
+      })
     }
-  }, [])
+    const observer = new ResizeObserver(sync)
+    observer.observe(list)
+    list.addEventListener('scroll', schedule, { passive: true })
+    sync()
+    return () => {
+      cancelAnimationFrame(frame)
+      observer.disconnect()
+      list.removeEventListener('scroll', schedule)
+    }
+  }, [rowHeight])
   const [deleting, setDeleting] = useState<SessionSummary[]>([])
   const deleteOne = useCallback((session: SessionSummary) => setDeleting([session]), [])
   const togglePinned = useCallback(
@@ -390,14 +404,20 @@ export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean 
   )
 })
 
-/** 移动端抽屉：浮在页面上方，点空白区域关闭。 */
+/** 移动端侧边栏：窄屏为浮层抽屉（点遮罩关闭）；Android 宽屏为左侧分栏（无遮罩）。 */
 export const MobileSider = memo(function MobileSider() {
   const t = useTranslate()
   const open = useMobileSider((state) => state.open)
+  const androidWide = useIsAndroidWide()
   const drawer = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    if (drawer.current) {
-      drawer.current.inert = !open
+    const el = drawer.current
+    if (!el) {
+      return
+    }
+    el.inert = !open
+    if (!open && el.contains(document.activeElement) && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur()
     }
   }, [open])
   if (!android && !open) {
@@ -405,7 +425,7 @@ export const MobileSider = memo(function MobileSider() {
   }
   return (
     <>
-      {open ? (
+      {open && !androidWide ? (
         <div
           className={styles.drawerMask}
           role="button"

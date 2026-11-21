@@ -1,6 +1,7 @@
 import clsx from 'clsx'
 import { memo, useEffect, useRef, useState } from 'react'
 import { android } from '../../app/android.js'
+import { isAndroidWide } from '../../app/viewport.js'
 import { useTranslate } from '../../i18n/index.js'
 import {
   IconEditOutline16,
@@ -46,6 +47,9 @@ export const SessionItem = memo(function SessionItem({
     selectSession(session.id)
     if (!android) {
       closeMobileSider()
+      return
+    }
+    if (isAndroidWide()) {
       return
     }
     window.clearTimeout(closeTimerRef.current)

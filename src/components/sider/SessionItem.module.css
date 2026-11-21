@@ -54,9 +54,10 @@
 }
 
 [data-android] .item {
-  content-visibility: auto;
+  contain: layout style;
   padding-inline: 20.6222px;
   height: 44.8px;
+  border-radius: 16px;
   user-select: none;
 
   &.active {
