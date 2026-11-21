@@ -524,24 +524,59 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   min-height: 44px;
   margin: 0;
-  padding: 0 6px 4px 10px;
+  padding: 0 10px 4px 10px;
   box-sizing: border-box;
 }
 
 [data-android] .toggles {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   flex: 1;
   min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  &[data-fade='right'] {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent 100%);
+    mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent 100%);
+  }
+
+  &[data-fade='left'] {
+    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 16px, #000 100%);
+    mask-image: linear-gradient(to right, transparent 0, #000 16px, #000 100%);
+  }
+
+  &[data-fade='both'] {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 16px,
+      #000 calc(100% - 20px),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 16px,
+      #000 calc(100% - 20px),
+      transparent 100%
+    );
+  }
 }
 
 [data-android] .toggle {
-  height: 32px;
-  padding-inline: 11px;
+  height: 31px;
+  padding-inline: 9px;
   font-size: 13px;
   font-weight: 400;
   border-width: 1px;
@@ -553,8 +588,8 @@
     transform 100ms;
 
   svg {
-    width: 16px;
-    height: 16px;
+    width: 15px;
+    height: 15px;
   }
 
   &:active {
@@ -566,14 +601,26 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  gap: 2px;
+  gap: 6px;
   margin-left: auto;
 }
 
-[data-android] .sendButton {
+[data-android] .androidToolButton {
+  position: relative;
   width: 32px;
   height: 32px;
-  margin: 0 5px 0 3px;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: -6px -2px;
+  }
+}
+
+[data-android] .sendButton {
+  width: 30px;
+  height: 30px;
+  margin: 0;
 }
 
 .holdButton {

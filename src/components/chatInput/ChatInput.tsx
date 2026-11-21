@@ -111,6 +111,33 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
       return
     }
 
+    if (android) {
+      toggles.classList.remove(styles.collapsedToggles)
+      const updateFade = () => {
+        const overflow = toggles.scrollWidth - toggles.clientWidth > 1
+        const fadeLeft = overflow && toggles.scrollLeft > 1
+        const fadeRight =
+          overflow && toggles.scrollLeft + toggles.clientWidth < toggles.scrollWidth - 1
+        const fade =
+          fadeLeft && fadeRight ? 'both' : fadeRight ? 'right' : fadeLeft ? 'left' : ''
+        if (fade) {
+          toggles.dataset.fade = fade
+        } else {
+          delete toggles.dataset.fade
+        }
+      }
+
+      updateFade()
+      const observer = new ResizeObserver(updateFade)
+      observer.observe(toggles)
+      toggles.addEventListener('scroll', updateFade, { passive: true })
+      return () => {
+        observer.disconnect()
+        toggles.removeEventListener('scroll', updateFade)
+        delete toggles.dataset.fade
+      }
+    }
+
     const updateLabels = () => {
       toggles.classList.remove(styles.collapsedToggles)
       toggles.classList.toggle(styles.collapsedToggles, toggles.scrollWidth > toggles.clientWidth)
@@ -454,6 +481,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
                 <IconButton
                   size="xl"
                   tone="primary"
+                  className={styles.androidToolButton}
                   icon={<AndroidCircle icon={showAttachments ? 'close' : 'add'} />}
                   aria-label={t(showAttachments ? 'close' : 'uploadFile')}
                   aria-expanded={showAttachments}
@@ -467,6 +495,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
                   <IconButton
                     size="xl"
                     tone="primary"
+                    className={styles.androidToolButton}
                     icon={<AndroidCircle icon={voiceMode ? 'keys' : 'voice'} />}
                     aria-label={t(voiceMode ? 'androidTextMode' : 'androidVoiceMode')}
                     aria-pressed={voiceMode}

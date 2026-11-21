@@ -28,6 +28,7 @@ declare const styles: {
   readonly toggle: string
   readonly selected: string
   readonly right: string
+  readonly androidToolButton: string
   readonly sendButton: string
   readonly disabled: string
 }
