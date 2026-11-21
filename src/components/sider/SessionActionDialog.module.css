@@ -55,15 +55,15 @@
     font: inherit;
     cursor: pointer;
 
-    & + & {
-      border-left: 1px solid var(--dsw-alias-border-l2);
-    }
-
     &:disabled {
       opacity: 0.45;
       cursor: default;
     }
   }
+}
+
+.actions button + button {
+  border-left: 1px solid var(--dsw-alias-border-l2);
 }
 
 .confirm {

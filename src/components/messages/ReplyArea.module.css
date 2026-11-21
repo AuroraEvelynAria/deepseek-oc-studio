@@ -194,17 +194,15 @@
   );
 }
 
-.withLine,
-.content {
-  &::after {
-    content: '';
-    position: absolute;
-    left: 7.5px;
-    top: 31px;
-    width: 1px;
-    height: calc(100% - 24px);
-    background-color: var(--dsw-alias-label-dimmed);
-  }
+.withLine::after,
+.content::after {
+  content: '';
+  position: absolute;
+  left: 7.5px;
+  top: 31px;
+  width: 1px;
+  height: calc(100% - 24px);
+  background-color: var(--dsw-alias-label-dimmed);
 }
 
 [data-android] .content {
