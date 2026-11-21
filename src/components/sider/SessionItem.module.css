@@ -55,7 +55,8 @@
 
 [data-android] .item {
   contain: layout style;
-  padding-inline: 20.6222px;
+  padding-left: 20.6222px;
+  padding-right: 20.6222px;
   height: 44.8px;
   border-radius: 16px;
   user-select: none;

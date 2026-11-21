@@ -251,7 +251,8 @@ a.row:active,
   background: var(--settings-card);
 
   .row {
-    padding-inline: 3px;
+    padding-left: 3px;
+    padding-right: 3px;
   }
 }
 
@@ -333,7 +334,10 @@ a.row:active,
 
 .overlay {
   position: fixed;
-  inset: 0 0 var(--android-button-nav-inset, 0px);
+  top: 0;
+  right: 0;
+  bottom: var(--android-button-nav-inset, 0px);
+  left: 0;
   z-index: 2;
   display: grid;
   place-items: center;
@@ -375,7 +379,8 @@ a.row:active,
 .options {
   min-height: 0;
   overflow-y: auto;
-  border-block: 1px solid var(--settings-line);
+  border-top: 1px solid var(--settings-line);
+  border-bottom: 1px solid var(--settings-line);
 
   button {
     display: flex;
@@ -598,14 +603,16 @@ a.row:active,
 /* 与官方 SettingsPageProps（Li3a.b = 768dp，左右 16dp）一致：超宽时居中限宽 768dp */
 @media (min-width: 800px) {
   .scroll {
-    padding-inline: calc((100% - 768px) / 2);
+    padding-left: calc((100% - 768px) / 2);
+    padding-right: calc((100% - 768px) / 2);
   }
 
   .fontPanel {
     box-sizing: border-box;
     width: 100%;
     max-width: 768px;
-    margin-inline: auto;
+    margin-left: auto;
+    margin-right: auto;
   }
 }
 
