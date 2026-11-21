@@ -67,3 +67,9 @@ body.change-theme *::after {
     overscroll-behavior-y: none;
   }
 }
+
+[inert],
+[inert] * {
+  pointer-events: none !important;
+  user-select: none;
+}

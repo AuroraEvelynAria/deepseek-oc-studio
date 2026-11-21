@@ -31,6 +31,7 @@ import { showToast } from '../components/base/toastState.js'
 import { onUploadNotice } from '../services/attachments.js'
 import { Button } from '../components/base/Button.js'
 import { stopReadAloud } from '../services/speech/readAloud.js'
+import { setInert } from '../utils/inert.js'
 import { CollapsedSider } from '../components/sider/CollapsedSider.js'
 import {
   closeMobileSider,
@@ -144,9 +145,7 @@ export const App = () => {
   }, [fontSize])
 
   useEffect(() => {
-    if (mainRef.current) {
-      mainRef.current.inert = Boolean(android && modalDrawerOpen)
-    }
+    setInert(mainRef.current, Boolean(android && modalDrawerOpen))
   }, [modalDrawerOpen])
 
   // 文件数、存储空间达到上限时，附件上只显示「上传失败」，原因用 toast 说明

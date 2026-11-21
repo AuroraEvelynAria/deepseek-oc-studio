@@ -24,6 +24,7 @@ import { closeMobileSider, useMobileSider } from './mobileSiderState.js'
 import { SessionActionDialog } from './SessionActionDialog.js'
 import { SessionItem } from './SessionItem.js'
 import { useSessionSearch } from './useSessionSearch.js'
+import { setInert } from '../../utils/inert.js'
 import styles from './Sider.module.css'
 
 const ROW_OVERSCAN = 10
@@ -411,14 +412,7 @@ export const MobileSider = memo(function MobileSider() {
   const androidWide = useIsAndroidWide()
   const drawer = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    const el = drawer.current
-    if (!el) {
-      return
-    }
-    el.inert = !open
-    if (!open && el.contains(document.activeElement) && document.activeElement instanceof HTMLElement) {
-      document.activeElement.blur()
-    }
+    setInert(drawer.current, !open)
   }, [open])
   if (!android && !open) {
     return null

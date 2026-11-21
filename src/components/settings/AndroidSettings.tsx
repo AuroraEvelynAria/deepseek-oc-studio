@@ -16,6 +16,7 @@ import {
   type ImportMode,
 } from '../../services/chat/backup.js'
 import { useChatStore } from '../../services/chat/store.js'
+import { setInert } from '../../utils/inert.js'
 import {
   setApiKey,
   setFoldThinking,
@@ -1159,9 +1160,7 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
           <section
             key={screen}
             ref={(element) => {
-              if (element) {
-                element.inert = !active
-              }
+              setInert(element, !active)
             }}
             className={styles.page}
             data-settings-page={screen}

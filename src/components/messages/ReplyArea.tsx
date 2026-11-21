@@ -1,6 +1,7 @@
 import { useTranslate } from '../../i18n/index.js'
 import { android } from '../../app/android.js'
 import { useSettings } from '../../services/settings.js'
+import { setInert } from '../../utils/inert.js'
 import clsx from 'clsx'
 import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import {
@@ -87,9 +88,7 @@ export const ReplyArea = memo(function ReplyArea({
   useTicker(titleActive, 1000)
 
   useLayoutEffect(() => {
-    if (clipRef.current) {
-      clipRef.current.inert = !open
-    }
+    setInert(clipRef.current, !open)
   }, [open, view.steps.length])
 
   useLayoutEffect(() => {
