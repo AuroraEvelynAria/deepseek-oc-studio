@@ -1,6 +1,6 @@
 import { useTranslate } from '../../i18n/index.js'
 import clsx from 'clsx'
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { android } from '../../app/android.js'
 import {
   IconCopyOutline16,
@@ -26,6 +26,7 @@ import { IconButton } from '../base/IconButton.js'
 import { Button } from '../base/Button.js'
 import { Menu } from '../base/Menu.js'
 import { Markdown } from '../markdown/Markdown.js'
+import { formatAndroidCopyText } from '../../services/markdown/copyText.js'
 import { SiteThumbnails } from '../search/SiteLogo.js'
 import { toggleSearchPanel, useSearchPanel } from '../search/searchPanelState.js'
 import { AndroidTextSelection } from './AndroidTextSelection.js'
@@ -72,7 +73,15 @@ export const AssistantMessage = memo(function AssistantMessage({
   const responseText = [answer?.text, notice?.presentation === 'response' ? notice.text : null]
     .filter(Boolean)
     .join('\n\n')
-  const copyText = responseText || notice?.text
+  const copyText = useMemo(() => {
+    if (!android) {
+      return responseText || notice?.text
+    }
+    if (responseText) {
+      return formatAndroidCopyText(responseText) || responseText
+    }
+    return notice?.text
+  }, [notice?.text, responseText])
   const [selecting, setSelecting] = useState(false)
   const [selectionPoint, setSelectionPoint] = useState<{ x: number; y: number } | undefined>()
   const [menuOffset, setMenuOffset] = useState<{ x: number; y: number } | undefined>()
@@ -283,6 +292,7 @@ export const AssistantMessage = memo(function AssistantMessage({
             contentRef={contentRef}
             initialMode="block"
             initialPoint={selectionPoint}
+            fullCopyText={copyText}
             onExit={stopSelecting}
           />
         ) : null}

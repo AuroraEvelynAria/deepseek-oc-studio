@@ -10,10 +10,22 @@ import { IconCopyOutline16, IconSelectAllOutline16 } from '../base/icons.js'
 import styles from './AndroidTextSelection.module.css'
 
 type TextSegment = {
+  kind: 'text'
   node: Text
   start: number
   end: number
 }
+
+type AtomicSegment = {
+  kind: 'atomic'
+  element: HTMLElement
+  text: string
+  display: boolean
+  start: number
+  end: number
+}
+
+type SelectionSegment = TextSegment | AtomicSegment
 
 type OffsetRange = {
   start: number
@@ -41,40 +53,118 @@ type VisualLayout = {
   toolbarLeft: number
 }
 
-const BLOCK_SELECTOR = 'p, li, blockquote, h1, h2, h3, h4, h5, h6, pre, td, th'
+const BLOCK_SELECTOR = 'p, li, blockquote, h1, h2, h3, h4, h5, h6, pre, td, th, [data-latex-display="true"]'
 const INLINE_SELECTOR =
   'p, li, blockquote, h1, h2, h3, h4, h5, h6, pre, td, th, span, a, code, em, strong, del'
-const IGNORED_SELECTOR = '[aria-hidden="true"], button, [role="toolbar"], .katex-mathml'
+const IGNORED_SELECTOR = '[aria-hidden="true"], button, [role="toolbar"], .katex-mathml, .ds-markdown-cite'
 const HANDLE_SIZE = 22
 const TOOLBAR_MARGIN = 12
 const TOOLBAR_SAFE_BOTTOM = 84
 
-const collectTextSegments = (root: HTMLElement): { segments: TextSegment[]; totalLength: number } => {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
-  const segments: TextSegment[] = []
+const collectSegments = (
+  root: HTMLElement
+): { segments: SelectionSegment[]; totalLength: number } => {
+  const segments: SelectionSegment[] = []
   let totalLength = 0
-  let current = walker.nextNode()
-  while (current) {
-    const node = current as Text
-    const parent = node.parentElement
-    const value = node.nodeValue ?? ''
-    if (
-      parent &&
-      value.length > 0 &&
-      !parent.closest(IGNORED_SELECTOR) &&
-      (/\S/.test(value) || parent.closest(INLINE_SELECTOR))
-    ) {
-      const start = totalLength
-      const end = start + value.length
-      segments.push({ node, start, end })
-      totalLength = end
+
+  const walk = (node: Node) => {
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as HTMLElement
+      if (el.hasAttribute('data-latex')) {
+        const latex = (el.getAttribute('data-latex') ?? '').trim()
+        if (latex.length > 0) {
+          segments.push({
+            kind: 'atomic',
+            element: el,
+            text: latex,
+            display: el.getAttribute('data-latex-display') === 'true',
+            start: totalLength,
+            end: totalLength + 1,
+          })
+          totalLength += 1
+        }
+        return
+      }
+      if (el !== root && el.matches(IGNORED_SELECTOR)) {
+        return
+      }
+      for (let child = el.firstChild; child; child = child.nextSibling) {
+        walk(child)
+      }
+      return
     }
-    current = walker.nextNode()
+
+    if (node.nodeType === Node.TEXT_NODE) {
+      const textNode = node as Text
+      const parent = textNode.parentElement
+      const value = textNode.nodeValue ?? ''
+      if (
+        parent &&
+        value.length > 0 &&
+        !parent.closest(IGNORED_SELECTOR) &&
+        (/\S/.test(value) || parent.closest(INLINE_SELECTOR))
+      ) {
+        const start = totalLength
+        const end = start + value.length
+        segments.push({ kind: 'text', node: textNode, start, end })
+        totalLength = end
+      }
+    }
   }
+
+  walk(root)
   return { segments, totalLength }
 }
 
-const getSubRangeRects = (seg: TextSegment, rangeStart: number, rangeEnd: number): DOMRect[] => {
+const getDisplayMathRect = (el: HTMLElement): DOMRect | null => {
+  const clipRect = el.getBoundingClientRect()
+  const katexHtml = el.querySelector('.katex-html')
+  let minLeft = Number.POSITIVE_INFINITY
+  let minTop = Number.POSITIVE_INFINITY
+  let maxRight = Number.NEGATIVE_INFINITY
+  let maxBottom = Number.NEGATIVE_INFINITY
+
+  if (katexHtml) {
+    for (const child of Array.from(katexHtml.children)) {
+      const rect = child.getBoundingClientRect()
+      if (rect.width > 0.5 && rect.height > 0.5) {
+        minLeft = Math.min(minLeft, rect.left)
+        minTop = Math.min(minTop, rect.top)
+        maxRight = Math.max(maxRight, rect.right)
+        maxBottom = Math.max(maxBottom, rect.bottom)
+      }
+    }
+  }
+
+  if (!Number.isFinite(minLeft)) {
+    const fallback = (el.querySelector('.katex') ?? el).getBoundingClientRect()
+    minLeft = fallback.left
+    minTop = fallback.top
+    maxRight = fallback.right
+    maxBottom = fallback.bottom
+  }
+
+  const left = Math.max(minLeft, clipRect.left)
+  const right = Math.min(maxRight, clipRect.right)
+  const top = Math.max(minTop, clipRect.top)
+  const bottom = Math.min(maxBottom, clipRect.bottom)
+  const width = right - left
+  const height = bottom - top
+  return width > 0.5 && height > 0.5 ? new DOMRect(left, top, width, height) : null
+}
+
+const getSubRangeRects = (seg: SelectionSegment, rangeStart: number, rangeEnd: number): DOMRect[] => {
+  if (rangeEnd <= seg.start || rangeStart >= seg.end) {
+    return []
+  }
+  if (seg.kind === 'atomic') {
+    if (seg.display) {
+      const rect = getDisplayMathRect(seg.element)
+      return rect ? [rect] : []
+    }
+    const rect = seg.element.getBoundingClientRect()
+    return rect.width > 0.5 && rect.height > 0.5 ? [rect] : []
+  }
   const localStart = Math.max(0, rangeStart - seg.start)
   const localEnd = Math.min(seg.end - seg.start, rangeEnd - seg.start)
   if (localEnd <= localStart) {
@@ -87,7 +177,7 @@ const getSubRangeRects = (seg: TextSegment, rangeStart: number, rangeEnd: number
 }
 
 const getAllSelectedClientRects = (
-  segments: TextSegment[],
+  segments: SelectionSegment[],
   start: number,
   end: number
 ): DOMRect[] => {
@@ -118,8 +208,24 @@ const findBlockScope = (
   return null
 }
 
+const getSegmentElement = (seg: SelectionSegment): Element | null =>
+  seg.kind === 'text' ? seg.node.parentElement : seg.element
+
+const segmentBelongsToBlock = (
+  seg: SelectionSegment,
+  block: Element,
+  isListItem: boolean
+): boolean => {
+  if (isListItem) {
+    return getSegmentElement(seg)?.closest('li') === block
+  }
+  return seg.kind === 'text'
+    ? block.contains(seg.node)
+    : block === seg.element || block.contains(seg.element)
+}
+
 const findInitialBlockOffsets = (
-  segments: TextSegment[],
+  segments: SelectionSegment[],
   totalLength: number,
   contentEl: HTMLElement,
   point?: { x: number; y: number }
@@ -135,7 +241,7 @@ const findInitialBlockOffsets = (
 
   if (!block) {
     let bestDistance = Number.POSITIVE_INFINITY
-    let bestSegment: TextSegment | null = null
+    let bestSegment: SelectionSegment | null = null
     for (const seg of segments) {
       for (const rect of getSubRangeRects(seg, seg.start, seg.end)) {
         const dx = point.x < rect.left ? rect.left - point.x : point.x > rect.right ? point.x - rect.right : 0
@@ -148,7 +254,7 @@ const findInitialBlockOffsets = (
       }
     }
     if (bestSegment) {
-      block = findBlockScope(bestSegment.node.parentElement, contentEl)
+      block = findBlockScope(getSegmentElement(bestSegment), contentEl)
     }
   }
 
@@ -160,10 +266,7 @@ const findInitialBlockOffsets = (
   let start = -1
   let end = -1
   for (const seg of segments) {
-    const belongs = isListItem
-      ? seg.node.parentElement?.closest('li') === block
-      : block.contains(seg.node)
-    if (belongs) {
+    if (segmentBelongsToBlock(seg, block, isListItem)) {
       if (start === -1) {
         start = seg.start
       }
@@ -174,7 +277,7 @@ const findInitialBlockOffsets = (
 }
 
 const caretOffsetInSegments = (
-  segments: TextSegment[],
+  segments: SelectionSegment[],
   node: Node | null,
   offset: number
 ): number | null => {
@@ -182,7 +285,7 @@ const caretOffsetInSegments = (
     return null
   }
   for (const seg of segments) {
-    if (seg.node === node) {
+    if (seg.kind === 'text' && seg.node === node) {
       return seg.start + Math.max(0, Math.min(seg.end - seg.start, offset))
     }
   }
@@ -190,7 +293,7 @@ const caretOffsetInSegments = (
 }
 
 const resolveOffsetGeometric = (
-  segments: TextSegment[],
+  segments: SelectionSegment[],
   totalLength: number,
   clientX: number,
   clientY: number
@@ -198,7 +301,7 @@ const resolveOffsetGeometric = (
   if (segments.length === 0) {
     return 0
   }
-  type SegRect = { seg: TextSegment; rect: DOMRect; centerY: number }
+  type SegRect = { seg: SelectionSegment; rect: DOMRect; centerY: number }
   const boxes: SegRect[] = []
   for (const seg of segments) {
     for (const rect of getSubRangeRects(seg, seg.start, seg.end)) {
@@ -273,6 +376,11 @@ const resolveOffsetGeometric = (
     }
   }
 
+  if (chosen.seg.kind === 'atomic') {
+    const midX = (chosen.rect.left + chosen.rect.right) / 2
+    return clientX >= midX ? chosen.seg.end : chosen.seg.start
+  }
+
   // Pick character offset inside chosen Text node via binary search.
   const len = chosen.seg.end - chosen.seg.start
   const probe = document.createRange()
@@ -304,7 +412,7 @@ const resolveOffsetGeometric = (
 }
 
 const resolveOffsetAtPoint = (
-  segments: TextSegment[],
+  segments: SelectionSegment[],
   totalLength: number,
   clientX: number,
   clientY: number
@@ -332,9 +440,18 @@ const resolveOffsetAtPoint = (
   return resolveOffsetGeometric(segments, totalLength, clientX, clientY)
 }
 
-const extractTextForRange = (segments: TextSegment[], start: number, end: number): string => {
+const countTrailingNewlines = (text: string, current: number): number => {
+  let count = 0
+  for (let i = text.length - 1; i >= 0 && text[i] === '\n'; i--) {
+    count += 1
+  }
+  return count === text.length ? current + count : count
+}
+
+const extractTextForRange = (segments: SelectionSegment[], start: number, end: number): string => {
   const parts: string[] = []
   let prevBlock: Element | null = null
+  let trailingNewlines = 0
   for (const seg of segments) {
     if (seg.end <= start) {
       continue
@@ -342,17 +459,30 @@ const extractTextForRange = (segments: TextSegment[], start: number, end: number
     if (seg.start >= end) {
       break
     }
-    const localStart = Math.max(0, start - seg.start)
-    const localEnd = Math.min(seg.end - seg.start, end - seg.start)
-    if (localEnd <= localStart) {
-      continue
+    let slice = ''
+    let block: Element | null = null
+    if (seg.kind === 'atomic') {
+      slice = seg.text
+      block = seg.display ? seg.element : (seg.element.closest(BLOCK_SELECTOR) ?? null)
+    } else {
+      const localStart = Math.max(0, start - seg.start)
+      const localEnd = Math.min(seg.end - seg.start, end - seg.start)
+      if (localEnd <= localStart) {
+        continue
+      }
+      slice = (seg.node.nodeValue ?? '').slice(localStart, localEnd)
+      block = seg.node.parentElement?.closest(BLOCK_SELECTOR) ?? null
     }
-    const slice = (seg.node.nodeValue ?? '').slice(localStart, localEnd)
-    const block = seg.node.parentElement?.closest(BLOCK_SELECTOR) ?? null
-    if (prevBlock && block !== prevBlock && parts.length > 0 && !parts[parts.length - 1].endsWith('\n')) {
-      parts.push('\n')
+    if (prevBlock && block !== prevBlock && parts.length > 0) {
+      const needed = prevBlock.tagName === 'LI' && block?.tagName === 'LI' ? 1 : 2
+      if (trailingNewlines < needed) {
+        const sep = '\n'.repeat(needed - trailingNewlines)
+        parts.push(sep)
+        trailingNewlines = needed
+      }
     }
     parts.push(slice)
+    trailingNewlines = countTrailingNewlines(slice, trailingNewlines)
     prevBlock = block
   }
   return parts.join('')
@@ -368,6 +498,7 @@ export const AndroidTextSelection = ({
   contentRef,
   initialMode = 'block',
   initialPoint,
+  fullCopyText,
   onExit,
 }: {
   active: boolean
@@ -375,6 +506,7 @@ export const AndroidTextSelection = ({
   contentRef: RefObject<HTMLElement | null>
   initialMode?: 'block' | 'all'
   initialPoint?: { x: number; y: number }
+  fullCopyText?: string
   onExit: () => void
 }) => {
   const t = useTranslate()
@@ -404,7 +536,7 @@ export const AndroidTextSelection = ({
       return
     }
     window.getSelection()?.removeAllRanges()
-    const { segments, totalLength: total } = collectTextSegments(contentEl)
+    const { segments, totalLength: total } = collectSegments(contentEl)
     setTotalLength(total)
     if (total === 0) {
       onExit()
@@ -425,7 +557,7 @@ export const AndroidTextSelection = ({
       setLayout(null)
       return
     }
-    const { segments } = collectTextSegments(contentEl)
+    const { segments } = collectSegments(contentEl)
     const clientRects = getAllSelectedClientRects(segments, current.start, current.end)
     if (clientRects.length === 0) {
       setLayout(null)
@@ -565,7 +697,7 @@ export const AndroidTextSelection = ({
       if (!drag || !contentEl) {
         return
       }
-      const { segments, totalLength: total } = collectTextSegments(contentEl)
+      const { segments, totalLength: total } = collectSegments(contentEl)
       if (total === 0) {
         return
       }
@@ -625,8 +757,11 @@ export const AndroidTextSelection = ({
       onExit()
       return
     }
-    const { segments } = collectTextSegments(contentEl)
-    const selected = extractTextForRange(segments, range.start, range.end)
+    const { segments } = collectSegments(contentEl)
+    const selected =
+      range.start === 0 && range.end === totalLength && fullCopyText
+        ? fullCopyText
+        : extractTextForRange(segments, range.start, range.end)
     if (selected) {
       void copyText(selected).then((copied) =>
         showToast({ key: copied ? 'copied' : 'copyFailed' }, copied ? 1990 : undefined)
@@ -640,7 +775,7 @@ export const AndroidTextSelection = ({
     if (!contentEl) {
       return
     }
-    const { totalLength: total } = collectTextSegments(contentEl)
+    const { totalLength: total } = collectSegments(contentEl)
     setTotalLength(total)
     setRange({ start: 0, end: total })
   }
