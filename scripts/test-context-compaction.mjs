@@ -55,8 +55,15 @@ const { ApiError } = await import('../src/services/api/client.ts')
 const { chatBaseUrl, readChatConfig, resolveChatEndpoint } =
   await import('../src/services/api/chatConfig.ts')
 const { isContextOverflow } = await import('../src/services/api/errors.ts')
-const { prepareHistoryContext, saveContextCheckpoint, textPrefixLength } =
-  await import('../src/services/chat/context.ts')
+const {
+  contextBudget,
+  estimateBranchScale,
+  estimateTextTokens,
+  prepareHistoryContext,
+  resolveMaxOutputTokens,
+  saveContextCheckpoint,
+  textPrefixLength,
+} = await import('../src/services/chat/context.ts')
 const { createContextSummarizer, includeContextSummary, summarizeCurrentInput } =
   await import('../src/services/chat/contextSummary.ts')
 const { addDraftFiles, setDraftText } = await import('../src/services/chat/drafts.ts')
@@ -589,7 +596,7 @@ test('只设置模型时继续使用 DeepSeek 官方请求和已有 Key', async 
 })
 
 test('发送入口在同一会话压缩重试，保存检查点和完整原始消息', async () => {
-  const long = '旧历史' + '甲'.repeat(96_000)
+  const long = '旧历史' + '甲'.repeat(105_000)
   const recent = '这是近一轮原文'
   const id = seed([...round('first', long), ...round('recent', recent)])
   let normal = 0
@@ -647,7 +654,7 @@ test('导出保留有效用量，异常用量不会导致归档无法导入', ()
 })
 
 test('本地预算触发预压缩，首次正式请求保留近期原文和完整输出预算', async () => {
-  const old = '较早资料' + '甲'.repeat(500_000)
+  const old = '较早资料' + '甲'.repeat(960_000)
   const id = seed([...round('large', old), ...round('recent', '近期原文')])
   let compact = 0
   let main = 0
@@ -670,6 +677,106 @@ test('本地预算触发预压缩，首次正式请求保留近期原文和完�
   assert.equal(main, 1)
   assert.equal(saved.messages[0].content, old)
   assert.equal(saved.messages.at(-1).status, 'done')
+})
+
+test('超长中文对话在 90% 预算内直出并动态收敛 max_tokens，高输入溢出优先降输出不砍历史', async () => {
+  // 复现 134.8 万字符中文长对话场景：新估算约 80 万 token，落在 90% (943K) 预算内
+  const zhChunk =
+    '我们在长对话里讨论移动端客户端的内存管理、上下文预算与流式渲染优化问题，避免误触发摘要压缩。'
+  const longZh = zhChunk.repeat(Math.ceil(1_348_000 / zhChunk.length)).slice(0, 1_348_000)
+  const est = estimateTextTokens(longZh)
+  assert.ok(est > 700_000 && est < 880_000, `unexpected estimate: ${est}`)
+  assert.equal(contextBudget(52_428).input, 943_718)
+  assert.equal(resolveMaxOutputTokens(393_216, 200_000, 52_428), 393_216)
+  assert.ok(resolveMaxOutputTokens(393_216, est, 52_428) < 393_216)
+
+  const id = seed([...round('long-zh', longZh), ...round('recent', '近期原文')])
+  let compact = 0
+  const mainMaxTokens = []
+  respond = (body) => {
+    if (body.max_tokens === 4_096) {
+      compact++
+      return stream(notes('不应触发'))
+    }
+    mainMaxTokens.push(body.max_tokens)
+    // 第一次模拟高输入撞 1M 窗口溢出，验证优先降 max_tokens 重试而不砍历史
+    if (mainMaxTokens.length === 1) {
+      assert.ok(body.max_tokens < 393_216 && body.max_tokens >= 52_428)
+      assert.ok(est + body.max_tokens <= 996_147)
+      return httpOverflow()
+    }
+    assert.equal(body.max_tokens, 8_192)
+    assert.match(JSON.stringify(body.messages), /我们在长对话里讨论/)
+    return stream('长中文直出成功')
+  }
+  setDraftText(id, '继续')
+  assert.equal(sendMessage(id), true)
+  const saved = await finish(id)
+  assert.equal(compact, 0)
+  assert.equal(mainMaxTokens.length, 2)
+  assert.equal(saved.contextCheckpoints, undefined)
+  assert.equal(saved.messages.at(-1).status, 'done')
+  assert.equal(saved.messages.at(-1).blocks[0].text, '长中文直出成功')
+})
+
+test('高精度估算器覆盖多语种结构特征，分支 usage 校准具备模型与工具隔离', () => {
+  // 数字精确每 3 位 1 token
+  assert.equal(estimateTextTokens('123456789'), 3)
+  assert.equal(estimateTextTokens('1234567890'), 4)
+  // 现代中文 ~0.6 tok/字，生僻字 2 tok/字，英文散文 ~0.18 tok/char
+  const zh = '这是一个测试长中文对话分词估算准确性的常见句子，包含多个高频词语。'.repeat(20)
+  const zhRatio = estimateTextTokens(zh) / zh.length
+  assert.ok(zhRatio > 0.5 && zhRatio < 0.72, `zhRatio=${zhRatio}`)
+  const rare = '龘靐齉爩鱻麤龗灪'.repeat(10)
+  assert.equal(estimateTextTokens(rare), rare.length * 2)
+  const en = 'The quick brown fox jumps over the lazy dog during context budgeting. '.repeat(20)
+  const enRatio = estimateTextTokens(en) / en.length
+  assert.ok(enRatio > 0.14 && enRatio < 0.26, `enRatio=${enRatio}`)
+  // 前缀截断参数与 slice 语义等价
+  assert.equal(estimateTextTokens(zh, 100), estimateTextTokens(zh.slice(0, 100)))
+
+  // 分支 usage 校准：同模型纯文本生效，换模型 / 含工具 / 含检查点时安全回退为 1
+  const text = '这是一段足够长的纯文本历史用于测试真实用量校准倍率。'.repeat(200)
+  const baseEst = estimateTextTokens(text) + 16
+  const measuredPrompt = Math.round(baseEst * 1.5) + 256
+  const withUsage = [
+    user('u1', text),
+    {
+      ...reply('a1', '收到'),
+      model: 'custom-model',
+      usage: {
+        input_tokens: measuredPrompt - 1000,
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 1000,
+        output_tokens: 20,
+      },
+    },
+  ]
+  const scale = estimateBranchScale(withUsage, 'custom-model')
+  assert.ok(Math.abs(scale - 1.5) < 0.05, `scale=${scale}`)
+  // 换模型后不复用旧模型倍率
+  assert.equal(estimateBranchScale(withUsage, 'deepseek-flash'), 1)
+  // 已有摘要检查点时不混用口径
+  assert.equal(estimateBranchScale(withUsage, 'custom-model', [{ replyId: 'a1', summary: 's' }]), 1)
+  // 含服务端搜索工具调用时不拿累计计费 usage 校准
+  const withSearch = [
+    user('u1', text),
+    {
+      ...withUsage[1],
+      blocks: [
+        {
+          type: 'server_tool_use',
+          id: 't1',
+          name: 'deepseek_web_search',
+          input: { action: 'search', query: 'q' },
+          kind: 'search',
+          caller: { type: 'direct' },
+        },
+        { type: 'text', text: '收到' },
+      ],
+    },
+  ]
+  assert.equal(estimateBranchScale(withSearch, 'custom-model'), 1)
 })
 
 test('多次上下文拒绝后用本轮输入继续，并区分 429 限流', async () => {
@@ -701,7 +808,7 @@ test('多次上下文拒绝后用本轮输入继续，并区分 429 限流', asy
 })
 
 test('停止预压缩会中止请求，保留原分支且不发送正式请求', async () => {
-  const id = seed([...round('old', '甲'.repeat(490_000)), ...round('recent', '近期原文')])
+  const id = seed([...round('old', '甲'.repeat(960_000)), ...round('recent', '近期原文')])
   let requests = 0
   respond = (body) => {
     requests++
