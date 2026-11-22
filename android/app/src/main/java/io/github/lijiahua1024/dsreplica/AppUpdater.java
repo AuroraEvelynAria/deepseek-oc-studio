@@ -2,17 +2,13 @@ package io.github.lijiahua1024.dsreplica;
 
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
-import android.content.ClipData;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
-import android.content.pm.PackageManager;
-import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.provider.Settings;
 import android.util.Log;
 import java.io.File;
 import java.io.IOException;
-import java.util.Iterator;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
@@ -22,7 +18,6 @@ import org.json.JSONObject;
 final class AppUpdater {
     private static final String TAG = "AppUpdater";
     static final int INSTALL_SOURCE_SETTINGS = 6;
-    private static final int SYSTEM_INSTALLER = 7;
 
     private final Activity activity;
     private final PackageInfo installed;
@@ -156,7 +151,6 @@ final class AppUpdater {
         install(false);
     }
 
-    @SuppressWarnings("deprecation") // Some OEMs register only ACTION_INSTALL_PACKAGE.
     private void install(boolean promptForPermission) {
         if (!apk.isFile()) {
             stagedVersion = null;
@@ -171,7 +165,12 @@ final class AppUpdater {
             }
             return;
         }
-        if (!launchInstaller(Intent.ACTION_VIEW) && !launchInstaller(Intent.ACTION_INSTALL_PACKAGE)) {
+        Intent intent = new Intent(Intent.ACTION_VIEW)
+            .setDataAndType(UpdateApkProvider.uri(activity), UpdateApkProvider.MIME_TYPE)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            activity.startActivity(intent);
+        } catch (ActivityNotFoundException | SecurityException failure) {
             publish("installerUnavailable");
         }
     }
@@ -186,39 +185,6 @@ final class AppUpdater {
         } catch (ActivityNotFoundException | SecurityException failure) {
             return false;
         }
-    }
-
-    private boolean launchInstaller(String action) {
-        Uri uri = UpdateApkProvider.uri(activity);
-        Intent intent = new Intent(action)
-            .setDataAndType(uri, UpdateApkProvider.MIME_TYPE)
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        intent.setClipData(ClipData.newRawUri("APK", uri));
-        int flags = PackageManager.MATCH_DEFAULT_ONLY | PackageManager.MATCH_SYSTEM_ONLY
-            | PackageManager.GET_RESOLVED_FILTER;
-        for (ResolveInfo handler : activity.getPackageManager().queryIntentActivities(intent, flags)) {
-            if (Intent.ACTION_VIEW.equals(action)) {
-                Iterator<String> types = handler.filter == null ? null : handler.filter.typesIterator();
-                boolean handlesApks = false;
-                while (types != null && types.hasNext()) {
-                    if (UpdateApkProvider.MIME_TYPE.equals(types.next())) {
-                        handlesApks = true;
-                        break;
-                    }
-                }
-                if (!handlesApks) continue;
-            }
-            Intent explicit = new Intent(intent).setClassName(handler.activityInfo.packageName,
-                handler.activityInfo.name);
-            try {
-                // Preserve the calling package on installers that obtain it from the activity result.
-                activity.startActivityForResult(explicit, SYSTEM_INSTALLER);
-                return true;
-            } catch (ActivityNotFoundException | SecurityException failure) {
-                // Some ROMs expose several installer activities with different access rules.
-            }
-        }
-        return false;
     }
 
     private void post(Runnable action) {
