@@ -1,12 +1,11 @@
 .overlay {
   position: fixed;
-  z-index: 23;
+  z-index: 820;
   right: 0;
   bottom: var(--android-button-nav-inset, 0px);
   left: 0;
-  height: 46vh;
-  height: 46dvh;
-  max-height: 340px;
+  height: 55vh;
+  height: 55dvh;
   isolation: isolate;
   overflow: hidden;
   pointer-events: none;
@@ -27,7 +26,57 @@
 }
 
 .overlay[data-canceling='true'] {
-  color: #ff5757;
+  color: #ff4d4d;
+}
+
+body[data-ds-dark-theme] .overlay[data-canceling='true'] {
+  color: #ff6565;
+}
+
+.backdrop {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: -2;
+  height: 351px;
+  max-height: 100%;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.16) 10%,
+    rgba(255, 255, 255, 0.5) 20%,
+    rgba(255, 255, 255, 0.84) 30%,
+    rgba(255, 255, 255, 1) 40%,
+    rgba(255, 255, 255, 1) 100%
+  );
+}
+
+body[data-ds-dark-theme] .backdrop {
+  background: linear-gradient(
+    180deg,
+    rgba(21, 21, 23, 0) 0%,
+    rgba(21, 21, 23, 0.16) 10%,
+    rgba(21, 21, 23, 0.5) 20%,
+    rgba(21, 21, 23, 0.84) 30%,
+    rgba(21, 21, 23, 1) 40%,
+    rgba(21, 21, 23, 1) 100%
+  );
+}
+
+.canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+}
+
+.overlay[data-shader='true'] .color,
+.overlay[data-shader='true'] .fallbackHalo {
+  display: none;
 }
 
 .color {
@@ -49,17 +98,17 @@
 .color[data-color='blue'] {
   --voice-base: linear-gradient(
     180deg,
-    transparent 10%,
-    rgb(103 162 255 / 2%) 21%,
-    rgb(103 162 255 / 9%) 32%,
-    rgb(103 162 255 / 26%) 42%,
-    rgb(103 162 255 / 48%) 53%,
-    rgb(103 162 255 / 73%) 65%,
-    rgb(103 162 255 / 89%) 80%,
+    transparent 24%,
+    rgb(103 162 255 / 2%) 33%,
+    rgb(103 162 255 / 9%) 42%,
+    rgb(103 162 255 / 26%) 51%,
+    rgb(103 162 255 / 48%) 61%,
+    rgb(103 162 255 / 73%) 72%,
+    rgb(103 162 255 / 89%) 84%,
     rgb(103 162 255 / 94%) 100%
   );
   --voice-diffusion: radial-gradient(
-    ellipse 52% 54% at 50% 65%,
+    ellipse 52% 54% at 50% 72%,
     rgb(102 163 254 / 92%) 5%,
     rgb(102 163 254 / 79%) 24%,
     rgb(102 163 254 / 59%) 44%,
@@ -71,23 +120,50 @@
 .color[data-color='red'] {
   --voice-base: linear-gradient(
     180deg,
-    transparent 12%,
-    rgb(255 171 171 / 2%) 21%,
-    rgb(255 171 171 / 8%) 32%,
-    rgb(255 171 171 / 19%) 42%,
-    rgb(255 171 171 / 34%) 53%,
-    rgb(255 171 171 / 51%) 65%,
-    rgb(255 171 171 / 70%) 80%,
+    transparent 24%,
+    rgb(255 171 171 / 2%) 33%,
+    rgb(255 171 171 / 8%) 42%,
+    rgb(255 171 171 / 19%) 51%,
+    rgb(255 171 171 / 34%) 61%,
+    rgb(255 171 171 / 51%) 72%,
+    rgb(255 171 171 / 70%) 84%,
     rgb(255 171 171 / 94%) 100%
   );
   --voice-diffusion: radial-gradient(
-    ellipse 53% 50% at 50% 66%,
+    ellipse 53% 50% at 50% 72%,
     rgb(255 163 164 / 38%) 18%,
     rgb(255 163 164 / 27%) 47%,
     rgb(255 163 164 / 10%) 72%,
     transparent
   );
   opacity: 0;
+}
+
+.fallbackHalo {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(
+    circle 180px at var(--voice-touch-x, 50%) var(--voice-touch-y, 82%),
+    rgb(66 135 255 / 55%) 0%,
+    rgb(66 135 255 / 22%) 45%,
+    transparent 75%
+  );
+  opacity: 0;
+  transition: opacity 160ms ease-out;
+}
+
+.overlay[data-touch-active='true'] .fallbackHalo {
+  opacity: 1;
+}
+
+.overlay[data-canceling='true'] .fallbackHalo {
+  background: radial-gradient(
+    circle 180px at var(--voice-touch-x, 50%) var(--voice-touch-y, 82%),
+    rgb(255 101 101 / 42%) 0%,
+    rgb(255 101 101 / 16%) 45%,
+    transparent 75%
+  );
 }
 
 [data-canceling='true'] .color[data-color='red'] {
@@ -131,6 +207,16 @@
     border-radius: 1px;
     background: currentColor;
     transform-origin: center;
+  }
+}
+
+@media (max-height: 460px) {
+  .hint {
+    bottom: 108px;
+  }
+
+  .wave {
+    bottom: 60px;
   }
 }
 

@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef } from 'react'
+import { memo, useEffect, useLayoutEffect, useRef } from 'react'
 import { android } from './android.js'
 import { useAndroidBackInterception } from './useAndroidBackInterception.js'
 import { useTranslate } from '../i18n/index.js'
@@ -41,6 +41,26 @@ import {
 import { MobileSider, Sider } from '../components/sider/Sider.js'
 import { useAndroidDrawerGesture } from '../components/sider/useAndroidDrawerGesture.js'
 import styles from './App.module.css'
+
+const SIDE_DRAWER_WIDTH = 326
+const SIDE_DRAWER_MS = 220
+const SIDE_DRAWER_EASING = 'cubic-bezier(0.2, 0, 0, 1)'
+
+const readTranslateX = (element: HTMLElement) => {
+  const value = getComputedStyle(element).transform
+  if (!value || value === 'none') {
+    return 0
+  }
+  const match = value.match(/^matrix\(([^)]+)\)$/)
+  if (match) {
+    return Number(match[1].split(',')[4]) || 0
+  }
+  const match3d = value.match(/^matrix3d\(([^)]+)\)$/)
+  if (match3d) {
+    return Number(match3d[1].split(',')[12]) || 0
+  }
+  return 0
+}
 
 const ChatContent = memo(function ChatContent({
   isMobile,
@@ -116,6 +136,9 @@ export const App = () => {
   const modalDrawerOpen = drawerOpen && !androidWide
   const mainRef = useRef<HTMLElement>(null)
   const prevAndroidWideRef = useRef(androidWide)
+  const prevWideForAnimRef = useRef(androidWide)
+  const prevDrawerOpenRef = useRef(drawerOpen)
+  const sideAnimationsRef = useRef(new Map<HTMLElement, Animation>())
   const locale = useSettings((state) => state.locale)
   const fontSize = useSettings((state) => state.fontSize)
   // 移动端侧边栏以独立抽屉管理开合状态
@@ -147,6 +170,90 @@ export const App = () => {
   useEffect(() => {
     setInert(mainRef.current, Boolean(android && modalDrawerOpen))
   }, [modalDrawerOpen])
+
+  // Android 平板端可能上报 hover: hover，仅在真实鼠标移动时启用悬停样式，触控/手写笔点击不残留高亮。
+  useEffect(() => {
+    if (!android) {
+      return
+    }
+    const root = document.documentElement
+    const onPointerMove = (event: PointerEvent) => {
+      if (event.pointerType === 'mouse') {
+        root.setAttribute('data-android-hover', '')
+      }
+    }
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.pointerType !== 'mouse') {
+        root.removeAttribute('data-android-hover')
+      }
+    }
+    const onTouchStart = () => {
+      root.removeAttribute('data-android-hover')
+    }
+    window.addEventListener('pointermove', onPointerMove, { passive: true, capture: true })
+    window.addEventListener('pointerdown', onPointerDown, { passive: true, capture: true })
+    window.addEventListener('touchstart', onTouchStart, { passive: true, capture: true })
+    return () => {
+      root.removeAttribute('data-android-hover')
+      window.removeEventListener('pointermove', onPointerMove, true)
+      window.removeEventListener('pointerdown', onPointerDown, true)
+      window.removeEventListener('touchstart', onTouchStart, true)
+    }
+  }, [])
+
+  // 宽屏侧栏开合使用纯 GPU FLIP 平移动画，避免 transition padding/margin 逐帧重排与连点卡顿。
+  useLayoutEffect(() => {
+    const prevWide = prevWideForAnimRef.current
+    const prevOpen = prevDrawerOpenRef.current
+    prevWideForAnimRef.current = androidWide
+    prevDrawerOpenRef.current = drawerOpen
+    const animations = sideAnimationsRef.current
+    if (!android || !androidWide) {
+      animations.forEach((animation) => animation.cancel())
+      animations.clear()
+      return
+    }
+    if (!prevWide || prevOpen === drawerOpen) {
+      return
+    }
+    const main = mainRef.current
+    if (!main || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return
+    }
+    const targets = Array.from(main.querySelectorAll<HTMLElement>('[data-side-shift]'))
+    const starts = targets.map((element) => {
+      const currentX = animations.has(element) ? readTranslateX(element) : 0
+      const shift =
+        element.dataset.sideShift === 'edge' ? SIDE_DRAWER_WIDTH : SIDE_DRAWER_WIDTH / 2
+      return currentX + (drawerOpen ? -shift : shift)
+    })
+    targets.forEach((element, index) => {
+      animations.get(element)?.cancel()
+      if (typeof element.animate !== 'function') {
+        return
+      }
+      const animation = element.animate(
+        [{ transform: `translateX(${starts[index]}px)` }, { transform: 'translateX(0)' }],
+        { duration: SIDE_DRAWER_MS, easing: SIDE_DRAWER_EASING }
+      )
+      animations.set(element, animation)
+      const clear = () => {
+        if (animations.get(element) === animation) {
+          animations.delete(element)
+        }
+      }
+      animation.onfinish = clear
+      animation.oncancel = clear
+    })
+  }, [androidWide, drawerOpen])
+
+  useEffect(() => {
+    const animations = sideAnimationsRef.current
+    return () => {
+      animations.forEach((animation) => animation.cancel())
+      animations.clear()
+    }
+  }, [])
 
   // 文件数、存储空间达到上限时，附件上只显示「上传失败」，原因用 toast 说明
   useEffect(() => onUploadNotice(showToast), [])

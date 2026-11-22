@@ -169,6 +169,10 @@
   transition: none;
 }
 
+[data-android] .frame[data-drawer-layout='side'][data-drawer-open='true'] .main {
+  padding-left: 326px;
+}
+
 .saveError {
   display: flex;
   align-items: center;

@@ -114,7 +114,10 @@ export const MessageList = ({
   const scrollToBottom = useCallback(() => {
     const el = scrollRef.current
     if (el && stickyRef.current && !jumpingRef.current) {
-      el.scrollTop = el.scrollHeight
+      const target = Math.max(0, el.scrollHeight - el.clientHeight)
+      if (Math.abs(target - el.scrollTop) > 0.5) {
+        el.scrollTop = el.scrollHeight
+      }
       scrollTopRef.current = el.scrollTop
       setShowJumpToBottom(false)
     }
@@ -525,7 +528,11 @@ export const MessageList = ({
   return (
     <ScrollToBottomContext.Provider value={stopFollowing}>
       <div ref={isMobile ? undefined : scrollRef} className={styles.container}>
-        <div ref={scrollAreaRef} className={styles.scrollArea}>
+        <div
+          ref={scrollAreaRef}
+          className={styles.scrollArea}
+          data-side-shift={android ? 'center' : undefined}
+        >
           <div ref={isMobile ? scrollRef : undefined} className={styles.scroll}>
             <div
               ref={contentRef}

@@ -37,7 +37,7 @@ export const SessionView = memo(function SessionView({
         session={session}
         streaming={streaming}
         footer={
-          <div className={styles.inputContainer}>
+          <div className={styles.inputContainer} data-side-shift={android ? 'center' : undefined}>
             <ChatInput sessionId={session.id} />
             <div className={styles.caveatSlot}>
               <div className={styles.caveat}>

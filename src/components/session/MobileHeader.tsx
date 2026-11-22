@@ -30,6 +30,7 @@ export const MobileHeader = ({ title }: { title?: string }) => {
         size="xl"
         tone="primary"
         className={styles.menu}
+        data-side-shift={android ? 'edge' : undefined}
         icon={<IconMenuOutline20 />}
         aria-label={t(androidWide && drawerOpen ? 'collapseSiderbarButton' : 'expandSiderbarButton')}
         aria-expanded={androidWide ? drawerOpen : undefined}
@@ -38,7 +39,7 @@ export const MobileHeader = ({ title }: { title?: string }) => {
       {title === undefined && !android ? null : (
         <>
           {title === undefined ? null : (
-            <div className={styles.title}>
+            <div className={styles.title} data-side-shift={android ? 'edge' : undefined}>
               <span className={styles.titleText}>{title}</span>
             </div>
           )}

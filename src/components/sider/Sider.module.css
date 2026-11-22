@@ -152,6 +152,10 @@
     &:hover {
       background-color: var(--dsw-specific-sidebar-nav-item-hover);
     }
+
+    [data-android]:not([data-android-hover]) &:hover:not(:active) {
+      background-color: transparent;
+    }
   }
 
   &:focus-visible {
@@ -272,35 +276,38 @@
   left: var(--drawer-edge);
 }
 
-/* Android 横屏/平板（>= 840px）：左侧 326dp 固定分栏，可通过顶栏按钮平滑展开/收起 */
+/* Android 横屏/平板（>= 840px）：左侧 326dp 固定分栏，纯 GPU transform 滑动避免连点触发布局重排 */
 [data-android] [data-drawer-layout='side'] .drawer {
-  position: relative;
-  top: auto;
-  bottom: auto;
-  left: auto;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
   z-index: 3;
-  flex: 0 0 auto;
   width: 326px;
-  height: 100%;
-  margin-left: -326px;
+  height: auto;
+  margin-left: 0;
   padding-top: var(--android-status-inset, 0px);
   padding-bottom: var(--android-button-nav-inset, 0px);
   border-right: 1px solid transparent;
-  transform: none;
+  transform: translateX(-100%);
   visibility: hidden;
   pointer-events: none;
   will-change: auto;
   transition:
-    margin-left 200ms cubic-bezier(0.2, 0, 0, 1),
-    border-right-color 200ms cubic-bezier(0.2, 0, 0, 1),
-    visibility 200ms cubic-bezier(0.2, 0, 0, 1);
+    transform 220ms cubic-bezier(0.2, 0, 0, 1),
+    border-right-color 220ms cubic-bezier(0.2, 0, 0, 1),
+    visibility 0s 220ms;
 }
 
 [data-android] [data-drawer-layout='side'][data-drawer-open='true'] .drawer {
-  margin-left: 0;
+  transform: translateX(0);
   border-right-color: var(--dsw-alias-border-l2);
   visibility: visible;
   pointer-events: auto;
+  transition:
+    transform 220ms cubic-bezier(0.2, 0, 0, 1),
+    border-right-color 220ms cubic-bezier(0.2, 0, 0, 1),
+    visibility 0s;
 }
 
 [data-android] [data-drawer-layout='side'] .drawer::after {
