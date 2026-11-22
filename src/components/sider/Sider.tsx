@@ -20,10 +20,10 @@ import { IconButton } from '../base/IconButton.js'
 import { showToast } from '../base/toastState.js'
 import { ProfileAvatar } from '../settings/ProfileAvatar.js'
 import { openSettings } from '../settings/settingsDialogState.js'
-import { closeMobileSider, useMobileSider } from './mobileSiderState.js'
+import { closeMobileSider, openDrawerSearch, useMobileSider } from './mobileSiderState.js'
+import { AndroidContentSearch } from './AndroidContentSearch.js'
 import { SessionActionDialog } from './SessionActionDialog.js'
 import { SessionItem } from './SessionItem.js'
-import { useSessionSearch } from './useSessionSearch.js'
 import { setInert } from '../../utils/inert.js'
 import styles from './Sider.module.css'
 
@@ -38,8 +38,8 @@ export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean 
   const profile = useSettings((state) => state.accountProfile)
   const username = profile.username || t('profileDefaultUsername')
   const androidDrawer = Boolean(mobile && android)
-  const [query, setQuery] = useState('')
-  const matches = useSessionSearch(query, sessions)
+  const searchOpen = useMobileSider((state) => state.searchOpen)
+  const showAndroidSearch = Boolean(androidDrawer && searchOpen)
   const [now, setNow] = useState(Date.now)
   const [selecting, setSelecting] = useState(false)
   const [checked, setChecked] = useState<Set<string>>(() => new Set())
@@ -47,18 +47,18 @@ export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean 
   const unpin = checked.size > 0 && [...checked].every((id) => pinnedIds.includes(id))
   const groups = useMemo(() => {
     if (!androidDrawer || pinnedIds.length === 0) {
-      return groupSessions(matches, now, t)
+      return groupSessions(sessions, now, t)
     }
-    const pinned = matches.filter((session) => pinnedIds.includes(session.id))
+    const pinned = sessions.filter((session) => pinnedIds.includes(session.id))
     const rest = groupSessions(
-      matches.filter((session) => !pinnedIds.includes(session.id)),
+      sessions.filter((session) => !pinnedIds.includes(session.id)),
       now,
       t
     )
     return pinned.length
       ? [{ key: 'pinned', label: t('androidPinned'), sessions: pinned }, ...rest]
       : rest
-  }, [androidDrawer, matches, now, pinnedIds, t])
+  }, [androidDrawer, sessions, now, pinnedIds, t])
   const listRef = useRef<HTMLDivElement>(null)
   const [viewport, setViewport] = useState({ top: 0, height: 720 })
   const rowHeight = androidDrawer ? (selecting ? 48 : 44.8) : mobile ? 44 : 40
@@ -106,7 +106,7 @@ export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean 
       observer.disconnect()
       list.removeEventListener('scroll', schedule)
     }
-  }, [rowHeight])
+  }, [rowHeight, showAndroidSearch])
   const [deleting, setDeleting] = useState<SessionSummary[]>([])
   const deleteOne = useCallback((session: SessionSummary) => setDeleting([session]), [])
   const togglePinned = useCallback(
@@ -133,10 +133,10 @@ export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean 
   }, [])
 
   useEffect(() => {
-    if (!drawerOpen) {
+    if (!drawerOpen || searchOpen) {
       closeSelection()
     }
-  }, [closeSelection, drawerOpen])
+  }, [closeSelection, drawerOpen, searchOpen])
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>
@@ -162,6 +162,14 @@ export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean 
     }
   }, [])
 
+  if (showAndroidSearch) {
+    return (
+      <div className={clsx(styles.sider, styles.mobile)}>
+        <AndroidContentSearch />
+      </div>
+    )
+  }
+
   return (
     <div className={clsx(styles.sider, mobile && styles.mobile)}>
       {selecting ? (
@@ -177,16 +185,15 @@ export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean 
           />
         </div>
       ) : androidDrawer ? (
-        <label className={styles.search}>
+        <button
+          type="button"
+          className={styles.search}
+          aria-label={t('androidSearchChats')}
+          onClick={openDrawerSearch}
+        >
           <IconSearchOutline16 />
-          <input
-            type="search"
-            placeholder={t('androidSearchChats')}
-            aria-label={t('androidSearchChats')}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </label>
+          <span className={styles.searchPlaceholder}>{t('androidSearchChats')}</span>
+        </button>
       ) : (
         <>
           <div className={styles.top}>
@@ -409,6 +416,7 @@ export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean 
 export const MobileSider = memo(function MobileSider() {
   const t = useTranslate()
   const open = useMobileSider((state) => state.open)
+  const searchOpen = useMobileSider((state) => state.searchOpen)
   const androidWide = useIsAndroidWide()
   const drawer = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -419,7 +427,7 @@ export const MobileSider = memo(function MobileSider() {
   }
   return (
     <>
-      {open && !androidWide ? (
+      {open && !androidWide && !searchOpen ? (
         <div
           className={styles.drawerMask}
           role="button"

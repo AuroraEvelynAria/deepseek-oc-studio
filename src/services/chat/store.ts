@@ -19,7 +19,13 @@ import {
 } from '../attachments.js'
 import { MANY_IMAGES_COUNT, MANY_IMAGES_MAX_EDGE, MAX_IMAGE_EDGE } from '../imageUpload.js'
 import { setPinnedSessions, useSettings } from '../settings.js'
-import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from './branches.js'
+import {
+  activateBranch,
+  appendBranch,
+  getVisibleMessages,
+  normalizeSession,
+  selectVersion,
+} from './branches.js'
 import type { ImportArchiveResult } from './history/importArchive.js'
 import {
   contextBudget,
@@ -105,6 +111,12 @@ const serverTools = (search: boolean) => {
 /** 允许自动补标题的请求；手动重命名后取消本轮标题写入，包含主动清空标题的情况。 */
 const titleRequests = new Set<AbortController>()
 
+export type PendingMessageJump = {
+  sessionId: string
+  messageId: string
+  nonce: number
+}
+
 type ChatState = {
   ready: boolean
   initError: boolean
@@ -117,6 +129,8 @@ type ChatState = {
   sessionSaveErrors: Record<string, boolean>
   /** null 表示新对话（欢迎页） */
   activeId: string | null
+  /** 搜索点击某条消息后待消费的定位目标；进入对应会话并完成滚动定位后清除 */
+  pendingJump: PendingMessageJump | null
   /** 正在生成回复的会话 */
   streaming: Record<string, AbortController>
 }
@@ -130,6 +144,7 @@ export const useChatStore = create<ChatState>(() => ({
   sessionLoadErrors: {},
   sessionSaveErrors: {},
   activeId: null,
+  pendingJump: null,
   streaming: {},
 }))
 
@@ -161,6 +176,7 @@ const deletingSessions = new Set<string>()
 const deletionTasks = new Set<Promise<boolean>>()
 const streamFlushes = new Map<string, () => void>()
 let accessSequence = 0
+let jumpSequence = 0
 let historyEpoch = 0
 let initTask: Promise<void> | undefined
 const sessionLoads = new Map<string, { promise: Promise<void> }>()
@@ -394,7 +410,12 @@ const ensureSessionLoaded = (id: string): Promise<void> => {
       }
       const settled = settleInterrupted(normalizeSession(stored))
       // 读取期间可能已在列表重命名，保留最新元数据，不能让旧读取覆盖它。
-      const session = sameSummary(settled, summary) ? settled : { ...settled, ...summary }
+      const synced = sameSummary(settled, summary) ? settled : { ...settled, ...summary }
+      const pendingJump = get().pendingJump
+      const session =
+        pendingJump?.sessionId === id && !getStreamController(id)
+          ? activateBranch(synced, pendingJump.messageId)
+          : synced
       touchSession(id)
       set((state) => ({ sessionCache: { ...state.sessionCache, [id]: session } }))
       if (session !== stored) {
@@ -496,6 +517,7 @@ export const replaceHistory = async (
       sessionLoadErrors: {},
       sessionSaveErrors: {},
       activeId: null,
+      pendingJump: null,
     })
     return summaries.length
   } catch (error) {
@@ -608,7 +630,7 @@ export const mergeHistory = async (
 export const newChat = () => {
   if (!get().importingHistory) {
     cancelMessageEdit()
-    set({ activeId: null })
+    set({ activeId: null, pendingJump: null })
     trimSessionCache()
   }
 }
@@ -617,10 +639,49 @@ export const selectSession = (id: string) => {
   if (!get().importingHistory && get().sessions.some((session) => session.id === id)) {
     cancelMessageEdit()
     touchSession(id)
-    set({ activeId: id })
+    set({ activeId: id, pendingJump: null })
     void ensureSessionLoaded(id)
     trimSessionCache()
   }
+}
+
+/** 从搜索结果跳转到指定会话的指定消息：若目标消息在非当前分支，自动激活通往该消息的分支路径。 */
+export const selectSessionMessage = (sessionId: string, messageId: string) => {
+  if (
+    get().importingHistory ||
+    deletingSessions.has(sessionId) ||
+    !get().sessions.some((session) => session.id === sessionId)
+  ) {
+    return
+  }
+  cancelMessageEdit()
+  touchSession(sessionId)
+  const nonce = ++jumpSequence
+  const cached = getSession(sessionId)
+  if (cached && !getStreamController(sessionId)) {
+    const activated = activateBranch(cached, messageId)
+    if (activated !== cached) {
+      set((state) => ({
+        activeId: sessionId,
+        pendingJump: { sessionId, messageId, nonce },
+        sessionCache: { ...state.sessionCache, [sessionId]: activated },
+      }))
+      persist(sessionId)
+      trimSessionCache()
+      return
+    }
+  }
+  set({ activeId: sessionId, pendingJump: { sessionId, messageId, nonce } })
+  void ensureSessionLoaded(sessionId)
+  trimSessionCache()
+}
+
+export const clearPendingJump = (nonce?: number) => {
+  set((state) =>
+    state.pendingJump && (nonce === undefined || state.pendingJump.nonce === nonce)
+      ? { pendingJump: null }
+      : state
+  )
 }
 
 export const renameSession = (id: string, title: string) => {
@@ -688,6 +749,7 @@ const removeSessionData = async (id: string): Promise<boolean> => {
         Object.entries(state.sessionSaveErrors).filter(([key]) => key !== id)
       ),
       activeId: state.activeId === id ? null : state.activeId,
+      pendingJump: state.pendingJump?.sessionId === id ? null : state.pendingJump,
     }))
     return true
   } catch (error) {

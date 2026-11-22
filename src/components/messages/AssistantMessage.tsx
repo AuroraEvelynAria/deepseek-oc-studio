@@ -49,6 +49,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   isLast,
   streaming,
   busy,
+  searchHighlightNonce = null,
   versions,
   onSelectVersion,
 }: {
@@ -57,6 +58,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   isLast: boolean
   streaming: boolean
   busy: boolean
+  searchHighlightNonce?: number | null
   versions: MessageVersions
   onSelectVersion: SelectMessageVersion
 }) {
@@ -126,7 +128,13 @@ export const AssistantMessage = memo(function AssistantMessage({
     streaming && view.steps.length === 0 && !view.answer && (android || !message.thinking)
   const summaryEntry = `${message.id}-summary`
   return (
-    <div className={styles.message}>
+    <div
+      className={clsx(styles.message, searchHighlightNonce !== null && styles.searchHighlighted)}
+      data-message-id={message.id}
+    >
+      {searchHighlightNonce !== null ? (
+        <div key={searchHighlightNonce} className={styles.searchHighlight} aria-hidden="true" />
+      ) : null}
       {refused ? null : (
         <ReplyArea
           message={message}

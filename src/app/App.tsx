@@ -34,6 +34,7 @@ import { stopReadAloud } from '../services/speech/readAloud.js'
 import { setInert } from '../utils/inert.js'
 import { CollapsedSider } from '../components/sider/CollapsedSider.js'
 import {
+  closeDrawerSearch,
   closeMobileSider,
   openMobileSider,
   useMobileSider,
@@ -133,6 +134,7 @@ export const App = () => {
   const configured = useSettings((state) => Boolean(state.apiKey || state.chatConfig.endpoint))
   const needsApiKey = Boolean(android && !configured)
   const drawerOpen = useMobileSider((state) => state.open)
+  const searchOpen = useMobileSider((state) => state.searchOpen)
   const modalDrawerOpen = drawerOpen && !androidWide
   const mainRef = useRef<HTMLElement>(null)
   const prevAndroidWideRef = useRef(androidWide)
@@ -153,7 +155,7 @@ export const App = () => {
   )
   const activeId = useChatStore((state) => state.activeId)
 
-  useAndroidBackInterception(modalDrawerOpen)
+  useAndroidBackInterception(modalDrawerOpen || (drawerOpen && searchOpen))
   usePreventPageScroll(isMobile && !android)
 
   useEffect(() => {
@@ -223,8 +225,7 @@ export const App = () => {
     const targets = Array.from(main.querySelectorAll<HTMLElement>('[data-side-shift]'))
     const starts = targets.map((element) => {
       const currentX = animations.has(element) ? readTranslateX(element) : 0
-      const shift =
-        element.dataset.sideShift === 'edge' ? SIDE_DRAWER_WIDTH : SIDE_DRAWER_WIDTH / 2
+      const shift = element.dataset.sideShift === 'edge' ? SIDE_DRAWER_WIDTH : SIDE_DRAWER_WIDTH / 2
       return currentX + (drawerOpen ? -shift : shift)
     })
     targets.forEach((element, index) => {
@@ -302,6 +303,8 @@ export const App = () => {
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
       } else if (useSearchPanel.getState().entry) {
         closeSearchPanel()
+      } else if (useMobileSider.getState().open && useMobileSider.getState().searchOpen) {
+        closeDrawerSearch()
       } else if (!isAndroidWide() && useMobileSider.getState().open) {
         closeMobileSider()
       } else {
@@ -323,6 +326,7 @@ export const App = () => {
         ref={frameRef}
         className={styles.frame}
         data-drawer-open={drawerOpen}
+        data-drawer-search={android && searchOpen ? 'true' : undefined}
         data-drawer-layout={android ? (androidWide ? 'side' : 'modal') : undefined}
         {...(android && !androidWide ? drawerGesture : {})}
       >

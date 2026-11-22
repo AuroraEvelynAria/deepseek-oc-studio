@@ -251,7 +251,8 @@
   visibility: hidden;
   transition:
     transform var(--drawer-transition),
-    visibility var(--drawer-transition);
+    visibility var(--drawer-transition),
+    width var(--drawer-transition);
   box-sizing: border-box;
 }
 
@@ -477,19 +478,29 @@
   gap: 8px;
   height: 48px;
   padding: 0 14px;
+  border: 0;
   border-radius: 24px;
   color: var(--dsw-alias-label-tertiary);
   background: var(--dsw-alias-bg-skeleton);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+  user-select: none;
 
-  input {
-    flex: 1;
-    min-width: 0;
-    padding: 0;
-    border: 0;
-    outline: none;
-    color: var(--dsw-alias-label-primary);
-    background: transparent;
-    font: inherit;
-    font-size: 16px;
+  > svg {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
   }
+}
+
+.searchPlaceholder {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 16px;
+  line-height: 22px;
 }

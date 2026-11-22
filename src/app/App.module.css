@@ -38,6 +38,11 @@
   }
 }
 
+/* 抽屉内容搜索页：模态抽屉展开至全宽，将主对话平滑推至右侧视野外 */
+[data-android] .frame[data-drawer-layout='modal'][data-drawer-search='true'] {
+  --drawer-edge: calc(100% - 0px);
+}
+
 /* 抽屉动画的变量只用于外层，避免每次移动把它们传给消息树。 */
 [data-android] .content {
   --drawer-progress: initial;

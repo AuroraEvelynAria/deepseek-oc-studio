@@ -214,6 +214,24 @@ export const loadSessionSummaries = async (): Promise<SessionSummary[]> => {
 export const loadSession = (id: string): Promise<Session | undefined> =>
   withActive('readonly', (tx, { slot }) => tx.objectStore(slots[slot].sessions).get(id))
 
+/** 在单次只读事务中按游标流式扫描会话，避免逐条开事务或一次性将全部会话驻留内存。 */
+export const scanSessions = async (
+  onSession: (session: Session) => boolean,
+  skipIds?: ReadonlySet<string>
+): Promise<void> => {
+  await withActive('readonly', async (tx, { slot }) => {
+    let cursor = await tx.objectStore(slots[slot].sessions).openCursor()
+    while (cursor) {
+      if (!skipIds?.has(cursor.primaryKey)) {
+        if (!onSession(cursor.value)) {
+          break
+        }
+      }
+      cursor = await cursor.continue()
+    }
+  })
+}
+
 export const saveSession = (session: Session, files: StoredFile[] = []): Promise<void> =>
   withActive('readwrite', async (tx, { slot }) => {
     const stores = slots[slot]

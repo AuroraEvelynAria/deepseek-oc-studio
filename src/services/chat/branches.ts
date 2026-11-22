@@ -115,3 +115,113 @@ export const selectVersion = (original: Session, messageId: string): Session => 
     ),
   }
 }
+
+/** 收集所有能沿 parentId 回到有效根节点的消息 ID，过滤孤立或成环的损坏节点。 */
+export const getReachableMessageIds = (original: Session): Set<string> => {
+  const session = normalizeSession(original)
+  const byId = new Map(session.messages.map((message) => [message.id, message]))
+  const memo = new Map<string, boolean>()
+  const reachable = new Set<string>()
+
+  const isReachable = (id: string): boolean => {
+    const cached = memo.get(id)
+    if (cached !== undefined) {
+      return cached
+    }
+    const chain: string[] = []
+    const visiting = new Set<string>()
+    let currentId: string | null | undefined = id
+    let valid = false
+
+    while (currentId) {
+      const known = memo.get(currentId)
+      if (known !== undefined) {
+        valid = known
+        break
+      }
+      if (visiting.has(currentId)) {
+        valid = false
+        break
+      }
+      const message = byId.get(currentId)
+      if (!message) {
+        valid = false
+        break
+      }
+      visiting.add(currentId)
+      chain.push(currentId)
+      if (message.parentId === null) {
+        valid = true
+        break
+      }
+      currentId = message.parentId
+    }
+
+    for (const itemId of chain) {
+      memo.set(itemId, valid)
+    }
+    return valid
+  }
+
+  for (const message of session.messages) {
+    if (isReachable(message.id)) {
+      reachable.add(message.id)
+    }
+  }
+  return reachable
+}
+
+/**
+ * 激活通往目标消息（含非当前分支深层节点）的整条祖先路径，同时保留该节点下已选中的后续子分支。
+ * 若目标消息已在当前可见路径上或无法从根到达，原样返回。
+ */
+export const activateBranch = (original: Session, messageId: string): Session => {
+  const session = normalizeSession(original)
+  const byId = new Map(session.messages.map((message) => [message.id, message]))
+  const target = byId.get(messageId)
+  if (!target) {
+    return original
+  }
+
+  const desiredChild = new Map<string, string>()
+  const visited = new Set<string>([target.id])
+  let current = target
+  while (current.parentId !== null) {
+    const parentId = current.parentId
+    if (!parentId || visited.has(parentId)) {
+      return original
+    }
+    const parent = byId.get(parentId)
+    if (!parent) {
+      return original
+    }
+    visited.add(parent.id)
+    desiredChild.set(parent.id, current.id)
+    current = parent
+  }
+
+  const rootId = current.id
+  let changed = session.rootMessageId !== rootId
+  if (!changed) {
+    for (const [parentId, childId] of desiredChild) {
+      if (byId.get(parentId)?.selectedChildId !== childId) {
+        changed = true
+        break
+      }
+    }
+  }
+  if (!changed) {
+    return original
+  }
+
+  return {
+    ...session,
+    rootMessageId: rootId,
+    messages: session.messages.map((message) => {
+      const nextChild = desiredChild.get(message.id)
+      return nextChild !== undefined && message.selectedChildId !== nextChild
+        ? { ...message, selectedChildId: nextChild }
+        : message
+    }),
+  }
+}

@@ -11,6 +11,52 @@
   }
 }
 
+.searchHighlighted {
+  z-index: 0;
+}
+
+.searchHighlight {
+  position: absolute;
+  top: 0;
+  right: -12px;
+  bottom: 0;
+  left: -12px;
+  z-index: -1;
+  border-radius: 12px;
+  background-color: rgb(242 242 242);
+  pointer-events: none;
+  animation: assistantSearchHighlightFade 1.8s ease-out forwards;
+}
+
+[data-android] .searchHighlight {
+  top: 0;
+  right: -20px;
+  bottom: 0;
+  left: -20px;
+  border-radius: 0;
+}
+
+[data-ds-dark-theme] .searchHighlight {
+  background-color: rgb(39 39 39);
+}
+
+@keyframes assistantSearchHighlightFade {
+  0%,
+  55% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .searchHighlight {
+    animation: none;
+  }
+}
+
 [data-android] .message {
   contain: layout style;
   padding: 11.38px 0 0 4px;

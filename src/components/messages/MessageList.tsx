@@ -7,7 +7,7 @@ import {
   type MessageVersions,
 } from '../../services/chat/branches.js'
 import { cancelMessageEdit, useDrafts } from '../../services/chat/drafts.js'
-import { selectMessageVersion } from '../../services/chat/store.js'
+import { clearPendingJump, selectMessageVersion, useChatStore } from '../../services/chat/store.js'
 import type { Session } from '../../services/chat/types.js'
 import { closeSearchPanel } from '../search/searchPanelState.js'
 import { AssistantMessage } from './AssistantMessage.js'
@@ -42,6 +42,9 @@ const EMPTY_VERSIONS: MessageVersions = { ids: [], index: -1 }
 const INITIAL_MESSAGES = 4
 const OLDER_MESSAGES = 8
 const OLDER_THRESHOLD = 320
+const SEARCH_JUMP_TOP_OFFSET = 10
+const SEARCH_JUMP_SETTLE_MS = 650
+const SEARCH_HIGHLIGHT_MS = 1800
 
 export const MessageList = ({
   session,
@@ -64,18 +67,36 @@ export const MessageList = ({
   const scrollTopRef = useRef(0)
   const jumpFrameRef = useRef(0)
   const restoreScrollRef = useRef<{ messageId: string; top: number } | null>(null)
+  const jumpAnchorRef = useRef<{ messageId: string; expiresAt: number } | null>(null)
+  const searchHighlightTimerRef = useRef<number | undefined>(undefined)
+  const [searchHighlight, setSearchHighlight] = useState<{
+    sessionId: string
+    messageId: string
+    nonce: number
+  } | null>(null)
+  const pendingJump = useChatStore((state) =>
+    state.pendingJump?.sessionId === session.id ? state.pendingJump : null
+  )
   const editingMessageId = useDrafts((state) =>
     android && state.editing?.sessionId === session.id ? state.editing.messageId : null
   )
   const editingMessageIdRef = useRef(editingMessageId)
   editingMessageIdRef.current = editingMessageId
   const messages = useMemo(() => getVisibleMessages(session), [session])
+  const pendingJumpIndex = pendingJump
+    ? messages.findIndex((message) => message.id === pendingJump.messageId)
+    : -1
   const latestStart = Math.max(0, messages.length - INITIAL_MESSAGES)
-  const [messageWindow, setMessageWindow] = useState({ sessionId: session.id, start: latestStart })
+  const requiredStart =
+    pendingJumpIndex >= 0 ? Math.min(latestStart, Math.max(0, pendingJumpIndex - 1)) : latestStart
+  const [messageWindow, setMessageWindow] = useState({
+    sessionId: session.id,
+    start: requiredStart,
+  })
   const start =
     messageWindow.sessionId === session.id
-      ? Math.min(messageWindow.start, latestStart)
-      : latestStart
+      ? Math.min(messageWindow.start, requiredStart)
+      : requiredStart
   if (messageWindow.sessionId !== session.id || messageWindow.start !== start) {
     setMessageWindow({ sessionId: session.id, start })
   }
@@ -158,7 +179,38 @@ export const MessageList = ({
       })
     }
   }, [])
+  const alignJumpTarget = useCallback((messageId: string) => {
+    const scroll = scrollRef.current
+    const content = contentRef.current
+    if (!scroll || !content) {
+      return false
+    }
+    const target = content.querySelector<HTMLElement>(
+      `[data-message-id="${CSS.escape(messageId)}"]`
+    )
+    if (!target) {
+      return false
+    }
+    const scrollRect = scroll.getBoundingClientRect()
+    const targetRect = target.getBoundingClientRect()
+    const maxTop = Math.max(0, scroll.scrollHeight - scroll.clientHeight)
+    const nextTop = Math.max(
+      0,
+      Math.min(
+        maxTop,
+        scroll.scrollTop + (targetRect.top - scrollRect.top) - SEARCH_JUMP_TOP_OFFSET
+      )
+    )
+    programmaticScrollRef.current = true
+    scroll.scrollTop = nextTop
+    scrollTopRef.current = scroll.scrollTop
+    requestAnimationFrame(() => {
+      programmaticScrollRef.current = false
+    })
+    return true
+  }, [])
   const stopFollowing = useCallback(() => {
+    jumpAnchorRef.current = null
     cancelJump()
     stickyRef.current = false
     updateJumpVisibility()
@@ -236,6 +288,16 @@ export const MessageList = ({
         ensureEditedBubbleVisible()
         return
       }
+      const jumpAnchor = jumpAnchorRef.current
+      if (jumpAnchor) {
+        if (performance.now() < jumpAnchor.expiresAt) {
+          stickyRef.current = false
+          alignJumpTarget(jumpAnchor.messageId)
+          updateJumpVisibility()
+          return
+        }
+        jumpAnchorRef.current = null
+      }
       if (stickyRef.current && !jumpingRef.current) {
         scrollToBottom()
       } else {
@@ -249,7 +311,7 @@ export const MessageList = ({
       observer.observe(desktopFooter)
     }
     return () => observer.disconnect()
-  }, [isMobile, ensureEditedBubbleVisible, scrollToBottom, updateJumpVisibility])
+  }, [isMobile, alignJumpTarget, ensureEditedBubbleVisible, scrollToBottom, updateJumpVisibility])
 
   useLayoutEffect(() => {
     if (!editingMessageId) {
@@ -424,10 +486,59 @@ export const MessageList = ({
       updateJumpVisibility()
       return
     }
+    if (useChatStore.getState().pendingJump?.sessionId === session.id) {
+      return
+    }
+    jumpAnchorRef.current = null
     cancelJump()
     stickyRef.current = true
     scrollToBottom()
   }, [session.id, lastMessageId, cancelJump, scrollToBottom, updateJumpVisibility])
+
+  // 消费来自搜索结果的消息定位请求：滚动到目标消息并显示短暂底色高亮，随后自动淡出。
+  useLayoutEffect(() => {
+    if (!pendingJump) {
+      return
+    }
+    if (pendingJumpIndex < 0) {
+      clearPendingJump(pendingJump.nonce)
+      return
+    }
+    cancelJump()
+    stickyRef.current = false
+    if (alignJumpTarget(pendingJump.messageId)) {
+      jumpAnchorRef.current = {
+        messageId: pendingJump.messageId,
+        expiresAt: performance.now() + SEARCH_JUMP_SETTLE_MS,
+      }
+      window.clearTimeout(searchHighlightTimerRef.current)
+      setSearchHighlight({
+        sessionId: session.id,
+        messageId: pendingJump.messageId,
+        nonce: pendingJump.nonce,
+      })
+      searchHighlightTimerRef.current = window.setTimeout(() => {
+        setSearchHighlight((current) => (current?.nonce === pendingJump.nonce ? null : current))
+      }, SEARCH_HIGHLIGHT_MS)
+      updateJumpVisibility()
+      clearPendingJump(pendingJump.nonce)
+    }
+  }, [
+    alignJumpTarget,
+    cancelJump,
+    pendingJump,
+    pendingJumpIndex,
+    session.id,
+    start,
+    updateJumpVisibility,
+  ])
+
+  useEffect(
+    () => () => {
+      window.clearTimeout(searchHighlightTimerRef.current)
+    },
+    []
+  )
 
   useEffect(closeSearchPanel, [session.id, lastMessageId])
   useEffect(() => cancelJump, [cancelJump])
@@ -487,14 +598,15 @@ export const MessageList = ({
       )
     }
     const interruptJump = (event: Event) => {
-      if (!jumpingRef.current) {
-        return
-      }
       const target = event.target
       if (
         target instanceof Node &&
         (desktopFooterRef.current?.contains(target) || jumpSlotRef.current?.contains(target))
       ) {
+        return
+      }
+      jumpAnchorRef.current = null
+      if (!jumpingRef.current) {
         return
       }
       cancelJump()
@@ -541,6 +653,11 @@ export const MessageList = ({
             >
               {messages.slice(start).map((message, offset) => {
                 const index = start + offset
+                const highlightNonce =
+                  searchHighlight?.sessionId === session.id &&
+                  searchHighlight.messageId === message.id
+                    ? searchHighlight.nonce
+                    : null
                 return message.role === 'user' ? (
                   <UserMessage
                     key={message.id}
@@ -551,6 +668,7 @@ export const MessageList = ({
                     isLast={index === lastIndex || index === lastIndex - 1}
                     busy={streaming}
                     editingTarget={editingMessageId === message.id}
+                    searchHighlightNonce={highlightNonce}
                     versions={versions.get(message.id) ?? EMPTY_VERSIONS}
                     onSelectVersion={selectVersion}
                   />
@@ -562,6 +680,7 @@ export const MessageList = ({
                     isLast={index === lastIndex}
                     streaming={streaming && index === lastIndex}
                     busy={streaming}
+                    searchHighlightNonce={highlightNonce}
                     versions={versions.get(message.id) ?? EMPTY_VERSIONS}
                     onSelectVersion={selectVersion}
                   />

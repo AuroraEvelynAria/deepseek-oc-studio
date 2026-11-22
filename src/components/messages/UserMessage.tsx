@@ -32,6 +32,7 @@ export const UserMessage = memo(function UserMessage({
   isLast,
   busy,
   editingTarget = false,
+  searchHighlightNonce = null,
   versions,
   onSelectVersion,
 }: {
@@ -43,6 +44,7 @@ export const UserMessage = memo(function UserMessage({
   isLast: boolean
   busy: boolean
   editingTarget?: boolean
+  searchHighlightNonce?: number | null
   versions: MessageVersions
   onSelectVersion: SelectMessageVersion
 }) {
@@ -102,9 +104,17 @@ export const UserMessage = memo(function UserMessage({
 
   return (
     <div
-      className={clsx(styles.container, isFirst && styles.isFirst)}
+      className={clsx(
+        styles.container,
+        isFirst && styles.isFirst,
+        searchHighlightNonce !== null && styles.searchHighlighted
+      )}
+      data-message-id={message.id}
       data-editing-target={editingTarget ? 'true' : undefined}
     >
+      {searchHighlightNonce !== null ? (
+        <div key={searchHighlightNonce} className={styles.searchHighlight} aria-hidden="true" />
+      ) : null}
       {message.files.length > 0 ? (
         <div
           className={clsx(
