@@ -69,6 +69,8 @@
 
 请前往 [GitHub Releases](https://github.com/AuroraEvelynAria/deepseek-oc-studio/releases) 获取 APK（跟随上游发布流程，目前亦可自行从源码构建）。
 
+> 本应用的 `applicationId` 是 `io.github.auroraevelynaria.deepseekocstudio`，因此可以与上游 `deepseek-app-replica` 同时安装、互不覆盖。注意：从旧包（`io.github.lijiahua1024.dsreplica`）换到新包时，Android 不会跨包迁移数据，需要手动安装新包并重新配置 Key / 模型；旧包可以保留或自行卸载。
+
 > 当前源码构建的 APK 支持 Android 9（API 级别 28）及以上版本，前端兼容 WebView 66+。兼容测试覆盖 Android 10 的预装 WebView 74、升级后的 WebView 83，以及 Android 11 的预装 WebView 83。
 
 ## 使用步骤

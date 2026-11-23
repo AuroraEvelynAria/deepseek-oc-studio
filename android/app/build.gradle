@@ -9,6 +9,8 @@ if (releaseSigningFile.isFile()) {
 }
 
 android {
+    // 源码 namespace 保持上游值（R/类包名不动）；安装身份用独立 applicationId，
+    // 这样本 App 可以和上游 replica 同时安装、数据互不覆盖。
     namespace = 'io.github.lijiahua1024.dsreplica'
     // 本地环境未安装 platform-37，降级到 36（targetSdk 一致；原生层未使用 API 37 特性）。
     compileSdk = 36
@@ -22,11 +24,11 @@ android {
     }
 
     defaultConfig {
-        applicationId = 'io.github.lijiahua1024.dsreplica'
+        applicationId = 'io.github.auroraevelynaria.deepseekocstudio'
         minSdk = 28
         targetSdk = 36
-        versionCode = 31
-        versionName = '1.0.2'
+        versionCode = 32
+        versionName = '1.1.0'
     }
 
     signingConfigs {
