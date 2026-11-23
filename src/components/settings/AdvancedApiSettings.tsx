@@ -9,6 +9,7 @@ import {
   type ChatApiFormat,
 } from '../../services/api/chatConfig.js'
 import { setChatConfig, useSettings } from '../../services/settings.js'
+import { activatePreset, savePreset, useModels } from '../../services/models/store.js'
 import { Button } from '../base/Button.js'
 import { Modal } from '../base/Modal.js'
 import { Select } from '../base/Select.js'
@@ -63,11 +64,21 @@ export const AdvancedApiSettings = ({ onSave }: { onSave: () => void }) => {
       format,
       apiKey: endpoint ? draft.apiKey.trim() : '',
     }
-    if (setChatConfig(config)) {
-      onSave()
-    } else {
-      setError('advancedSaveFailed')
+    // 高级设置即「编辑当前激活预设」：保存后立即以该预设生效，避免双入口不同步
+    const active = useModels.getState().presets.find(
+      (item) => item.id === useModels.getState().activeId
+    )
+    if (!active) {
+      if (setChatConfig(config)) {
+        onSave()
+      } else {
+        setError('advancedSaveFailed')
+      }
+      return
     }
+    savePreset({ ...active, ...config })
+    activatePreset(active.id)
+    onSave()
   }
   const reset = () => {
     if (setChatConfig(DEFAULT_CHAT_CONFIG)) {

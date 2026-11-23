@@ -15,6 +15,13 @@ export const isContextOverflow = (error: unknown): error is ApiError =>
     attachmentOverflow.test(error.message))
 
 /**
+ * 第三方端点的 404 或 model_not_found：模型 ID 填错，或端点路径不对
+ * （OpenAI 兼容网关普遍要求 /v1 前缀）。给用户可自查的专用提示。
+ */
+export const isModelNotFound = (error: unknown): boolean =>
+  error instanceof ApiError && (error.status === 404 || error.code === 'model_not_found')
+
+/**
  * 接口失败的统一分类。各调用方按自己的场景给同一种情况配不同文案，
  * 例如余额不足在回答、上传、朗读里措辞不同，所以这里只归类，不生成文案。
  */

@@ -71,8 +71,16 @@ export const openAIRequest = (
       ...common,
       messages: body.system ? [{ role: 'system', content: body.system }, ...messages] : messages,
       ...(deepSeek
-        ? { max_tokens: body.max_tokens, thinking: body.thinking }
-        : { max_completion_tokens: body.max_tokens }),
+        ? // 官方 OpenAI 兼容格式的 thinking 扩展只认开关；effort 不透传
+          { max_tokens: body.max_tokens, thinking: { type: body.thinking.type } }
+        : {
+            max_completion_tokens: body.max_tokens,
+            // 第三方端点：思考开启且声明了强度时才发 reasoning_effort（off 不发，
+            // 网关不支持的模型可关闭预设的思考能力标记来避免报错）
+            ...(body.thinking.type === 'enabled' && body.thinking.effort
+              ? { reasoning_effort: body.thinking.effort }
+              : {}),
+          }),
     }
   }
   return {
@@ -81,8 +89,17 @@ export const openAIRequest = (
     instructions: body.system || undefined,
     max_output_tokens: body.max_tokens,
     reasoning: deepSeek
-      ? { effort: body.thinking.type === 'enabled' ? 'high' : 'none' }
-      : undefined,
+      ? {
+          effort:
+            body.thinking.type === 'disabled'
+              ? 'none'
+              : body.thinking.effort === 'medium'
+                ? 'medium'
+                : 'high',
+        }
+      : body.thinking.type === 'enabled' && body.thinking.effort
+        ? { effort: body.thinking.effort }
+        : undefined,
     store: false,
   }
 }

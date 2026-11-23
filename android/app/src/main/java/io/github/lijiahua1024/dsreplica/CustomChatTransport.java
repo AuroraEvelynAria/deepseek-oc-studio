@@ -22,6 +22,11 @@ final class CustomChatTransport {
     private final ExecutorService workers = Executors.newCachedThreadPool();
 
     String begin(String savedConfig, String endpoint, String format, String body, Consumer<String> emit) {
+        return begin(savedConfig, endpoint, format, null, body, emit);
+    }
+
+    /** headersJson：可选的自定义请求头 JSON 对象（应用在内置头之后，可覆盖认证头）。 */
+    String begin(String savedConfig, String endpoint, String format, String headersJson, String body, Consumer<String> emit) {
         if (savedConfig == null || endpoint == null || format == null || body == null) return null;
         try {
             JSONObject config = new JSONObject(savedConfig);
@@ -34,8 +39,9 @@ final class CustomChatTransport {
             if (!format.equals("messages") && !format.equals("chat") && !format.equals("responses")) {
                 return null;
             }
+            JSONObject extraHeaders = headersJson == null ? null : new JSONObject(headersJson);
             String id = UUID.randomUUID().toString();
-            Exchange exchange = new Exchange(target, config.optString("apiKey"), format);
+            Exchange exchange = new Exchange(target, config.optString("apiKey"), format, extraHeaders);
             exchanges.put(id, exchange);
             workers.execute(() -> stream(id, exchange, body, emit));
             return id;
@@ -61,6 +67,16 @@ final class CustomChatTransport {
                 if (!exchange.key.isEmpty()) connection.setRequestProperty("x-api-key", exchange.key);
             } else if (!exchange.key.isEmpty()) {
                 connection.setRequestProperty("Authorization", "Bearer " + exchange.key);
+            }
+            if (exchange.extraHeaders != null) {
+                java.util.TreeSet<String> names = new java.util.TreeSet<>();
+                java.util.Iterator<?> it = exchange.extraHeaders.keys();
+                while (it.hasNext()) names.add(String.valueOf(it.next()));
+                for (String name : names) {
+                    if (name == null || name.isEmpty()) continue;
+                    String value = exchange.extraHeaders.optString(name, null);
+                    if (value != null) connection.setRequestProperty(name, value);
+                }
             }
             byte[] data = body.getBytes(StandardCharsets.UTF_8);
             connection.setFixedLengthStreamingMode(data.length);
@@ -117,13 +133,15 @@ final class CustomChatTransport {
         final URI target;
         final String key;
         final String format;
+        final JSONObject extraHeaders;
         volatile boolean cancelled;
         volatile HttpURLConnection connection;
 
-        Exchange(URI target, String key, String format) {
+        Exchange(URI target, String key, String format, JSONObject extraHeaders) {
             this.target = target;
             this.key = key;
             this.format = format;
+            this.extraHeaders = extraHeaders;
         }
     }
 }

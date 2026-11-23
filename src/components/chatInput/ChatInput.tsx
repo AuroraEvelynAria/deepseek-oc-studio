@@ -11,7 +11,8 @@ import {
   IconStopFill16,
   IconThinkOutline14,
 } from '../base/icons.js'
-import { setSearch, setThinking, useSettings } from '../../services/settings.js'
+import { setSearch, setThinkingLevel, useSettings } from '../../services/settings.js'
+import { useModels } from '../../services/models/store.js'
 import { useIsMobile } from '../../app/viewport.js'
 import { editMessage, sendMessage, stopReply, useChatStore } from '../../services/chat/store.js'
 import {
@@ -38,7 +39,7 @@ import { Tooltip } from '../base/Tooltip.js'
 import { ensureApiKey } from '../settings/settingsDialogState.js'
 import { DragMask, useFileDrop } from './DragMask.js'
 import { showToast } from '../base/toastState.js'
-import { ACCEPT, useUploads } from '../../services/attachments.js'
+import { ACCEPT, useUploads, isAttachmentImage } from '../../services/attachments.js'
 import { DraftAttachments } from './DraftAttachments.js'
 import { useVoiceInput } from './useVoiceInput.js'
 import { VoiceButton } from './VoiceButton.js'
@@ -90,6 +91,14 @@ const Input = ({
   const activeDraft = editing ?? draft
   const { text, attachments } = activeDraft
   const customEndpoint = useSettings((state) => Boolean(state.chatConfig.endpoint))
+  // 当前预设的模型能力：官方端点恒支持视觉/思考/搜索，自定义端点看预设标记
+  const modelCapabilities = useModels((state) => {
+    const preset = state.presets.find((item) => item.id === state.activeId)
+    if (!preset || preset.endpoint === '') {
+      return { vision: true, reasoning: true, search: true }
+    }
+    return { vision: preset.vision, reasoning: preset.reasoning, search: preset.search }
+  })
   const apiKey = useSettings((state) => state.apiKey)
   const uploadKey = customEndpoint ? null : apiKey
   const isEditingTarget = useCallback(
@@ -122,7 +131,7 @@ const Input = ({
   const streaming = useChatStore(
     (state) => sessionId !== null && Object.hasOwn(state.streaming, sessionId)
   )
-  const thinking = useSettings((state) => state.thinking)
+  const thinkingLevel = useSettings((state) => state.thinkingLevel)
   const importingHistory = useChatStore((state) => state.importingHistory)
   const isMobile = useIsMobile()
   const search = useSettings((state) => state.search)
@@ -204,9 +213,19 @@ const Input = ({
     if (files.length === 0 || useChatStore.getState().importingHistory || !ensureApiKey()) {
       return
     }
+    // 非视觉模型下过滤图片附件（覆盖选择、拖拽、粘贴所有入口）
+    const accepted = modelCapabilities.vision
+      ? files
+      : files.filter((file) => !isAttachmentImage(file))
+    if (accepted.length < files.length) {
+      showToast({ key: 'visionRejected', type: 'error' })
+    }
+    if (accepted.length === 0) {
+      return
+    }
     const error = isEditingTarget()
-      ? addEditFiles(files, uploadKey, recentPhotoId)
-      : addDraftFiles(sessionId, files, uploadKey, recentPhotoId)
+      ? addEditFiles(accepted, uploadKey, recentPhotoId)
+      : addDraftFiles(sessionId, accepted, uploadKey, recentPhotoId)
     if (error) {
       showToast(error)
     }
@@ -599,36 +618,59 @@ const Input = ({
           )}
         </div>
         <div className={styles.functionRow}>
-          {/* 深度思考 / 智能搜索开关，tooltip 在按钮上方 */}
+          {/* 思考强度 / 智能搜索开关，tooltip 在按钮上方；思考按钮在支持的第三方端点也可用 */}
           <div ref={togglesRef} className={styles.toggles}>
-            {customEndpoint ? null : (
-              <>
-                <Tooltip content={t('deactivatedThinkTooltip')}>
-                  <button
-                    type="button"
-                    className={clsx(styles.toggle, thinking && styles.selected)}
-                    aria-label={t('thinkingSwitch')}
-                    aria-pressed={thinking}
-                    onClick={() => setThinking(!thinking)}
-                  >
-                    <IconThinkOutline14 />
-                    <span className={styles.toggleLabel}>{t('thinkingSwitch')}</span>
-                  </button>
-                </Tooltip>
-                <Tooltip content={t('deactivatedSearchTooltip')}>
-                  <button
-                    type="button"
-                    className={clsx(styles.toggle, search && styles.selected)}
-                    aria-label={t('search')}
-                    aria-pressed={search}
-                    onClick={() => setSearch(!search)}
-                  >
-                    <IconGlobeLanguageOutline14 />
-                    <span className={styles.toggleLabel}>{t('search')}</span>
-                  </button>
-                </Tooltip>
-              </>
-            )}
+            {modelCapabilities.reasoning ? (
+              <Tooltip
+                content={t(
+                  thinkingLevel === 'off'
+                    ? 'deactivatedThinkTooltip'
+                    : thinkingLevel === 'normal'
+                      ? 'thinkingLevelNormal'
+                      : 'thinkingLevelDeep'
+                )}
+              >
+                <button
+                  type="button"
+                  className={clsx(
+                    styles.toggle,
+                    thinkingLevel !== 'off' && styles.selected,
+                    thinkingLevel === 'deep' && styles.deep
+                  )}
+                  aria-label={`${t('thinkingSwitch')} · ${t(
+                    thinkingLevel === 'off'
+                      ? 'thinkingLevelOff'
+                      : thinkingLevel === 'normal'
+                        ? 'thinkingLevelNormal'
+                        : 'thinkingLevelDeep'
+                  )}`}
+                  onClick={() =>
+                    setThinkingLevel(
+                      thinkingLevel === 'off' ? 'normal' : thinkingLevel === 'normal' ? 'deep' : 'off'
+                    )
+                  }
+                >
+                  <IconThinkOutline14 />
+                  <span className={styles.toggleLabel}>
+                    {thinkingLevel === 'deep' ? `${t('thinkingSwitch')} · ${t('thinkingLevelDeep')}` : t('thinkingSwitch')}
+                  </span>
+                </button>
+              </Tooltip>
+            ) : null}
+            {modelCapabilities.search ? (
+              <Tooltip content={t('deactivatedSearchTooltip')}>
+                <button
+                  type="button"
+                  className={clsx(styles.toggle, search && styles.selected)}
+                  aria-label={t('search')}
+                  aria-pressed={search}
+                  onClick={() => setSearch(!search)}
+                >
+                  <IconGlobeLanguageOutline14 />
+                  <span className={styles.toggleLabel}>{t('search')}</span>
+                </button>
+              </Tooltip>
+            ) : null}
           </div>
           <div className={styles.right}>
             {android ? (
@@ -741,6 +783,7 @@ const Input = ({
         <>
           <AndroidAttachments
             open={showAttachments}
+            imagesAllowed={modelCapabilities.vision}
             selectedPhotos={
               new Map(
                 attachments.flatMap((item) =>

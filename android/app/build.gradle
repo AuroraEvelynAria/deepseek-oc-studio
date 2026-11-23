@@ -10,7 +10,8 @@ if (releaseSigningFile.isFile()) {
 
 android {
     namespace = 'io.github.lijiahua1024.dsreplica'
-    compileSdk = 37
+    // 本地环境未安装 platform-37，降级到 36（targetSdk 一致；原生层未使用 API 37 特性）。
+    compileSdk = 36
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

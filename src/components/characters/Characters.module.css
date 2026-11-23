@@ -1,0 +1,557 @@
+/* 角色与记忆对话框；配色与圆角跟随设计系统的别名变量。 */
+
+.dialog {
+  width: min(560px, calc(100vw - 48px));
+}
+
+/* 视图切换：key 变化触发重挂载，淡入过渡 */
+.viewFade {
+  animation: view-enter 160ms ease-out;
+}
+
+@keyframes view-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* 区块标题（角色 / 模型） */
+.sectionTitle {
+  margin: 4px 0 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 模型预设行的能力小标记 */
+.capChips {
+  display: flex;
+  gap: 4px;
+  flex: 1 0 100%;
+}
+
+.capChip {
+  padding: 1px 8px;
+  border-radius: 100px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  font-size: 11px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.modelBadge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--dsw-alias-button-primary-fill);
+  color: var(--dsw-alias-label-primary-foreground, #fff);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+/* 命中提供商模板 / 官方端点的预设行用官方图标代替首字占位：
+   40px 圆底居中，图标内缩到 24px，避免各家画布留白差异导致偏大或偏移 */
+.modelBadgeIcon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--dsw-alias-bg-skeleton);
+  box-sizing: border-box;
+}
+
+.modelBadgeIcon img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+/* 模板选择 chip：官方图标 + 名称 */
+.templateChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px 5px 6px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 100px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.templateChip:hover {
+  border-color: var(--dsw-alias-brand-primary);
+}
+
+.templateIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-skeleton);
+  box-sizing: border-box;
+}
+
+.templateIcon img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+.capSwitches {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fieldHint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 侧边栏的「角色与记忆」入口（桌面与移动抽屉共用）。 */
+.siderEntry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 12px;
+  background: none;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.siderEntry:hover {
+  background: var(--dsw-specific-sidebar-nav-item-hover);
+}
+
+/* 欢迎页当前角色的小徽章。 */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 5px 14px 5px 6px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 100px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: var(--dsw-alias-brand-primary);
+}
+
+.chipAvatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  overflow: hidden;
+  object-fit: cover;
+  background: var(--dsw-alias-bg-skeleton);
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.chipAvatar img {
+  width: 16px;
+  height: 16px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-base);
+}
+
+.row[data-selected] {
+  border-color: var(--dsw-alias-brand-primary);
+}
+
+.rowMain {
+  flex: 1 1 200px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: start;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.rowText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rowName {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--ds-font-size-m);
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.checkIcon {
+  display: inline-flex;
+  color: var(--dsw-alias-brand-primary);
+  flex: none;
+}
+
+.checkIcon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.inUse {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--dsw-alias-brand-primary);
+}
+
+.rowSub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.rowActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.rowMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+  flex: 1 0 100%;
+}
+
+.listFooter {
+  display: flex;
+  justify-content: center;
+  padding-top: 12px;
+}
+
+.avatar,
+.avatarFallback {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--dsw-alias-bg-skeleton);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 16px;
+}
+
+.avatarFallback img {
+  width: 24px;
+  height: 24px;
+}
+
+.avatarFallback.l,
+.avatar.l {
+  width: 64px;
+  height: 64px;
+  font-size: 24px;
+}
+
+.toggle {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border: none;
+  border-radius: 100px;
+  padding: 0;
+  background: var(--dsw-alias-border-l2);
+  cursor: pointer;
+  transition: background var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+.toggle[data-checked] {
+  background: var(--dsw-alias-button-primary-fill);
+}
+
+.toggleThumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--dsw-alias-bg-layer-2);
+  transition: transform var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+.toggle[data-checked] .toggleThumb {
+  transform: translateX(16px);
+}
+
+.editForm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.backIcon {
+  display: inline-flex;
+  transform: rotate(180deg);
+}
+
+.backIcon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.avatarField {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.avatarActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.field input,
+.field textarea,
+.search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  resize: vertical;
+}
+
+.field input:focus,
+.field textarea:focus,
+.search:focus {
+  outline: none;
+  border-color: var(--dsw-alias-brand-primary);
+}
+
+.switchRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: var(--ds-font-size-m);
+  color: var(--dsw-alias-label-primary);
+}
+
+.editActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.memoryView {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 320px;
+}
+
+.memoryHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.memoryTitle {
+  font-size: var(--ds-font-size-m);
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.dimensionPicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dimensionChip {
+  padding: 4px 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 100px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dimensionChip[data-active] {
+  border-color: var(--dsw-alias-brand-primary);
+  color: var(--dsw-alias-brand-primary);
+}
+
+.memoryEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.memoryContent {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  resize: vertical;
+}
+
+.memoryContent:focus {
+  outline: none;
+  border-color: var(--dsw-alias-brand-primary);
+}
+
+.memoryList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.memoryEmpty {
+  padding: 32px 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.memoryCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-base);
+}
+
+.memoryCard[data-disabled] {
+  opacity: 0.55;
+}
+
+.memoryCardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.memoryCardActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dimensionTag {
+  padding: 2px 8px;
+  border-radius: 100px;
+  background: var(--dsw-alias-bg-skeleton);
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.memoryCardContent {
+  font-size: var(--ds-font-size-m);
+  color: var(--dsw-alias-label-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.memorySource summary {
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.memorySource blockquote {
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  border-inline-start: 2px solid var(--dsw-alias-border-l2);
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

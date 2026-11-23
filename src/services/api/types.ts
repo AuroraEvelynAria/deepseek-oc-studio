@@ -187,7 +187,12 @@ export type CreateMessageRequest = {
   max_tokens: number
   system: string
   messages: MessageParam[]
-  thinking: { type: 'enabled' | 'disabled' }
+  /**
+   * 思考开关与强度：type 面向 Anthropic 兼容协议与官方 OpenAI 扩展（二值）；
+   * effort 仅在 OpenAI chat/responses 格式且思考开启时携带（第三方映射
+   * reasoning_effort，responses 映射 reasoning.effort），messages 格式不携带。
+   */
+  thinking: { type: 'enabled' | 'disabled'; effort?: 'medium' | 'high' }
   tools?: (DeepseekWebSearchTool | DeepseekReadUrlTool)[]
   safety_check?: { level: 'high' }
   title?: { enabled: boolean }

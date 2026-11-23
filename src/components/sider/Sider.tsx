@@ -10,6 +10,7 @@ import {
   IconCloseOutline16,
   IconEllipsisOutline16,
   IconTrashOutline16,
+  IconDataOutline16,
   NewChatIcon,
 } from '../base/icons.js'
 import { setPinnedSessions, setSiderCollapsed, useSettings } from '../../services/settings.js'
@@ -20,6 +21,8 @@ import { IconButton } from '../base/IconButton.js'
 import { showToast } from '../base/toastState.js'
 import { ProfileAvatar } from '../settings/ProfileAvatar.js'
 import { openSettings } from '../settings/settingsDialogState.js'
+import { openList as openCharacters } from '../characters/charactersDialogState.js'
+import charStyles from '../characters/Characters.module.css'
 import { closeMobileSider, openDrawerSearch, useMobileSider } from './mobileSiderState.js'
 import { AndroidContentSearch } from './AndroidContentSearch.js'
 import { SessionActionDialog } from './SessionActionDialog.js'
@@ -185,15 +188,28 @@ export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean 
           />
         </div>
       ) : androidDrawer ? (
-        <button
-          type="button"
-          className={styles.search}
-          aria-label={t('androidSearchChats')}
-          onClick={openDrawerSearch}
-        >
-          <IconSearchOutline16 />
-          <span className={styles.searchPlaceholder}>{t('androidSearchChats')}</span>
-        </button>
+        <>
+          <button
+            type="button"
+            className={styles.search}
+            aria-label={t('androidSearchChats')}
+            onClick={openDrawerSearch}
+          >
+            <IconSearchOutline16 />
+            <span className={styles.searchPlaceholder}>{t('androidSearchChats')}</span>
+          </button>
+          <button
+            type="button"
+            className={charStyles.siderEntry}
+            onClick={() => {
+              openCharacters()
+              closeMobileSider()
+            }}
+          >
+            <IconDataOutline16 />
+            {t('charactersTitle')}
+          </button>
+        </>
       ) : (
         <>
           <div className={styles.top}>
@@ -218,6 +234,17 @@ export const Sider = memo(function Sider({ mobile = false }: { mobile?: boolean 
               <NewChatIcon />
             </span>
             {t('newChat')}
+          </button>
+          <button
+            type="button"
+            className={charStyles.siderEntry}
+            onClick={() => {
+              openCharacters()
+              closeMobileSider()
+            }}
+          >
+            <IconDataOutline16 />
+            {t('charactersTitle')}
           </button>
         </>
       )}

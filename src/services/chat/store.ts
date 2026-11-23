@@ -8,6 +8,7 @@ import {
   getFileErrorCode,
   getRejectedImagePosition,
   isContextOverflow,
+  isModelNotFound,
   isRetryableApiError,
 } from '../api/errors.js'
 import {
@@ -18,7 +19,14 @@ import {
   type AttachmentUpload,
 } from '../attachments.js'
 import { MANY_IMAGES_COUNT, MANY_IMAGES_MAX_EDGE, MAX_IMAGE_EDGE } from '../imageUpload.js'
+import { enqueueMemoryExtraction } from '../characters/extraction.js'
+import { buildRequestSystem } from '../characters/inject.js'
+import { useCharacters } from '../characters/store.js'
+import { useModels } from '../models/store.js'
+import { debugLog } from '../debug/log.js'
+import { resolveSessionHeaders } from '../api/chatConfig.js'
 import { setPinnedSessions, useSettings } from '../settings.js'
+import { showToast } from '../../components/base/toastState.js'
 import {
   activateBranch,
   appendBranch,
@@ -80,8 +88,6 @@ const MIN_OUTPUT_RESERVE = 52_428
 const PROMPT_OVERHEAD_TOKENS = 256
 const CUSTOM_OUTPUT_TOKENS = 4_096
 const CUSTOM_CONTEXT_WINDOW = 128 * 1024
-/** 所有生成请求统一携带的助手身份说明 */
-const SYSTEM_PROMPT = '该助手为DeepSeek，由深度求索公司创造。'
 /** 官方对纯算术首条保留原文标题，不进入服务端摘要通道。 */
 const SIMPLE_ARITHMETIC =
   /^\s*\d+(?:\.\d+)?(?:\s*[+\-*/×÷]\s*\d+(?:\.\d+)?)+(?:\s*(?:=|等于|\?|？))?\s*$/
@@ -317,17 +323,20 @@ export const bindChatPersistence = () => {
   }
 }
 
-/** 按当前开关创建回复：深度思考对应 thinking，智能搜索控制 deepseek_web_search。 */
+/** 按当前开关创建回复：思考档位映射 thinking，智能搜索控制 deepseek_web_search。 */
 const createReply = (): AssistantMessage => {
-  const { thinking, search, chatConfig } = useSettings.getState()
+  const { thinkingLevel, search, chatConfig } = useSettings.getState()
   const customEndpoint = Boolean(chatConfig.endpoint)
+  const { presets, activeId } = useModels.getState()
+  const preset = presets.find((item) => item.id === activeId)
   return {
     id: createId(),
     role: 'assistant',
     createdAt: Date.now(),
     model: chatConfig.model || DEFAULT_CHAT_MODEL,
-    thinking: !customEndpoint && thinking,
-    search: !customEndpoint && search,
+    // 思考对所有端点可用（第三方按预设的思考能力标记决定是否发送 reasoning_effort）
+    thinking: thinkingLevel !== 'off',
+    search: search && (!customEndpoint || (preset?.search ?? false)),
     prefix: !customEndpoint && chatConfig.format === 'messages',
     status: 'pending',
     blocks: [],
@@ -770,6 +779,20 @@ const removeSessionData = async (id: string): Promise<boolean> => {
 
 export const stopReply = (sessionId: string) => getStreamController(sessionId)?.abort()
 
+/** 当前会话绑定角色卡；null 回到官方 DeepSeek。影响后续请求的 system 提示词与记忆注入。 */
+export const bindSessionCharacter = (id: string, characterId: string | null) => {
+  if (get().importingHistory || deletingSessions.has(id) || getStreamController(id)) {
+    return
+  }
+  if (getSession(id)) {
+    updateSession(id, (session) => ({
+      ...session,
+      characterId: characterId ?? undefined,
+    }))
+    persist(id)
+  }
+}
+
 const stripFileBlobs = (files: readonly DraftFilePayload[]): FileAttachment[] =>
   files.map(({ id, serverId, serverImage, name, size, isImage, mimeType }) => ({
     id,
@@ -822,6 +845,8 @@ export const sendMessage = (targetSessionId: string | null) => {
       updatedAt: now,
       messages: [],
       rootMessageId: null,
+      // 新对话绑定当前选中的角色；null 表示官方 DeepSeek，不写入字段。
+      characterId: useCharacters.getState().selectedCharacterId ?? undefined,
     }
     sessionId = session.id
     touchSession(session.id)
@@ -966,13 +991,15 @@ export const continueReply = (sessionId: string, messageId: string) => {
   ) {
     return
   }
-  const { thinking, search } = useSettings.getState()
+  const { thinkingLevel, search } = useSettings.getState()
+  const modelsState = useModels.getState()
+  const preset = modelsState.presets.find((item) => item.id === modelsState.activeId)
   const reply: AssistantMessage = {
     ...previous,
     // 未记录请求配置的回复，续写时使用默认模型和当前开关。
     model: previous.model ?? (chatConfig.model || DEFAULT_CHAT_MODEL),
-    thinking: previous.thinking ?? thinking,
-    search: previous.search ?? search,
+    thinking: previous.thinking ?? thinkingLevel !== 'off',
+    search: previous.search ?? (search && (chatConfig.endpoint === '' || (preset?.search ?? false))),
     status: 'pending',
     stopReason: undefined,
     stopDetails: undefined,
@@ -1317,6 +1344,8 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
   const { apiKey: storedKey, chatConfig } = useSettings.getState()
   const apiKey = storedKey ?? ''
   const custom = Boolean(chatConfig.endpoint)
+  // 自定义头里的 {sessionId} 占位符按会话替换（OpenCode 等网关要求每对话稳定的会话 ID）
+  const requestConfig = resolveSessionHeaders(chatConfig, sessionId)
   const controller = new AbortController()
   const stopped = new Promise<false>((resolve) => {
     controller.signal.addEventListener('abort', () => resolve(false), { once: true })
@@ -1329,7 +1358,8 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
     ? {
         ...initial,
         model: chatConfig.model || DEFAULT_CHAT_MODEL,
-        thinking: false,
+        // 思考在自定义端点同样可用（强度随预设的思考能力标记发送 reasoning_effort）
+        thinking: initial.thinking,
         search: false,
         prefix: false,
       }
@@ -1482,14 +1512,26 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         const body: CreateMessageRequest = {
           model: requestModel,
           max_tokens: requestMaxOutput,
-          system: custom ? '' : SYSTEM_PROMPT,
+          // 角色人设与记忆对所有端点生效：官方与自定义端点共用同一注入
+          // （OpenAI chat 格式映射为首条 system 消息，responses 映射为 instructions）。
+          system: buildRequestSystem(getSession(sessionId)?.characterId),
           messages,
-          thinking: { type: initial.thinking ? 'enabled' : 'disabled' },
+          thinking: {
+            type: initial.thinking ? 'enabled' : 'disabled',
+            // 思考强度只在 OpenAI 兼容格式下携带（messages 协议严格校验字段，
+            // 且其思考开关只有二值）；关/普通/深度 → 不发/medium/high
+            ...(chatConfig.format !== 'messages' && initial.thinking
+              ? {
+                  effort:
+                    useSettings.getState().thinkingLevel === 'deep' ? ('high' as const) : ('medium' as const),
+                }
+              : {}),
+          },
           safety_check: SAFETY_CHECK,
           tools: serverTools(initial.search ?? false),
           ...(titleRequests.has(controller) ? { title: { enabled: true } } : {}),
         }
-        const events = streamChatMessage(chatConfig, apiKey, body, signal)
+        const events = streamChatMessage(requestConfig, apiKey, body, signal)
         const blockIndexes = new Map<number, number>()
         for await (const event of events) {
           receivedContent ||= event.type === 'content_block_start'
@@ -1609,7 +1651,10 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
             kind: error.kind,
             message: error.message,
             status: error.status,
-            localMessage: error.localMessage,
+            // 404 / model_not_found 给出可自查的专用提示（第三方端点最常见配置错误）。
+            localMessage: isModelNotFound(error)
+              ? { key: 'advancedModelNotFound' }
+              : error.localMessage,
           })
         } else {
           reply = settleReply(reply, 'error', Date.now(), {
@@ -1620,16 +1665,29 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         break
       }
     }
-  } finally {
-    titleRequests.delete(controller)
-    streamFlushes.delete(sessionId)
-    cancelAnimationFrame(frame)
-    updateReply(sessionId, reply)
-    set((state) => ({
-      streaming: Object.fromEntries(
-        Object.entries(state.streaming).filter(([id]) => id !== sessionId)
-      ),
-    }))
-    persist(sessionId)
-  }
+    } finally {
+      titleRequests.delete(controller)
+      streamFlushes.delete(sessionId)
+      cancelAnimationFrame(frame)
+      updateReply(sessionId, reply)
+      set((state) => ({
+        streaming: Object.fromEntries(
+          Object.entries(state.streaming).filter(([id]) => id !== sessionId)
+        ),
+      }))
+      persist(sessionId)
+      // 开发者控制台：记录回复收尾状态
+      debugLog('event', `回复收尾 · ${reply.status}${reply.stopReason ? ` · ${reply.stopReason}` : ''}${reply.error ? ` · ${reply.error.message.slice(0, 120)}` : ''}`)
+      // 回答成功后按会话绑定的角色提取长期记忆；失败静默，不打扰聊天。
+      if (reply.status === 'done') {
+        const characterId = getSession(sessionId)?.characterId ?? null
+        void enqueueMemoryExtraction(characterId, sessionId, request.question.content).then(
+          (count) => {
+            if (count > 0) {
+              showToast({ key: 'memoryExtractedToast', params: { count } })
+            }
+          }
+        )
+      }
+    }
 }

@@ -1,4 +1,4 @@
-import { IconMenuOutline20, IconNewChatOutline20 } from '../base/icons.js'
+import { IconMenuOutline20, IconNewChatOutline20, IconDownloadOutline16 } from '../base/icons.js'
 import { useTranslate } from '../../i18n/index.js'
 import { android } from '../../app/android.js'
 import { useIsAndroidWide } from '../../app/viewport.js'
@@ -16,7 +16,14 @@ import {
 import styles from './MobileHeader.module.css'
 
 /** 移动端顶栏：左侧菜单打开或切换侧边栏；会话页再显示标题与开启新对话 */
-export const MobileHeader = ({ title }: { title?: string }) => {
+export const MobileHeader = ({
+  title,
+  onExport,
+}: {
+  title?: string
+  /** 提供时在标题旁显示「导出对话」按钮（仅会话页）。 */
+  onExport?: () => void
+}) => {
   const t = useTranslate()
   const androidWide = useIsAndroidWide()
   const drawerOpen = useMobileSider((state) => state.open)
@@ -39,9 +46,22 @@ export const MobileHeader = ({ title }: { title?: string }) => {
       {title === undefined && !android ? null : (
         <>
           {title === undefined ? null : (
-            <div className={styles.title} data-side-shift={android ? 'edge' : undefined}>
-              <span className={styles.titleText}>{title}</span>
-            </div>
+            <>
+              {onExport ? (
+                <IconButton
+                  size="xl"
+                  tone="primary"
+                  className={styles.export}
+                  data-side-shift={android ? 'edge' : undefined}
+                  icon={<IconDownloadOutline16 />}
+                  aria-label={t('exportChat')}
+                  onClick={onExport}
+                />
+              ) : null}
+              <div className={styles.title} data-side-shift={android ? 'edge' : undefined}>
+                <span className={styles.titleText}>{title}</span>
+              </div>
+            </>
           )}
           {android ? (
             <IconButton

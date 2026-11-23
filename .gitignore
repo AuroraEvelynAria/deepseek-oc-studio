@@ -18,3 +18,7 @@ android/**/build/
 /android/app/release.jks
 /android/keystore.properties
 *.apk
+
+# 本机构建环境（代理等），不同步到仓库
+android/gradle.properties
+.test-endpoint-requests.jsonl

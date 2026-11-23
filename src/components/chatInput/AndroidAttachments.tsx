@@ -16,12 +16,15 @@ export const AndroidAttachments = ({
   selectedPhotos,
   onRecentFile,
   onRemove,
+  imagesAllowed = true,
 }: {
   open: boolean
   onFiles: (files: File[], source: Source) => void
   selectedPhotos: ReadonlyMap<string, string>
   onRecentFile: (file: File, photoId: string) => void
   onRemove: (attachmentId: string) => void
+  /** 当前模型是否支持视觉；false 时隐藏相机与相册入口 */
+  imagesAllowed?: boolean
 }) => {
   const t = useTranslate()
   const camera = useRef<HTMLInputElement>(null)
@@ -103,11 +106,13 @@ export const AndroidAttachments = ({
     }
   }
 
-  const actions = [
-    { kind: 'camera', label: t('androidCamera'), ref: camera, accept: 'image/*' },
-    { kind: 'gallery', label: t('androidGallery'), ref: gallery, accept: 'image/*' },
-    { kind: 'files', label: t('androidFiles'), ref: documents, accept: ACCEPT },
-  ] satisfies { kind: Source; label: string; ref: typeof camera; accept: string }[]
+  const actions = (
+    [
+      { kind: 'camera', label: t('androidCamera'), ref: camera, accept: 'image/*' },
+      { kind: 'gallery', label: t('androidGallery'), ref: gallery, accept: 'image/*' },
+      { kind: 'files', label: t('androidFiles'), ref: documents, accept: ACCEPT },
+    ] satisfies { kind: Source; label: string; ref: typeof camera; accept: string }[]
+  ).filter((action) => imagesAllowed || action.kind === 'files')
 
   return (
     <section
@@ -118,7 +123,7 @@ export const AndroidAttachments = ({
       aria-label={t('uploadFile')}
     >
       <div className={styles.content}>
-        {photos.length > 0 ? (
+        {imagesAllowed && photos.length > 0 ? (
           <div className={styles.recent}>
             {photos.map((photo) => {
               const selected = selectedPhotos.has(photo.id) || loadingIds.has(photo.id)

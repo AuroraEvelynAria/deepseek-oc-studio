@@ -331,6 +331,11 @@
       background-color: var(--dsw-alias-button-ghost-active-fill);
     }
   }
+
+  /* 思考强度「深度」档：在选中态上叠加品牌色描边以示区别 */
+  &.deep.selected {
+    border-color: var(--dsw-alias-brand-primary);
+  }
 }
 
 .right {

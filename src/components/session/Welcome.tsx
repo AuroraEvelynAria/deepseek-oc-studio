@@ -7,7 +7,10 @@ import {
   useAndroidWelcomeMessages,
   useTranslate,
 } from '../../i18n/index.js'
+import { resolveCharacter, useCharacters } from '../../services/characters/store.js'
 import { ChatInput } from '../chatInput/ChatInput.js'
+import { openList as openCharacters } from '../characters/charactersDialogState.js'
+import charStyles from '../characters/Characters.module.css'
 import { MobileHeader } from './MobileHeader.js'
 import styles from './Welcome.module.css'
 
@@ -20,6 +23,8 @@ export const Welcome = () => {
   const coldStartGreeting = useAndroidColdStartGreeting()
   const androidMessages = useAndroidWelcomeMessages()
   const [hasPhotoSuggestions, setHasPhotoSuggestions] = useState(false)
+  const selectedId = useCharacters((state) => state.selectedCharacterId)
+  const selected = resolveCharacter(selectedId)
   const [coldStart] = useState(coldStartGreetingPending)
   const [greeting] = useState(() => {
     if (!android) {
@@ -47,6 +52,21 @@ export const Welcome = () => {
           {android ? <img src={whale} alt="" /> : null}
           {android ? <span className={styles.greetingText}>{greeting}</span> : greeting}
         </div>
+        <button
+          type="button"
+          className={charStyles.chip}
+          onClick={openCharacters}
+          aria-label={t('charactersTitle')}
+        >
+          {selected?.avatar ? (
+            <img className={charStyles.chipAvatar} src={selected.avatar} alt="" />
+          ) : (
+            <span className={charStyles.chipAvatar}>
+              {selected ? selected.name.slice(0, 1) : <img src={whale} alt="" />}
+            </span>
+          )}
+          <span>{selected?.name ?? 'DeepSeek'}</span>
+        </button>
         <ChatInput sessionId={null} onPhotoSuggestionsChange={setHasPhotoSuggestions} />
         {isMobile && !android ? <div className={styles.caveat}>{t('contentCaveat')}</div> : null}
       </div>

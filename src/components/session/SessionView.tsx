@@ -4,7 +4,11 @@ import { android } from '../../app/android.js'
 import { useIsMobile } from '../../app/viewport.js'
 import { useTranslate } from '../../i18n/index.js'
 import type { Session } from '../../services/chat/types.js'
+import { exportSessionMarkdown, saveExportFile } from '../../services/chat/exportMarkdown.js'
 import { ChatInput } from '../chatInput/ChatInput.js'
+import { IconButton } from '../base/IconButton.js'
+import { IconDownloadOutline16 } from '../base/icons.js'
+import { showToast } from '../base/toastState.js'
 import { MessageList } from '../messages/MessageList.js'
 import { MobileHeader } from './MobileHeader.js'
 import styles from './SessionView.module.css'
@@ -23,14 +27,29 @@ export const SessionView = memo(function SessionView({
   const isMobile = useIsMobile()
   const [attachmentPanelOpen, setAttachmentPanelOpen] = useState(false)
   const title = session.title || t('untitledChat')
+  const exportChat = () => {
+    const { name, blob } = exportSessionMarkdown(session)
+    saveExportFile(name, blob)
+      .then((saved) => showToast({ key: saved ? 'chatExported' : 'chatExportCancelled' }))
+      .catch(() => showToast({ key: 'chatExportFailed', type: 'error' }))
+  }
   return (
     <div className={styles.view}>
       {isMobile ? (
-        <MobileHeader title={title} />
+        <MobileHeader title={title} onExport={exportChat} />
       ) : (
         <div className={styles.header}>
           <div className={clsx(styles.title, siderCollapsed && styles.withCollapsedSider)}>
             {title}
+          </div>
+          <div className={styles.headerActions}>
+            <IconButton
+              size="xl"
+              tone="primary"
+              icon={<IconDownloadOutline16 />}
+              aria-label={t('exportChat')}
+              onClick={exportChat}
+            />
           </div>
         </div>
       )}

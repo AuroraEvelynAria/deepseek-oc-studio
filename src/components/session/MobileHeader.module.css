@@ -69,3 +69,8 @@
   width: 22px;
   height: 22px;
 }
+
+[data-android] .export svg {
+  width: 20px;
+  height: 20px;
+}

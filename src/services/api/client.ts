@@ -1,5 +1,6 @@
 import { android } from '../../app/android.js'
 import { translate, type TranslationMessage } from '../../i18n/index.js'
+import { debugLog, sanitizeHeaders } from '../debug/log.js'
 import { CHAT_API_PATHS, type ChatConfig } from './chatConfig.js'
 import { openAIRequest, readOpenAIFrame } from './openaiChat.js'
 import { readMessageEvent } from './parseEvent.js'
@@ -45,6 +46,11 @@ export class ApiError extends Error {
     super(typeof message === 'string' ? message : translate(message.key, message.params))
     this.name = 'ApiError'
     this.localMessage = typeof message === 'string' ? undefined : message
+    // 开发者控制台：一处埋点捕获全部 API 错误
+    debugLog('error', `API ${kind}${status ? ` · HTTP ${status}` : ''}`, {
+      message: this.message,
+      code,
+    })
   }
 }
 
@@ -75,6 +81,9 @@ const readErrorResponse = async (
 }
 
 export const request = async (url: string, init: RequestInit): Promise<Response> => {
+  debugLog('request', `非流请求 · ${init.method ?? 'GET'} ${url}`, {
+    body: typeof init.body === 'string' ? init.body.slice(0, 600) : undefined,
+  })
   let response: Response
   try {
     response = await fetch(url, init)
@@ -84,6 +93,7 @@ export const request = async (url: string, init: RequestInit): Promise<Response>
     }
     throw new ApiError('network', error instanceof Error ? error.message : String(error))
   }
+  debugLog('request', `非流响应 · HTTP ${response.status} · ${url}`)
   if (!response.ok) {
     throw await readErrorResponse(response)
   }
@@ -151,8 +161,13 @@ const hasFile = (body: CreateMessageRequest) =>
       message.content.some((block) => block.type !== 'text' && block.source.type === 'file')
   )
 
-const openMessageStream = (apiKey: string, body: CreateMessageRequest, signal: AbortSignal) =>
-  request(`${ANTHROPIC_BASE_URL}/messages`, {
+const openMessageStream = (apiKey: string, body: CreateMessageRequest, signal: AbortSignal) => {
+  // 开发者控制台：记录官方 messages 请求（含脱敏头与 body 摘要）
+  debugLog('request', '流式请求 · messages · 官方端点', {
+    headers: sanitizeHeaders(anthropicHeaders(apiKey, hasFile(body))),
+    body: JSON.stringify({ ...body, stream: true }).slice(0, 3000),
+  })
+  return request(`${ANTHROPIC_BASE_URL}/messages`, {
     method: 'POST',
     headers: {
       ...anthropicHeaders(apiKey, hasFile(body)),
@@ -162,6 +177,7 @@ const openMessageStream = (apiKey: string, body: CreateMessageRequest, signal: A
     body: JSON.stringify({ ...body, stream: true }),
     signal,
   })
+}
 
 const withDeepSeekExtensionsFallback = (
   body: CreateMessageRequest,
@@ -320,6 +336,7 @@ const openAndroidChat = (
     switch (chunk.type) {
       case 'headers': {
         headersReceived = true
+        debugLog('native', `原生通道响应 · HTTP ${chunk.status} · ${chunk.mime}`)
         const bodyStream = chunk.status === 204 || chunk.status === 205 ? null : stream
         resolve(
           new Response(bodyStream, {
@@ -337,13 +354,15 @@ const openAndroidChat = (
         receiver.close()
         break
       case 'error':
+        debugLog('native', '原生通道错误 · 连接未建立或读取失败')
         fail(new ApiError('network', ''))
         break
     }
   }
   window.addEventListener('android-custom-chat', onChunk)
   signal.addEventListener('abort', onAbort, { once: true })
-  id = device.beginChatRequest(config.endpoint, config.format, body)
+  // 4 参重载携带自定义头；旧版 APK（3 参）会在 Java Bridge 层静默失配 → id 为 null → 走 protocol 错误兜底
+  id = device.beginChatRequest(config.endpoint, config.format, JSON.stringify(config.headers ?? {}), body)
   if (!id) {
     fail(new ApiError('protocol', { key: 'advancedConnectionChanged' }))
   }
@@ -357,7 +376,8 @@ export const streamChatMessage = (
   signal: AbortSignal
 ) => {
   if (config.endpoint) {
-    return streamCompatibleMessage(config, body, signal, false)
+    // 兼容网关（透传 DeepSeek 官方扩展）按官方方式发送扩展字段
+    return streamCompatibleMessage(config, body, signal, config.compatible === true)
   }
   if (config.format === 'messages') {
     return streamMessage(apiKey, body, signal)
@@ -380,27 +400,42 @@ async function* streamCompatibleMessage(
         : openAIRequest(format, requestBody, deepSeek)
     )
   signal.throwIfAborted()
+  const requestHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'text/event-stream',
+    ...(config.headers ?? {}),
+    ...(format === 'messages'
+      ? {
+          'anthropic-version': '2023-06-01',
+          ...(apiKey ? { 'x-api-key': apiKey } : {}),
+          ...(new URL(endpoint).hostname === 'api.anthropic.com'
+            ? { 'anthropic-dangerous-direct-browser-access': 'true' }
+            : {}),
+        }
+      : apiKey
+        ? { Authorization: `Bearer ${apiKey}` }
+        : {}),
+  }
+  // 开发者控制台：记录最终请求（含脱敏头与 body 摘要）
+  debugLog('request', `流式请求 · ${format} · ${endpoint}`, {
+    headers: sanitizeHeaders(requestHeaders),
+    body: serialize(body).slice(0, 3000),
+  })
+  // 兼容网关（透传 DeepSeek 官方扩展）在 Android 上同样走原生通道：绕 CORS 且支持自定义头
   const native =
-    android && !deepSeek ? openAndroidChat(android, config, serialize(body), signal) : undefined
+    android && (!deepSeek || config.compatible === true)
+      ? openAndroidChat(android, config, serialize(body), signal)
+      : undefined
+  if (native) {
+    debugLog('native', `原生通道启动 · ${config.endpoint}`, {
+      headers: sanitizeHeaders(config.headers ?? {}),
+    })
+  }
   try {
     const send = (requestBody: CreateMessageRequest) =>
       request(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'text/event-stream',
-          ...(format === 'messages'
-            ? {
-                'anthropic-version': '2023-06-01',
-                ...(apiKey ? { 'x-api-key': apiKey } : {}),
-                ...(new URL(endpoint).hostname === 'api.anthropic.com'
-                  ? { 'anthropic-dangerous-direct-browser-access': 'true' }
-                  : {}),
-              }
-            : apiKey
-              ? { Authorization: `Bearer ${apiKey}` }
-              : {}),
-        },
+        headers: requestHeaders,
         body: serialize(requestBody),
         credentials: 'omit',
         redirect: 'error',

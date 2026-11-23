@@ -41,6 +41,7 @@ import { AdvancedApiDialog } from './AdvancedApiSettings.js'
 import { ProfileIcon } from './ProfileAvatar.js'
 import { ProfileEditor } from './ProfileEditor.js'
 import { closeSettings, useSettingsDialog, type SettingsSection } from './settingsDialogState.js'
+import { DeveloperConsole } from '../debug/DeveloperConsole.js'
 import styles from './Settings.module.css'
 
 /**
@@ -76,6 +77,9 @@ const SettingsContent = () => {
   const historyBusy = historyImport.busy || historyDelete.busy || replacingHistory
   if (section === 'advanced') {
     return <AdvancedApiDialog onClose={() => setSection('data')} />
+  }
+  if (section === 'console') {
+    return <DeveloperConsole onClose={() => setSection('data')} />
   }
   return (
     <>
@@ -128,6 +132,21 @@ const SettingsContent = () => {
                     variant="outlined"
                     size="m"
                     onClick={() => setSection('advanced')}
+                  >
+                    <IconChevronRightOutline14 />
+                  </Button>
+                }
+              />
+              <SettingCell
+                label={t('devConsole')}
+                description={t('devConsoleHint')}
+                status={null}
+                action={
+                  <Button
+                    aria-label={t('devConsole')}
+                    variant="outlined"
+                    size="m"
+                    onClick={() => setSection('console')}
                   >
                     <IconChevronRightOutline14 />
                   </Button>

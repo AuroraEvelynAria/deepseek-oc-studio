@@ -26,12 +26,29 @@ type Settings = {
   location: UserLocation | null
   ttsVoice: TtsVoice
   autoRead: boolean
-  thinking: boolean
+  /** 思考强度：关闭 / 普通 / 深度；旧布尔值迁移（true→deep、false→off） */
+  thinkingLevel: ThinkingLevel
   search: boolean
   siderCollapsed: boolean
   fontSize: number | null
   foldThinking: boolean
   pinnedSessions: string[]
+}
+
+export type ThinkingLevel = 'off' | 'normal' | 'deep'
+
+const THINKING_LEVELS: ThinkingLevel[] = ['off', 'normal', 'deep']
+
+/** 读取思考档位；兼容旧布尔存储（'true'→deep、'false'→off）。 */
+const initialThinkingLevel = (): ThinkingLevel => {
+  const saved = read(KEYS.thinking)
+  if (saved === 'true') {
+    return 'deep'
+  }
+  if (saved === 'false' || saved === null) {
+    return 'off'
+  }
+  return THINKING_LEVELS.includes(saved as ThinkingLevel) ? (saved as ThinkingLevel) : 'off'
 }
 
 const KEYS = {
@@ -158,7 +175,7 @@ export const useSettings = create<Settings>(() => ({
   themePreference: initialThemePreference(),
   ttsVoice: initialTtsVoice(),
   autoRead: read(KEYS.autoRead) === 'true',
-  thinking: read(KEYS.thinking) === 'true',
+  thinkingLevel: initialThinkingLevel(),
   search: (read(KEYS.search) ?? (android ? 'true' : 'false')) === 'true',
   siderCollapsed: read(KEYS.siderCollapsed) === 'true',
   fontSize: initialFontSize(),
@@ -240,9 +257,9 @@ export const setChatConfig = (chatConfig: ChatConfig) => {
   return persisted
 }
 
-export const setThinking = (thinking: boolean) => {
-  write(KEYS.thinking, String(thinking))
-  useSettings.setState({ thinking })
+export const setThinkingLevel = (thinkingLevel: ThinkingLevel) => {
+  write(KEYS.thinking, thinkingLevel)
+  useSettings.setState({ thinkingLevel })
 }
 
 export const setSearch = (search: boolean) => {

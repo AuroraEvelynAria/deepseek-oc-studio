@@ -125,6 +125,8 @@ export type Session = {
   /** undefined 表示线性消息列表；null 表示空会话。 */
   rootMessageId?: string | null
   contextCheckpoints?: ContextCheckpoint[]
+  /** 绑定的角色卡 id；缺省表示官方 DeepSeek。 */
+  characterId?: string
 }
 
 /** 会话列表元数据；消息只在打开会话时加载。 */

@@ -28,6 +28,10 @@ import { AndroidSettings } from '../components/settings/AndroidSettings.js'
 import { ApiKeyScreen } from '../components/settings/ApiKeyScreen.js'
 import { Toast } from '../components/base/Toast.js'
 import { showToast } from '../components/base/toastState.js'
+import { CharactersDialog } from '../components/characters/CharactersDialog.js'
+import { initCharacters } from '../services/characters/store.js'
+import { initModels } from '../services/models/store.js'
+import { installDebugContext } from '../services/debug/context.js'
 import { onUploadNotice } from '../services/attachments.js'
 import { Button } from '../components/base/Button.js'
 import { stopReadAloud } from '../services/speech/readAloud.js'
@@ -285,6 +289,9 @@ export const App = () => {
 
   useEffect(() => {
     void initChat()
+    void initCharacters()
+    void initModels()
+    installDebugContext()
     // 首次打开先在设置里输入 API Key
     if (!android) {
       ensureApiKey()
@@ -353,6 +360,7 @@ export const App = () => {
         <SearchPanel />
       </div>
       {android ? <AndroidSettings chatFrame={frameRef} /> : <SettingsDialog />}
+      <CharactersDialog />
       <Toast />
     </>
   )

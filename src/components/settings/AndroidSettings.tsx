@@ -42,6 +42,7 @@ import { showToast } from '../base/toastState.js'
 import { closeOverlaySider } from '../sider/mobileSiderState.js'
 import { ApiKeyConfirm, ApiKeyField, useApiKeyEditor } from './ApiKeyField.js'
 import { AdvancedApiSettings } from './AdvancedApiSettings.js'
+import { DeveloperConsole } from '../debug/DeveloperConsole.js'
 import { createSettingsPageMotion } from './androidSettingsMotion.js'
 import { ProfileIcon } from './ProfileAvatar.js'
 import { ProfileEditor } from './ProfileEditor.js'
@@ -357,6 +358,7 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
   const [importMode, setImportMode] = useState<ImportMode>('merge')
   const [importStatus, setImportStatus] = useState<LinkedMessage | null>(null)
   const [exportSavedName, setExportSavedName] = useState<string | null>(null)
+  const [showConsole, setShowConsole] = useState(false)
   const importInput = useRef<HTMLInputElement>(null)
   const pagesRef = useRef<HTMLDivElement>(null)
   const motionRef = useRef<ReturnType<typeof createSettingsPageMotion>>()
@@ -836,6 +838,14 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
                 {t(importStatus.key, importStatus.params)}
               </p>
             ) : null}
+            <Group>
+              <Row
+                label={t('devConsole')}
+                arrow={false}
+                onClick={() => setShowConsole(true)}
+              />
+            </Group>
+            <p className={styles.caption}>{t('devConsoleHint')}</p>
           </>
         ) : null}
         {screen === 'export' ? (
@@ -1031,23 +1041,26 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
                 <IconCloseOutline16 />
               </button>
             </header>
-            <div
-              className={styles.voiceBody}
-              onTouchStart={(event) => {
-                event.currentTarget.dataset.swipeX = String(event.touches[0].clientX)
-              }}
-              onTouchEnd={(event) => {
-                const dx =
-                  event.changedTouches[0].clientX - Number(event.currentTarget.dataset.swipeX)
-                if (Math.abs(dx) > 32) {
-                  setTone(dx > 0 ? 'stella' : 'tide')
-                }
-              }}
-            >
-              <div className={styles.voiceArt} data-tone={tone} aria-hidden="true" />
-              <div>{currentTone.label}</div>
-              <small>{currentTone.description}</small>
-              <div className={styles.dots} role="radiogroup" aria-label={voice}>
+              <div
+                className={styles.voiceBody}
+                onTouchStart={(event) => {
+                  event.currentTarget.dataset.swipeX = String(event.touches[0].clientX)
+                }}
+                onTouchEnd={(event) => {
+                  const dx =
+                    event.changedTouches[0].clientX - Number(event.currentTarget.dataset.swipeX)
+                  if (Math.abs(dx) > 32) {
+                    setTone(dx > 0 ? 'stella' : 'tide')
+                  }
+                }}
+              >
+                <div className={styles.voiceArt} data-tone={tone} aria-hidden="true" />
+                {/* key 随音色变化触发文字与画面切换动效 */}
+                <div key={tone} className={styles.voiceTextSwap}>
+                  <div>{currentTone.label}</div>
+                  <small>{currentTone.description}</small>
+                </div>
+                <div className={styles.dots} role="radiogroup" aria-label={voice}>
                 {tones.map((item) => (
                   <button
                     key={item.id}
@@ -1059,6 +1072,12 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
                   />
                 ))}
               </div>
+              <p className={styles.voiceNotice}>
+                {tr(
+                  '使用 TTS（文字转语音）服务会增加额外使用费用',
+                  'Using the TTS (text-to-speech) service incurs additional usage fees'
+                )}
+              </p>
             </div>
             <button
               className={styles.primary}
@@ -1195,6 +1214,7 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
           </section>
         )
       })}
+      {showConsole ? <DeveloperConsole onClose={() => setShowConsole(false)} /> : null}
     </div>
   )
 }

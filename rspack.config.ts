@@ -85,6 +85,7 @@ export const createConfig = ({
         type: 'javascript/auto',
       },
       { test: /\.(woff2?|ttf)$/, type: 'asset/resource' },
+      { test: /\.(png|jpe?g|webp|gif|ico)$/, type: 'asset/resource' },
       { test: /\.svg$/, type: 'asset/resource' },
     ],
   },

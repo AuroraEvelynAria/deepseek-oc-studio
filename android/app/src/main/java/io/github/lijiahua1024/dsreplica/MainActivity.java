@@ -568,7 +568,13 @@ public final class MainActivity extends Activity {
 
         @JavascriptInterface
         public String beginChatRequest(String endpoint, String format, String body) {
-            return customChat.begin(chatConfig.read(), endpoint, format, body, payload ->
+            return beginChatRequest(endpoint, format, null, body);
+        }
+
+        /** 4 参重载：headersJson 为可选的自定义请求头 JSON 对象（可覆盖认证头）。 */
+        @JavascriptInterface
+        public String beginChatRequest(String endpoint, String format, String headersJson, String body) {
+            return customChat.begin(chatConfig.read(), endpoint, format, headersJson, body, payload ->
                 runOnUiThread(() -> {
                     if (isDestroyed()) return;
                     webView.evaluateJavascript(

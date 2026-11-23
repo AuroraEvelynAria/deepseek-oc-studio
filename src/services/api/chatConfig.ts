@@ -8,7 +8,16 @@ export const CHAT_API_FORMATS = {
 
 export type ChatApiFormat = keyof typeof CHAT_API_FORMATS
 /** endpoint 保存实际请求地址，供网页与 Android 共用。 */
-export type ChatConfig = { model: string; endpoint: string; format: ChatApiFormat; apiKey: string }
+export type ChatConfig = {
+  model: string
+  endpoint: string
+  format: ChatApiFormat
+  apiKey: string
+  /** 额外请求头；值支持 {sessionId} 占位符（发送时替换为会话 ID） */
+  headers?: Record<string, string>
+  /** 端点透传 DeepSeek 官方扩展（联网搜索/思考开关/自动标题）时为 true */
+  compatible?: boolean
+}
 
 export const CHAT_API_PATHS: Record<ChatApiFormat, string> = {
   messages: '/messages',
@@ -78,6 +87,42 @@ export const resolveChatEndpoint = (
   return url.href
 }
 
+/** 校验自定义头表：名字与值都必须是非空字符串。 */
+const parseHeaders = (value: unknown): Record<string, string> | undefined => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return undefined
+  }
+  const headers: Record<string, string> = {}
+  let valid = false
+  for (const [name, headerValue] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof name === 'string' && name.trim() && typeof headerValue === 'string') {
+      headers[name.trim()] = headerValue
+      valid = true
+    }
+  }
+  return valid ? headers : undefined
+}
+
+/**
+ * 替换自定义头里的 {sessionId} 占位符：OpenCode 等网关要求每个对话
+ * 携带稳定的会话 ID，调用方按当前会话替换后使用。
+ */
+export const resolveSessionHeaders = (
+  config: ChatConfig,
+  sessionId: string
+): ChatConfig =>
+  config.headers
+    ? {
+        ...config,
+        headers: Object.fromEntries(
+          Object.entries(config.headers).map(([name, value]) => [
+            name,
+            value.replaceAll('{sessionId}', sessionId),
+          ])
+        ),
+      }
+    : config
+
 export const readChatConfig = (stored: string | null): ChatConfig => {
   try {
     const value = JSON.parse(stored ?? 'null') as Partial<ChatConfig> | null
@@ -90,6 +135,8 @@ export const readChatConfig = (stored: string | null): ChatConfig => {
         endpoint: endpoint ?? '',
         format,
         apiKey: endpoint && typeof value?.apiKey === 'string' ? value.apiKey : '',
+        headers: endpoint ? parseHeaders(value?.headers) : undefined,
+        compatible: endpoint === null || endpoint === '' ? false : value?.compatible === true,
       }
     }
     return { ...DEFAULT_CHAT_CONFIG, model }
