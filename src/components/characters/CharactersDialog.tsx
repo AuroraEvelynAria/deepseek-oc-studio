@@ -19,6 +19,8 @@ import {
   type ModelPreset,
 } from '../../services/models/store.js'
 import { PROVIDER_TEMPLATES } from '../../services/models/providers.js'
+import { PRESET_CHARACTERS, presetToCharacterInput } from '../../services/characters/presets.js'
+import { AvatarStudioView } from './AvatarStudioView.js'
 import {
   isMemoryEnabled,
   removeCharacter,
@@ -56,6 +58,8 @@ import {
   openEdit as openEditView,
   openModelEdit as openModelEditView,
   openImport as openImportView,
+  openPreset as openPresetView,
+  openStudio as openStudioView,
   openList,
   useCharactersDialog,
 } from './charactersDialogState.js'
@@ -260,6 +264,9 @@ const ListView = ({ onImportFile }: { onImportFile: (file: File) => void }) => {
       <div className={styles.listFooter}>
         <Button size="m" variant="outlined" block onClick={() => openEditView(null)}>
           {t('newCharacter')}
+        </Button>
+        <Button size="m" variant="outlined" block onClick={openPresetView}>
+          {t('presetCharacters')}
         </Button>
         <Button
           size="m"
@@ -538,6 +545,16 @@ const EditView = ({ id }: { id: string | null }) => {
           onChange={setMemoryFlag}
         />
       </div>
+      {existing ? (
+        <Button
+          size="m"
+          variant="outlined"
+          type="button"
+          onClick={() => openStudioView(existing.id)}
+        >
+          {t('studioOpen')}
+        </Button>
+      ) : null}
       <div className={styles.editActions}>
         <Button size="m" variant="outlined" type="button" onClick={openList}>
           {t('cancel')}
@@ -630,6 +647,7 @@ const MemoryEditor = ({
                 content: content.trim(),
                 source: card?.source ?? null,
                 enabled,
+                importance: card?.importance ?? 0,
                 createdAt: card?.createdAt ?? now,
                 updatedAt: now,
               })
@@ -800,6 +818,53 @@ const headersToText = (headers: Record<string, string> | undefined) =>
   Object.entries(headers ?? {})
     .map(([name, value]) => `${name}: ${value}`)
     .join('\n')
+
+/** 预设角色库：官方打磨的 OC 参考角色，一键加入自己的角色列表。 */
+const PresetView = () => {
+  const t = useTranslate()
+  const existing = useCharacters((state) => state.characters)
+  const [added, setAdded] = useState<string[]>([])
+  return (
+    <div className={styles.editForm}>
+      <button type="button" className={styles.back} onClick={openList}>
+        <span className={styles.backIcon}>
+          <IconChevronRightOutline14 />
+        </span>
+        {t('back')}
+      </button>
+      <p className={styles.fieldHint}>{t('presetCharactersHint')}</p>
+      <div className={styles.list}>
+        {PRESET_CHARACTERS.map((preset) => {
+          const alreadyAdded =
+            existing.some((item) => item.prompt === preset.prompt) || added.includes(preset.id)
+          return (
+            <div key={preset.id} className={styles.row}>
+              <span className={styles.modelBadge}>{preset.name.slice(0, 1)}</span>
+              <div className={styles.rowText}>
+                <span className={styles.rowName}>{preset.name}</span>
+                <span className={styles.rowSub}>{preset.tagline}</span>
+              </div>
+              <div className={styles.rowActions}>
+                <Button
+                  size="s"
+                  variant="outlined"
+                  disabled={alreadyAdded}
+                  onClick={() => {
+                    saveCharacter(presetToCharacterInput(preset))
+                    setAdded((prev) => [...prev, preset.id])
+                    showToast({ key: 'presetAdded', params: { name: preset.name } })
+                  }}
+                >
+                  {alreadyAdded ? t('presetAdded') : t('presetAdd')}
+                </Button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 /** 导入角色卡的预览与落库：解析结果先展示，确认后写入角色与记忆。 */
 const ImportView = ({ file }: { file: File }) => {
@@ -1175,9 +1240,13 @@ export const CharactersDialog = memo(function CharactersDialog() {
         ? t('memoryTitle')
         : view.type === 'model-edit'
           ? t(view.id ? 'modelEdit' : 'modelNew')
-          : view.type === 'import'
-            ? t('cardImport')
-            : t('charactersTitle')
+        : view.type === 'import'
+          ? t('cardImport')
+          : view.type === 'preset'
+            ? t('presetCharacters')
+            : view.type === 'studio'
+              ? t('studioTitle')
+              : t('charactersTitle')
   return (
     <Modal title={title} closable className={styles.dialog} onClose={close}>
       <div key={view.type} className={styles.viewFade}>
@@ -1193,6 +1262,10 @@ export const CharactersDialog = memo(function CharactersDialog() {
           ) : (
             <ListView onImportFile={setImportFile} />
           )
+        ) : view.type === 'preset' ? (
+          <PresetView />
+        ) : view.type === 'studio' ? (
+          <AvatarStudioView id={view.id} />
         ) : (
           <ModelEditView id={view.id} />
         )}

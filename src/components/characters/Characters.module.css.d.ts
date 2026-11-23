@@ -14,6 +14,11 @@ declare const styles: {
   readonly "capSwitches": string;
   readonly "fieldHint": string;
   readonly "voiceNotice": string;
+  readonly "grid": string;
+  readonly "cell": string;
+  readonly "cellLoading": string;
+  readonly "cellFailed": string;
+  readonly "referencePreview": string;
   readonly "list": string;
   readonly "row": string;
   readonly "rowMain": string;

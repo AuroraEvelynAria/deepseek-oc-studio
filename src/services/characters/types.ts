@@ -50,6 +50,8 @@ export type MemoryCard = {
   content: string
   source: MemorySource | null
   enabled: boolean
+  /** 重要级：0=普通 1=重要（用户明确要求记住） 2=关键（身份/健康/安全）；注入时高优先。 */
+  importance: 0 | 1 | 2
   createdAt: number
   updatedAt: number
 }

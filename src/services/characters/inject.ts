@@ -22,11 +22,11 @@ const DIMENSION_LABEL_KEYS = {
 const dimensionLabel = (dimension: MemoryCard['dimension']) =>
   translate(DIMENSION_LABEL_KEYS[dimension])
 
-/** 把启用的记忆卡按固定维度顺序拼成紧凑列表；超预算时保留最近更新的卡。 */
+/** 把启用的记忆卡按固定维度顺序拼成紧凑列表；重要卡优先，超预算时低优先级让位。 */
 export const buildMemoryBlock = (cards: readonly MemoryCard[]): string => {
   const enabled = cards
     .filter((card) => card.enabled && card.content.trim())
-    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .sort((a, b) => b.importance - a.importance || b.updatedAt - a.updatedAt)
   if (enabled.length === 0) {
     return ''
   }

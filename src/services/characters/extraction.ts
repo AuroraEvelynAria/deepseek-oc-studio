@@ -17,15 +17,17 @@ import { isMemoryDimension, MEMORY_CONTENT_LIMIT, type MemoryCard } from './type
 
 const EXTRACTOR_SYSTEM = [
   '你是记忆提取器。从用户消息中提取值得长期记住的用户信息，只输出一个 JSON 数组，不要输出其他内容。',
-  '每项形如 {"dimension":"...","content":"...","quote":"..."}：',
+  '每项形如 {"dimension":"...","content":"...","quote":"...","importance":0}：',
   '- dimension 必须是 preference | daily | social | experience | goal | communication | trait | emotion 之一；',
   '- content 以「用户」为主体的第三人称事实描述，不超过 200 字；',
-  '- quote 是支撑该记忆的用户原话片段，必须逐字出现在用户消息原文中。',
+  '- quote 是支撑该记忆的用户原话片段，必须逐字出现在用户消息原文中；',
+  '- importance 可选：0=普通，1=重要（用户明确要求记住的重要事实），2=关键（身份/健康/安全）。',
   '规则：只提取用户的喜好、习惯、重要关系、过往经历、长期目标、沟通偏好、自述特点、情绪支持需求；',
+  '用户说「记住…」时必须提取（importance 至少 1）；',
   '不要提取事实问答、代码、临时任务或一次性话题；最多 6 项；没有值得记住的内容时输出 []。',
 ].join('\n')
 
-type ExtractedItem = { dimension: string; content: string; quote?: string }
+type ExtractedItem = { dimension: string; content: string; quote?: string; importance?: number }
 
 const sameText = (a: string, b: string) => a.replace(/\s+/g, '') === b.replace(/\s+/g, '')
 
@@ -135,6 +137,8 @@ export const enqueueMemoryExtraction = (
           content,
           source: { sessionId, messageId: undefined, quote },
           enabled: true,
+          // 用户明确要求记住 → 重要；普通提炼 → 普通
+          importance: item.importance === 1 || item.importance === 2 ? item.importance : 0,
           createdAt: now,
           updatedAt: now,
         }

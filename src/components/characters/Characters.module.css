@@ -121,6 +121,61 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* 形象工作室的四格候选画布 */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.cell {
+  aspect-ratio: 1;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-base);
+  overflow: hidden;
+  padding: 0;
+  cursor: pointer;
+}
+
+.cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cell[data-state='loading'],
+.cell[data-state='failed'],
+.cell[data-state='empty'] {
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+.cell[data-state='failed'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.cellLoading {
+  animation: cell-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes cell-pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.referencePreview {
+  width: 96px;
+  height: 96px;
+  border-radius: 12px;
+  object-fit: cover;
+  align-self: center;
+}
+
 /* 侧边栏的「角色与记忆」入口（桌面与移动抽屉共用）。 */
 .siderEntry {
   display: flex;
