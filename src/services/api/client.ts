@@ -179,17 +179,25 @@ const openMessageStream = (apiKey: string, body: CreateMessageRequest, signal: A
   })
 }
 
+/** 请求是否携带 DeepSeek 官方扩展字段。 */
+const hasDeepSeekExtensions = (body: CreateMessageRequest) =>
+  Boolean(body.tools?.length || body.safety_check || body.title?.enabled)
+
+/** 扩展模式在生成前拒绝长输入时，服务端会用这条文案提示切到基础模式。 */
+const EXTENSION_INPUT_OVERFLOW = /\buser input too long, \d+ tokens exceeds max 32768 tokens\b/i
+
+const isExtensionInputOverflow = (body: CreateMessageRequest, error: unknown) =>
+  hasDeepSeekExtensions(body) &&
+  error instanceof ApiError &&
+  error.status === 400 &&
+  EXTENSION_INPUT_OVERFLOW.test(error.message)
+
 const withDeepSeekExtensionsFallback = (
   body: CreateMessageRequest,
   send: (requestBody: CreateMessageRequest) => Promise<Response>
 ) =>
   send(body).catch((error: unknown) => {
-    if (
-      !(body.tools?.length || body.safety_check || body.title?.enabled) ||
-      !(error instanceof ApiError) ||
-      error.status !== 400 ||
-      !/\buser input too long, \d+ tokens exceeds max 32768 tokens\b/i.test(error.message)
-    ) {
+    if (!isExtensionInputOverflow(body, error)) {
       throw error
     }
     // 扩展模式在生成前拒绝长输入时，用同一协议的基础模式发送同一上下文。
@@ -446,18 +454,10 @@ async function* streamCompatibleMessage(
   })
   // 兼容网关（透传 DeepSeek 官方扩展）在 Android 上同样走原生通道：绕 CORS 且支持自定义头；
   // 合成出来的官方端点除外（nativeAllowed=false）。
-  const native =
-    android && nativeAllowed && (!deepSeek || config.compatible === true)
-      ? openAndroidChat(android, config, serialize(body), signal)
-      : undefined
-  if (native) {
-    debugLog('native', `原生通道启动 · ${config.endpoint}`, {
-      headers: sanitizeHeaders(config.headers ?? {}),
-    })
-  }
-  try {
-    const send = (requestBody: CreateMessageRequest) =>
-      request(endpoint, {
+  // 注意这里用裸 fetch 拿 Response（不在这里按状态码抛错）：原生与网页需要同一套 400 兜底。
+  const send = async (requestBody: CreateMessageRequest): Promise<Response> => {
+    try {
+      return await fetch(endpoint, {
         method: 'POST',
         headers: requestHeaders,
         body: serialize(requestBody),
@@ -465,13 +465,43 @@ async function* streamCompatibleMessage(
         redirect: 'error',
         signal,
       })
-    const response = native
-      ? await native.response
-      : deepSeek
-        ? await withDeepSeekExtensionsFallback(body, send)
-        : await send(body)
+    } catch (error) {
+      if (signal.aborted) {
+        throw error
+      }
+      throw new ApiError('network', error instanceof Error ? error.message : String(error))
+    }
+  }
+  const openExchange = (requestBody: CreateMessageRequest) => {
+    if (android && nativeAllowed && (!deepSeek || config.compatible === true)) {
+      const exchange = openAndroidChat(android, config, serialize(requestBody), signal)
+      debugLog('native', `原生通道启动 · ${config.endpoint}`, {
+        headers: sanitizeHeaders(config.headers ?? {}),
+      })
+      return { response: exchange.response, close: exchange.close }
+    }
+    return { response: send(requestBody), close: () => {} }
+  }
+  let exchange = openExchange(body)
+  try {
+    let response = await exchange.response
     if (!response.ok) {
-      throw await readErrorResponse(response, 'http', `HTTP ${response.status}`)
+      const error = await readErrorResponse(response, 'http', `HTTP ${response.status}`)
+      // 原生与网页统一兜底：扩展模式因超长输入被 400 拒绝时，换成基础模式重发同一上下文。
+      if (!isExtensionInputOverflow(body, error)) {
+        throw error
+      }
+      exchange.close()
+      exchange = openExchange({
+        ...body,
+        tools: undefined,
+        safety_check: undefined,
+        title: undefined,
+      })
+      response = await exchange.response
+      if (!response.ok) {
+        throw await readErrorResponse(response, 'http', `HTTP ${response.status}`)
+      }
     }
     if (format === 'messages') {
       yield* readAnthropicStream(response, signal)
@@ -546,6 +576,6 @@ async function* streamCompatibleMessage(
     }
     yield { type: 'message_stop' }
   } finally {
-    native?.close()
+    exchange.close()
   }
 }

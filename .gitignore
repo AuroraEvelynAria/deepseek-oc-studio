@@ -25,3 +25,4 @@ android/gradle.properties
 /android/release.jks
 /android/keystore.properties
 scripts/card-codec-test/dist/
+scripts/client-fallback-test/dist/

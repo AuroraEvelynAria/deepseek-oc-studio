@@ -11,6 +11,7 @@
     "type": "tsc -p tsconfig.json",
     "lint": "oxlint src rspack.config.ts",
     "test:codec": "rspack build -c scripts/card-codec-test/rspack.config.ts && node scripts/card-codec-test/dist/codec.cjs",
+    "test:api": "rspack build -c scripts/client-fallback-test/rspack.config.ts && node scripts/client-fallback-test/dist/test.cjs",
     "format": "oxfmt --write ."
   },
   "dependencies": {
