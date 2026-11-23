@@ -1,11 +1,12 @@
 import { create } from 'zustand'
 
-/** 对话框内的视图：角色列表 → 编辑角色 / 记忆库 / 编辑模型（id 为 null 表示官方 DeepSeek 或新建）。 */
+/** 对话框内的视图：角色列表 → 编辑角色 / 记忆库 / 编辑模型 / 导入角色卡确认。 */
 export type CharactersView =
   | { type: 'list' }
   | { type: 'edit'; id: string | null }
   | { type: 'memory'; id: string | null }
   | { type: 'model-edit'; id: string | null }
+  | { type: 'import' }
 
 type CharactersDialogState = {
   open: boolean
@@ -14,6 +15,7 @@ type CharactersDialogState = {
   openEdit: (id: string | null) => void
   openMemory: (id: string | null) => void
   openModelEdit: (id: string | null) => void
+  openImport: () => void
   close: () => void
 }
 
@@ -25,6 +27,7 @@ export const useCharactersDialog = create<CharactersDialogState>(() => ({
   openMemory: (id) => useCharactersDialog.setState({ open: true, view: { type: 'memory', id } }),
   openModelEdit: (id) =>
     useCharactersDialog.setState({ open: true, view: { type: 'model-edit', id } }),
+  openImport: () => useCharactersDialog.setState({ open: true, view: { type: 'import' } }),
   close: () => useCharactersDialog.setState({ open: false }),
 }))
 
@@ -34,4 +37,5 @@ export const openEdit = (id: string | null) => useCharactersDialog.getState().op
 export const openMemory = (id: string | null) => useCharactersDialog.getState().openMemory(id)
 export const openModelEdit = (id: string | null) =>
   useCharactersDialog.getState().openModelEdit(id)
+export const openImport = () => useCharactersDialog.getState().openImport()
 export const closeDialog = () => useCharactersDialog.getState().close()

@@ -7,6 +7,9 @@ import {
   resolveChatEndpoint,
   type ChatApiFormat,
 } from '../../services/api/chatConfig.js'
+import { CardError, exportCharacterAsPngCard, exportPersonaJson, parseCharacterFile, type StCardV2 } from '../../services/characters/cardCodec.js'
+import { debugLog } from '../../services/debug/log.js'
+import { saveExportFile } from '../../services/chat/exportMarkdown.js'
 import { bindSessionCharacter, useChatStore } from '../../services/chat/store.js'
 import {
   activatePreset,
@@ -39,9 +42,11 @@ import { createId } from '../../utils/id.js'
 import { Button } from '../base/Button.js'
 import { IconButton } from '../base/IconButton.js'
 import { Modal } from '../base/Modal.js'
+import { showToast } from '../base/toastState.js'
 import {
   IconCheckOutline16,
   IconChevronRightOutline14,
+  IconDownloadOutline16,
   IconEditOutline16,
   IconTrashOutline16,
 } from '../base/icons.js'
@@ -50,6 +55,7 @@ import {
   openMemory as openMemoryView,
   openEdit as openEditView,
   openModelEdit as openModelEditView,
+  openImport as openImportView,
   openList,
   useCharactersDialog,
 } from './charactersDialogState.js'
@@ -133,7 +139,7 @@ const Toggle = ({
 )
 
 /** 角色列表：官方 DeepSeek + 自定义角色；点击行设为新对话默认。下方为模型预设区块。 */
-const ListView = () => {
+const ListView = ({ onImportFile }: { onImportFile: (file: File) => void }) => {
   const t = useTranslate()
   const characters = useCharacters((state) => state.characters)
   const selectedId = useCharacters((state) => state.selectedCharacterId)
@@ -149,6 +155,21 @@ const ListView = () => {
   })
   const [deleting, setDeleting] = useState<Character | null>(null)
   const [deletingModel, setDeletingModel] = useState<ModelPreset | null>(null)
+  const [exporting, setExporting] = useState<Character | null>(null)
+  const importInput = useRef<HTMLInputElement>(null)
+  const importFileRef = useRef<File | null>(null)
+
+  const chooseImportFile = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0]
+    event.currentTarget.value = ''
+    if (!file) {
+      return
+    }
+    // 先暂存文件再切视图：视图组件从父级拿到 File
+    importFileRef.current = file
+    onImportFile(file)
+    openImportView()
+  }
 
   const rows: (Character | null)[] = [null, ...characters]
   return (
@@ -194,6 +215,15 @@ const ListView = () => {
                     onClick={() => openEditView(character.id)}
                   />
                 ) : null}
+                {character ? (
+                  <IconButton
+                    size="m"
+                    tone="primary"
+                    icon={<IconDownloadOutline16 />}
+                    tooltip={t('cardExport')}
+                    onClick={() => setExporting(character)}
+                  />
+                ) : null}
                 <IconButton
                   size="m"
                   tone="primary"
@@ -231,6 +261,21 @@ const ListView = () => {
         <Button size="m" variant="outlined" block onClick={() => openEditView(null)}>
           {t('newCharacter')}
         </Button>
+        <Button
+          size="m"
+          variant="outlined"
+          block
+          onClick={() => importInput.current?.click()}
+        >
+          {t('cardImport')}
+        </Button>
+        <input
+          ref={importInput}
+          type="file"
+          accept=".png,.json,image/png,application/json"
+          hidden
+          onChange={chooseImportFile}
+        />
       </div>
       <div className={styles.sectionTitle}>{t('modelsSection')}</div>
       <div className={styles.list}>
@@ -340,6 +385,48 @@ const ListView = () => {
           onConfirm={() => {
             removeCharacter(deleting.id)
             setDeleting(null)
+          }}
+        />
+      ) : null}
+      {exporting ? (
+        <SessionActionDialog
+          title={t('cardExportTitle', { name: exporting.name })}
+          description={t('cardExportChoose')}
+          cancelLabel={t('cancel')}
+          confirmLabel={t('cardExportPng')}
+          onCancel={() => setExporting(null)}
+          onConfirm={async () => {
+            const card = exporting
+            setExporting(null)
+            try {
+              const blob = await exportCharacterAsPngCard(card)
+              await saveExportFile(`${card.name}.png`, blob)
+              showToast({ key: 'cardExported' })
+            } catch {
+              showToast({ key: 'cardExportFailed', type: 'error' })
+            }
+          }}
+        />
+      ) : null}
+      {exporting ? (
+        <SessionActionDialog
+          title={t('cardExportPersonaTitle')}
+          description={t('cardExportPersonaDescription')}
+          cancelLabel={t('cancel')}
+          confirmLabel={t('cardExportPersona')}
+          onCancel={() => setExporting(null)}
+          onConfirm={() => {
+            const card = exporting
+            setExporting(null)
+            try {
+              const memories = useCharacters.getState().memories[card.id] ?? []
+              const blob = exportPersonaJson(card, memories)
+              void saveExportFile(`${card.name}.replica-persona.json`, blob).then(() =>
+                showToast({ key: 'cardExported' })
+              )
+            } catch {
+              showToast({ key: 'cardExportFailed', type: 'error' })
+            }
           }}
         />
       ) : null}
@@ -714,6 +801,138 @@ const headersToText = (headers: Record<string, string> | undefined) =>
     .map(([name, value]) => `${name}: ${value}`)
     .join('\n')
 
+/** 导入角色卡的预览与落库：解析结果先展示，确认后写入角色与记忆。 */
+const ImportView = ({ file }: { file: File }) => {
+  const t = useTranslate()
+  const [parsed, setParsed] = useState<
+    | { kind: 'st'; name: string; prompt: string; avatar: Blob }
+    | { kind: 'persona'; name: string; prompt: string; avatar: string | null; memoryEnabled: boolean; memories: MemoryCard[] }
+    | { kind: 'error'; reason: TranslationKey }
+  | null
+  >(null)
+  const [saving, setSaving] = useState(false)
+
+  useState(() => {
+    void (async () => {
+      try {
+        const result = await parseCharacterFile(file)
+        if (result.kind === 'st') {
+          const data = (typeof result.card.data === 'object' && result.card.data !== null ? result.card.data : result.card) as StCardV2
+          const prompt = [
+            typeof data.description === 'string' ? data.description.trim() : '',
+            typeof data.personality === 'string' && data.personality.trim() ? `【性格】${data.personality.trim()}` : '',
+            typeof data.scenario === 'string' && data.scenario.trim() ? `【场景】${data.scenario.trim()}` : '',
+          ]
+            .filter(Boolean)
+            .join('\n\n')
+          setParsed({ kind: 'st', name: data.name?.trim() ?? '', prompt, avatar: result.image })
+        } else {
+          setParsed({
+            kind: 'persona',
+            name: result.card.character.name.trim(),
+            prompt: result.card.character.prompt,
+            avatar: result.card.character.avatar,
+            memoryEnabled: result.card.character.memoryEnabled,
+            memories: result.card.memories ?? [],
+          })
+        }
+      } catch (error) {
+        const reason: TranslationKey =
+          error instanceof CardError
+            ? ({ notPng: 'cardInvalid', noCard: 'cardInvalid', invalidCard: 'cardInvalid', tooLarge: 'cardTooLarge', invalidPersona: 'cardInvalid' } as const)[error.reason] ?? 'cardImportFailed'
+            : 'cardImportFailed'
+        setParsed({ kind: 'error', reason })
+        debugLog('event', '角色卡导入失败', error instanceof Error ? error.message : String(error))
+      }
+    })()
+    return null
+  })
+
+  const confirm = async () => {
+    if (!parsed || parsed.kind === 'error' || saving) {
+      return
+    }
+    setSaving(true)
+    try {
+      let avatar: string | null = null
+      if (parsed.kind === 'st') {
+        avatar = await prepareAvatar(new File([parsed.avatar], 'card.png', { type: 'image/png' }))
+      } else {
+        avatar = parsed.avatar
+      }
+      const saved = saveCharacter({
+        name: parsed.name,
+        avatar,
+        prompt: parsed.prompt,
+        memoryEnabled: parsed.kind === 'persona' ? parsed.memoryEnabled : true,
+      })
+      if (parsed.kind === 'persona') {
+        for (const card of parsed.memories) {
+          upsertMemory({ ...card, id: createId(), characterId: saved.id })
+        }
+      }
+      debugLog('state', `角色卡导入成功 · ${saved.name}`)
+      showToast({ key: 'cardImported', params: { name: saved.name } })
+      openMemoryView(saved.id)
+    } catch (error) {
+      debugLog('event', '角色卡导入失败', error instanceof Error ? error.message : String(error))
+      showToast({ key: 'cardImportFailed', type: 'error' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className={styles.editForm}>
+      <button type="button" className={styles.back} onClick={openList}>
+        <span className={styles.backIcon}>
+          <IconChevronRightOutline14 />
+        </span>
+        {t('back')}
+      </button>
+      {!parsed ? (
+        <div className={styles.memoryEmpty}>{t('cardParsing')}</div>
+      ) : parsed.kind === 'error' ? (
+        <div className={styles.memoryEmpty}>{t(parsed.reason)}</div>
+      ) : (
+        <>
+          <div className={styles.avatarField}>
+            {parsed.kind === 'st' ? (
+              <img className={`${styles.avatar} ${styles.l}`} src={URL.createObjectURL(parsed.avatar)} alt="" />
+            ) : parsed.avatar ? (
+              <img className={`${styles.avatar} ${styles.l}`} src={parsed.avatar} alt="" />
+            ) : (
+              <span className={`${styles.avatarFallback} ${styles.l}`}>{parsed.name.slice(0, 1)}</span>
+            )}
+            <div className={styles.rowText}>
+              <span className={styles.rowName}>{parsed.name}</span>
+              <span className={styles.rowSub}>
+                {parsed.kind === 'persona'
+                  ? t('cardMemoriesCount', { count: parsed.memories.length })
+                  : t('cardKindSt')}
+              </span>
+            </div>
+          </div>
+          <label className={styles.field}>
+            <span>{t('characterPrompt')}</span>
+            <div className={styles.memorySource}>
+              <blockquote className={styles.promptPreview}>{parsed.prompt || t('characterNoPrompt')}</blockquote>
+            </div>
+          </label>
+          <div className={styles.editActions}>
+            <Button size="m" variant="outlined" onClick={openList}>
+              {t('cancel')}
+            </Button>
+            <Button size="m" disabled={saving} onClick={() => void confirm()}>
+              {t('cardImportConfirm')}
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 /** 模型预设编辑：新建（id 为 null）或修改名称、模型、端点与能力标记。 */
 const ModelEditView = ({ id }: { id: string | null }) => {
   const t = useTranslate()
@@ -945,6 +1164,7 @@ export const CharactersDialog = memo(function CharactersDialog() {
   const open = useCharactersDialog((state) => state.open)
   const view = useCharactersDialog((state) => state.view)
   const close = useCharactersDialog((state) => state.close)
+  const [importFile, setImportFile] = useState<File | null>(null)
   if (!open) {
     return null
   }
@@ -955,16 +1175,24 @@ export const CharactersDialog = memo(function CharactersDialog() {
         ? t('memoryTitle')
         : view.type === 'model-edit'
           ? t(view.id ? 'modelEdit' : 'modelNew')
-          : t('charactersTitle')
+          : view.type === 'import'
+            ? t('cardImport')
+            : t('charactersTitle')
   return (
     <Modal title={title} closable className={styles.dialog} onClose={close}>
       <div key={view.type} className={styles.viewFade}>
         {view.type === 'list' ? (
-          <ListView />
+          <ListView onImportFile={setImportFile} />
         ) : view.type === 'edit' ? (
           <EditView id={view.id} />
         ) : view.type === 'memory' ? (
           <MemoryView id={view.id} />
+        ) : view.type === 'import' ? (
+          importFile ? (
+            <ImportView file={importFile} />
+          ) : (
+            <ListView onImportFile={setImportFile} />
+          )
         ) : (
           <ModelEditView id={view.id} />
         )}

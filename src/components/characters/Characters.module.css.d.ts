@@ -13,6 +13,7 @@ declare const styles: {
   readonly "templateIcon": string;
   readonly "capSwitches": string;
   readonly "fieldHint": string;
+  readonly "voiceNotice": string;
   readonly "list": string;
   readonly "row": string;
   readonly "rowMain": string;

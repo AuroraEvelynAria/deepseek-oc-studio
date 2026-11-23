@@ -41,7 +41,8 @@ const crcTable1 = nextCrcTable(crcTable)
 const crcTable2 = nextCrcTable(crcTable1)
 const crcTable3 = nextCrcTable(crcTable2)
 
-const updateCrc = (crc: number, bytes: Uint8Array) => {
+/** 标准 CRC-32（更新式：初始 0xffffffff，结束后再 ^0xffffffff）；PNG chunk 校验也复用。 */
+export const updateCrc = (crc: number, bytes: Uint8Array) => {
   const view = viewOf(bytes)
   let offset = 0
   for (; offset + 4 <= bytes.length; offset += 4) {
