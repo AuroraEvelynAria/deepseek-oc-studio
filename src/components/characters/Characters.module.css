@@ -2,6 +2,21 @@
 
 .dialog {
   width: min(560px, calc(100vw - 48px));
+  /* 手机屏幕高度有限：限制整体高度，内容区自己滚动，底部按钮保持可达。 */
+  max-height: calc(var(--app-default-viewport-height, 100dvh) - 32px);
+}
+
+.dialogMain {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* 角色卡导出：两种格式纵向排列，整行可点 */
+.exportChoices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 /* 视图切换：key 变化触发重挂载，淡入过渡 */
@@ -329,7 +344,9 @@
 
 .listFooter {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
   padding-top: 12px;
 }
 

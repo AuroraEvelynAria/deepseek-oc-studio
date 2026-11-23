@@ -64,7 +64,10 @@ export const initDebugLog = () => {
   if (get().entries.length > 0) {
     return
   }
-  set({ entries: load() })
+  const entries = load()
+  // 恢复序号：重新启动后新日志不能和持久化下来的 id 撞车。
+  sequence = entries.reduce((max, entry) => Math.max(max, entry.id), 0)
+  set({ entries })
 }
 
 export const clearDebugLog = () => {
@@ -95,6 +98,13 @@ const push = (kind: DebugKind, title: string, detail?: string) => {
   return entry
 }
 
+/** 常见密钥形态：日志里即使出现在错误正文中也要打码。 */
+const SECRET_PATTERN =
+  /\b(?:sk-ant-[A-Za-z0-9_-]{16,}|sk-[A-Za-z0-9_-]{16,}|oc_sk_[A-Za-z0-9_-]{8,}|AIza[A-Za-z0-9_-]{16,}|hf_[A-Za-z0-9]{16,})/g
+
+const redactSecrets = (text: string) =>
+  text.replace(SECRET_PATTERN, (match) => `${match.slice(0, 6)}***(${match.length})`)
+
 /** 记录一条调试日志；detail 传任意可序列化数据（自动 JSON 化并截断超长文本）。 */
 export const debugLog = (kind: DebugKind, title: string, detail?: unknown): void => {
   try {
@@ -112,6 +122,7 @@ export const debugLog = (kind: DebugKind, title: string, detail?: unknown): void
         2
       )
     }
+    text = redactSecrets(text)
     if (text.length > 8000) {
       text = `${text.slice(0, 8000)}…(截断)`
     }
@@ -121,14 +132,36 @@ export const debugLog = (kind: DebugKind, title: string, detail?: unknown): void
   }
 }
 
-const SENSITIVE_HEADERS = ['authorization', 'x-api-key']
+const SENSITIVE_HEADERS = new Set([
+  'authorization',
+  'proxy-authorization',
+  'x-api-key',
+  'api-key',
+  'apikey',
+  'x-goog-api-key',
+  'x-auth-token',
+  'x-access-token',
+  'token',
+  'cookie',
+  'set-cookie',
+])
+
+const isSensitiveHeader = (name: string) => {
+  const lower = name.toLowerCase()
+  return (
+    SENSITIVE_HEADERS.has(lower) ||
+    lower.endsWith('-token') ||
+    lower.includes('api-key') ||
+    lower.includes('apikey')
+  )
+}
 
 /** 请求头脱敏：认证类头的值只保留前 6 位与长度信息。 */
 export const sanitizeHeaders = (headers: Record<string, string>): Record<string, string> =>
   Object.fromEntries(
     Object.entries(headers).map(([name, value]) => [
       name,
-      SENSITIVE_HEADERS.includes(name.toLowerCase()) && value.length > 6
+      isSensitiveHeader(name) && value.length > 6
         ? `${value.slice(0, 6)}***(${value.length})`
         : value,
     ])

@@ -20,7 +20,7 @@ const formatTime = (timestamp: number) => {
   }).format(date)}`
 }
 
-const sanitizeFileName = (title: string, fallback: string) =>
+export const sanitizeFileName = (title: string, fallback: string) =>
   title
     .replace(/[\\/:*?"<>|\r\n]+/g, ' ')
     .trim()
@@ -117,7 +117,9 @@ const exportFileName = (session: Session): string => {
   const now = new Date()
   const date = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`
   const time = `${pad(now.getHours())}${pad(now.getMinutes())}`
-  return sanitizeFileName(`${name}-${date}-${time}`, 'chat')
+  // 先掐角色名再拼时间：超长名字不能把时间戳挤掉（否则同一分钟导出会重名）。
+  const safeName = sanitizeFileName(name, 'DeepSeek').slice(0, 48)
+  return `${safeName}-${date}-${time}`
 }
 
 export const exportSessionMarkdown = (session: Session): { name: string; blob: Blob } => ({

@@ -1,11 +1,10 @@
 import { useEffect, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { isTopOverlay, pushOverlay } from '../../app/overlayStack.js'
 import { useAndroidBackInterception } from '../../app/useAndroidBackInterception.js'
 import styles from './SessionActionDialog.module.css'
 
-/** 侧边栏会话动作弹窗；叠放时 Esc 只关闭最上层。 */
-const openDialogs: object[] = []
-
+/** 侧边栏会话动作弹窗；与 Modal 共用浮层栈，叠放时 Esc 只关闭最上层。 */
 export const SessionActionDialog = ({
   title,
   description,
@@ -35,15 +34,15 @@ export const SessionActionDialog = ({
 
   useEffect(() => {
     const token = {}
-    openDialogs.push(token)
+    const release = pushOverlay(token)
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && openDialogs.at(-1) === token && !closeDisabled) {
+      if (event.key === 'Escape' && isTopOverlay(token) && !closeDisabled) {
         onCancel()
       }
     }
     document.addEventListener('keydown', onKeyDown)
     return () => {
-      openDialogs.splice(openDialogs.indexOf(token), 1)
+      release()
       document.removeEventListener('keydown', onKeyDown)
     }
   }, [closeDisabled, onCancel])

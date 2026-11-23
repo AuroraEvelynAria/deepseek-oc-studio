@@ -1,5 +1,7 @@
 declare const styles: {
   readonly "dialog": string;
+  readonly "dialogMain": string;
+  readonly "exportChoices": string;
   readonly "siderEntry": string;
   readonly "chip": string;
   readonly "chipAvatar": string;

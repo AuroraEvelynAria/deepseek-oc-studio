@@ -22,33 +22,44 @@ const DIMENSION_LABEL_KEYS = {
 const dimensionLabel = (dimension: MemoryCard['dimension']) =>
   translate(DIMENSION_LABEL_KEYS[dimension])
 
-/** 把启用的记忆卡按固定维度顺序拼成紧凑列表；重要卡优先，超预算时低优先级让位。 */
+const DIMENSION_ORDER = new Map(MEMORY_DIMENSIONS.map((dimension, index) => [dimension, index]))
+
+/** 把启用的记忆卡按重要级/更新时间挑进预算，再按维度顺序整理成紧凑列表。 */
 export const buildMemoryBlock = (cards: readonly MemoryCard[]): string => {
   const enabled = cards
-    .filter((card) => card.enabled && card.content.trim())
+    .filter(
+      (card) =>
+        card.enabled &&
+        // IndexedDB 里的历史数据可能来自旧版本/损坏的角色卡，渲染前再兜一次底。
+        typeof card.content === 'string' &&
+        card.content.trim().length > 0 &&
+        DIMENSION_ORDER.has(card.dimension)
+    )
     .sort((a, b) => b.importance - a.importance || b.updatedAt - a.updatedAt)
   if (enabled.length === 0) {
     return ''
   }
-  const lines: string[] = []
+  // 先按全局优先级决定谁能进预算，避免低优先级维度把高优先级卡片挤出预算。
+  const selected: { dimension: MemoryCard['dimension']; line: string }[] = []
   let used = 0
-  for (const dimension of MEMORY_DIMENSIONS) {
-    for (const card of enabled) {
-      if (card.dimension !== dimension) {
-        continue
-      }
-      const line = `- [${dimensionLabel(dimension)}] ${card.content.trim()}`
-      if (used + line.length > MEMORY_BUDGET) {
-        continue
-      }
-      lines.push(line)
-      used += line.length
+  for (const card of enabled) {
+    const line = `- [${dimensionLabel(card.dimension)}] ${card.content.trim()}`
+    if (used + line.length > MEMORY_BUDGET) {
+      continue
     }
+    selected.push({ dimension: card.dimension, line })
+    used += line.length
   }
-  if (lines.length === 0) {
+  if (selected.length === 0) {
     return ''
   }
-  return `以下是关于用户的长期记忆，供你自然地参考，不要逐条复述：\n${lines.join('\n')}`
+  // 入选后按维度分组，保持阅读顺序稳定（同维度内仍是重要级优先）。
+  selected.sort(
+    (a, b) => (DIMENSION_ORDER.get(a.dimension) ?? 0) - (DIMENSION_ORDER.get(b.dimension) ?? 0)
+  )
+  return `以下是关于用户的长期记忆，供你自然地参考，不要逐条复述：\n${selected
+    .map((item) => item.line)
+    .join('\n')}`
 }
 
 /**

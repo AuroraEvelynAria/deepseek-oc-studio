@@ -3,7 +3,7 @@ import { android } from '../../app/android.js'
 import { useTranslate } from '../../i18n/index.js'
 import { useCharacters } from '../../services/characters/store.js'
 import { resolveActivePreset } from '../../services/models/store.js'
-import { clearDebugLog, useDebugLog, type DebugEntry } from '../../services/debug/log.js'
+import { clearDebugLog, debugLog, useDebugLog, type DebugEntry } from '../../services/debug/log.js'
 import { useSettings } from '../../services/settings.js'
 import { copyText } from '../../utils/clipboard.js'
 import { Button } from '../base/Button.js'
@@ -11,13 +11,18 @@ import { Modal } from '../base/Modal.js'
 import { showToast } from '../base/toastState.js'
 import styles from './DeveloperConsole.module.css'
 
-/** 汇总当前应用状态，供状态区展示与一键复制。 */
+/** 汇总当前应用状态，供状态区展示与一键复制；凭据只显示存在性与头名。 */
 const collectState = () => {
   const settings = useSettings.getState()
   const preset = resolveActivePreset()
   const characters = useCharacters.getState()
+  const { apiKey, headers, ...chatConfig } = settings.chatConfig
   return {
-    chatConfig: settings.chatConfig,
+    chatConfig: {
+      ...chatConfig,
+      apiKey: apiKey ? '***' : '',
+      headers: headers ? Object.keys(headers) : undefined,
+    },
     activePreset: preset ? { name: preset.name, model: preset.model, endpoint: preset.endpoint, format: preset.format, vision: preset.vision, reasoning: preset.reasoning, search: preset.search } : null,
     thinkingLevel: settings.thinkingLevel,
     apiKeySaved: Boolean(settings.apiKey),
@@ -67,12 +72,8 @@ export const DeveloperConsole = memo(function DeveloperConsole({ onClose }: { on
       const result = eval(code)
       const text = typeof result === 'string' ? result : JSON.stringify(result, null, 2) ?? String(result)
       setEvalResult(text?.slice(0, 4000) ?? 'undefined')
-      useDebugLog.setState((state) => ({
-        entries: [
-          ...state.entries,
-          { id: state.entries.length + 1, at: Date.now(), kind: 'eval' as const, title: code.slice(0, 120), detail: text?.slice(0, 4000) ?? 'undefined' },
-        ].slice(-300),
-      }))
+      // 走日志服务统一分配 id，避免直接按 length+1 造成 ID 冲突（React key 重复）。
+      debugLog('eval', code.slice(0, 120), text?.slice(0, 4000) ?? 'undefined')
     } catch (error) {
       const text = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
       setEvalResult(text)

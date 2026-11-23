@@ -1,4 +1,4 @@
-import { memo, useRef, useState, type ChangeEvent, type ReactNode } from 'react'
+import { memo, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react'
 import whale from '../../assets/deepseek-whale.svg'
 import { useTranslate, type TranslationKey } from '../../i18n/index.js'
 import {
@@ -9,7 +9,7 @@ import {
 } from '../../services/api/chatConfig.js'
 import { CardError, exportCharacterAsPngCard, exportPersonaJson, parseCharacterFile, type StCardV2 } from '../../services/characters/cardCodec.js'
 import { debugLog } from '../../services/debug/log.js'
-import { saveExportFile } from '../../services/chat/exportMarkdown.js'
+import { saveExportFile, sanitizeFileName } from '../../services/chat/exportMarkdown.js'
 import { bindSessionCharacter, useChatStore } from '../../services/chat/store.js'
 import {
   activatePreset,
@@ -22,7 +22,6 @@ import { PROVIDER_TEMPLATES } from '../../services/models/providers.js'
 import { PRESET_CHARACTERS, presetToCharacterInput } from '../../services/characters/presets.js'
 import { AvatarStudioView } from './AvatarStudioView.js'
 import {
-  isMemoryEnabled,
   removeCharacter,
   removeMemory,
   resolveCharacter,
@@ -34,6 +33,7 @@ import {
 } from '../../services/characters/store.js'
 import {
   DEFAULT_CHARACTER_ID,
+  isMemoryDimension,
   MEMORY_CONTENT_LIMIT,
   MEMORY_DIMENSIONS,
   type Character,
@@ -147,9 +147,13 @@ const ListView = ({ onImportFile }: { onImportFile: (file: File) => void }) => {
   const t = useTranslate()
   const characters = useCharacters((state) => state.characters)
   const selectedId = useCharacters((state) => state.selectedCharacterId)
+  const defaultMemoryEnabled = useCharacters((state) => state.defaultMemoryEnabled)
   const presets = useModels((state) => state.presets)
   const activeModelId = useModels((state) => state.activeId)
   const activeId = useChatStore((state) => state.activeId)
+  const streaming = useChatStore(
+    (state) => state.activeId !== null && Object.hasOwn(state.streaming, state.activeId)
+  )
   const sessionCharacterId = useChatStore((state) => {
     const session =
       state.activeId !== null && Object.hasOwn(state.sessionCache, state.activeId)
@@ -161,7 +165,6 @@ const ListView = ({ onImportFile }: { onImportFile: (file: File) => void }) => {
   const [deletingModel, setDeletingModel] = useState<ModelPreset | null>(null)
   const [exporting, setExporting] = useState<Character | null>(null)
   const importInput = useRef<HTMLInputElement>(null)
-  const importFileRef = useRef<File | null>(null)
 
   const chooseImportFile = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0]
@@ -170,9 +173,28 @@ const ListView = ({ onImportFile }: { onImportFile: (file: File) => void }) => {
       return
     }
     // 先暂存文件再切视图：视图组件从父级拿到 File
-    importFileRef.current = file
     onImportFile(file)
     openImportView()
+  }
+
+  /** 导出角色卡：文件名先净化（角色名可能来自外部卡，含 / 等非法字符）。 */
+  const exportCard = async (card: Character, format: 'png' | 'persona') => {
+    setExporting(null)
+    try {
+      const baseName = sanitizeFileName(card.name, 'character')
+      const blob =
+        format === 'png'
+          ? await exportCharacterAsPngCard(card)
+          : exportPersonaJson(card, useCharacters.getState().memories[card.id] ?? [])
+      const saved = await saveExportFile(
+        format === 'png' ? `${baseName}.png` : `${baseName}.replica-persona.json`,
+        blob
+      )
+      showToast({ key: saved ? 'cardExported' : 'chatExportCancelled' })
+    } catch (error) {
+      debugLog('event', '角色卡导出失败', error instanceof Error ? error.message : String(error))
+      showToast({ key: 'cardExportFailed', type: 'error' })
+    }
   }
 
   const rows: (Character | null)[] = [null, ...characters]
@@ -183,7 +205,8 @@ const ListView = ({ onImportFile }: { onImportFile: (file: File) => void }) => {
         {rows.map((character) => {
           const id = character?.id ?? null
           const isDefault = selectedId === id
-          const memoryOn = isMemoryEnabled(id)
+          // 直接读订阅到的数据：isMemoryEnabled 走 getState()，默认角色开关变化不会触发重渲染。
+          const memoryOn = character ? character.memoryEnabled : defaultMemoryEnabled
           const inUse = activeId !== null && sessionCharacterId === id
           return (
             <div key={id ?? 'default'} className={styles.row} data-selected={isDefault ? '' : undefined}>
@@ -243,6 +266,7 @@ const ListView = ({ onImportFile }: { onImportFile: (file: File) => void }) => {
                   <Button
                     size="s"
                     variant="outlined"
+                    disabled={streaming}
                     onClick={() => bindSessionCharacter(activeId, id)}
                   >
                     {t('useInCurrentChat')}
@@ -345,7 +369,7 @@ const ListView = ({ onImportFile }: { onImportFile: (file: File) => void }) => {
                   tone="primary"
                   icon={<IconTrashOutline16 />}
                   tooltip={t('delete')}
-                  disabled={presets.length <= 1}
+                  disabled={presets.length <= 1 || preset.endpoint === ''}
                   onClick={() => setDeletingModel(preset)}
                 />
               </div>
@@ -396,46 +420,26 @@ const ListView = ({ onImportFile }: { onImportFile: (file: File) => void }) => {
         />
       ) : null}
       {exporting ? (
-        <SessionActionDialog
+        <Modal
           title={t('cardExportTitle', { name: exporting.name })}
-          description={t('cardExportChoose')}
-          cancelLabel={t('cancel')}
-          confirmLabel={t('cardExportPng')}
-          onCancel={() => setExporting(null)}
-          onConfirm={async () => {
-            const card = exporting
-            setExporting(null)
-            try {
-              const blob = await exportCharacterAsPngCard(card)
-              await saveExportFile(`${card.name}.png`, blob)
-              showToast({ key: 'cardExported' })
-            } catch {
-              showToast({ key: 'cardExportFailed', type: 'error' })
-            }
-          }}
-        />
-      ) : null}
-      {exporting ? (
-        <SessionActionDialog
-          title={t('cardExportPersonaTitle')}
-          description={t('cardExportPersonaDescription')}
-          cancelLabel={t('cancel')}
-          confirmLabel={t('cardExportPersona')}
-          onCancel={() => setExporting(null)}
-          onConfirm={() => {
-            const card = exporting
-            setExporting(null)
-            try {
-              const memories = useCharacters.getState().memories[card.id] ?? []
-              const blob = exportPersonaJson(card, memories)
-              void saveExportFile(`${card.name}.replica-persona.json`, blob).then(() =>
-                showToast({ key: 'cardExported' })
-              )
-            } catch {
-              showToast({ key: 'cardExportFailed', type: 'error' })
-            }
-          }}
-        />
+          closable
+          onClose={() => setExporting(null)}
+        >
+          <p className={styles.fieldHint}>{t('cardExportChoose')}</p>
+          <div className={styles.exportChoices}>
+            <Button size="m" block onClick={() => void exportCard(exporting, 'png')}>
+              {t('cardExportPng')}
+            </Button>
+            <Button
+              size="m"
+              block
+              variant="outlined"
+              onClick={() => void exportCard(exporting, 'persona')}
+            >
+              {t('cardExportPersona')}
+            </Button>
+          </div>
+        </Modal>
       ) : null}
     </>
   )
@@ -668,7 +672,12 @@ const MemoryView = ({ id }: { id: string | null }) => {
   const character = resolveCharacter(id)
   const targetId = character?.id ?? DEFAULT_CHARACTER_ID
   const cards = useCharacters((state) => state.memories[targetId] ?? [])
-  const memoryOn = isMemoryEnabled(id)
+  // 订阅开关本身，切换后标题栏的 Toggle 才会立即刷新。
+  const memoryOn = useCharacters((state) =>
+    id
+      ? (state.characters.find((item) => item.id === id)?.memoryEnabled ?? false)
+      : state.defaultMemoryEnabled
+  )
   const [filter, setFilter] = useState<MemoryDimension | 'all'>('all')
   const [query, setQuery] = useState('')
   const [editing, setEditing] = useState<MemoryCard | null>(null)
@@ -676,6 +685,8 @@ const MemoryView = ({ id }: { id: string | null }) => {
 
   const keyword = query.trim().toLowerCase()
   const visible = cards
+    // 历史/外部导入的坏数据不能让渲染崩掉：先过滤掉结构不合法的条目。
+    .filter((card) => isMemoryDimension(card.dimension) && typeof card.content === 'string')
     .filter((card) => (filter === 'all' ? true : card.dimension === filter))
     .filter((card) =>
       keyword
@@ -870,12 +881,26 @@ const PresetView = () => {
 const ImportView = ({ file }: { file: File }) => {
   const t = useTranslate()
   const [parsed, setParsed] = useState<
-    | { kind: 'st'; name: string; prompt: string; avatar: Blob }
+    | { kind: 'st'; name: string; prompt: string; avatar: Blob; memoryEnabled: boolean }
     | { kind: 'persona'; name: string; prompt: string; avatar: string | null; memoryEnabled: boolean; memories: MemoryCard[] }
     | { kind: 'error'; reason: TranslationKey }
   | null
   >(null)
   const [saving, setSaving] = useState(false)
+
+  // ST 卡预览用临时 objectURL；结果变化/卸载时释放，避免每次渲染都新建一个。
+  const previewUrl = useMemo(
+    () => (parsed?.kind === 'st' ? URL.createObjectURL(parsed.avatar) : null),
+    [parsed]
+  )
+  useEffect(
+    () => () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl)
+      }
+    },
+    [previewUrl]
+  )
 
   useState(() => {
     void (async () => {
@@ -890,7 +915,19 @@ const ImportView = ({ file }: { file: File }) => {
           ]
             .filter(Boolean)
             .join('\n\n')
-          setParsed({ kind: 'st', name: data.name?.trim() ?? '', prompt, avatar: result.image })
+          // 本 app 导出的 PNG 会在 extensions 里带记忆开关，往返导出不丢设置。
+          const extensions = result.card.extensions as
+            | { 'replica.character'?: { memoryEnabled?: unknown } }
+            | undefined
+          const replica = extensions?.['replica.character']
+          const memoryEnabled = typeof replica?.memoryEnabled === 'boolean' ? replica.memoryEnabled : true
+          setParsed({
+            kind: 'st',
+            name: data.name?.trim() ?? '',
+            prompt,
+            avatar: result.image,
+            memoryEnabled,
+          })
         } else {
           setParsed({
             kind: 'persona',
@@ -929,7 +966,7 @@ const ImportView = ({ file }: { file: File }) => {
         name: parsed.name,
         avatar,
         prompt: parsed.prompt,
-        memoryEnabled: parsed.kind === 'persona' ? parsed.memoryEnabled : true,
+        memoryEnabled: parsed.memoryEnabled,
       })
       if (parsed.kind === 'persona') {
         for (const card of parsed.memories) {
@@ -963,7 +1000,9 @@ const ImportView = ({ file }: { file: File }) => {
         <>
           <div className={styles.avatarField}>
             {parsed.kind === 'st' ? (
-              <img className={`${styles.avatar} ${styles.l}`} src={URL.createObjectURL(parsed.avatar)} alt="" />
+              previewUrl ? (
+                <img className={`${styles.avatar} ${styles.l}`} src={previewUrl} alt="" />
+              ) : null
             ) : parsed.avatar ? (
               <img className={`${styles.avatar} ${styles.l}`} src={parsed.avatar} alt="" />
             ) : (
@@ -1045,6 +1084,11 @@ const ModelEditView = ({ id }: { id: string | null }) => {
       setError('advancedInvalidEndpoint')
       return
     }
+    // 自定义端点留空模型 ID 会静默回退成官方 deepseek-flash，到网关只会得到 404。
+    if (resolved && !model.trim()) {
+      setError('modelIdRequired')
+      return
+    }
     const headers = parseHeadersText(headersText)
     if (headers === null) {
       setError('modelHeadersInvalid')
@@ -1119,7 +1163,13 @@ const ModelEditView = ({ id }: { id: string | null }) => {
       </label>
       {(() => {
         // 当前端点匹配某家模板时，展示该家的 DeepSeek 模型 ID 变体供快速切换
-        const match = PROVIDER_TEMPLATES.find((template) => template.endpoint === endpoint.trim())
+        // 编辑框里保存的是去掉协议路径的基地址，模板里存的是完整端点，按基地址比较。
+        const currentBase = chatBaseUrl(endpoint.trim(), format)
+        const match = currentBase
+          ? PROVIDER_TEMPLATES.find(
+              (template) => chatBaseUrl(template.endpoint, template.format) === currentBase
+            )
+          : undefined
         if (!match) {
           return null
         }
@@ -1248,7 +1298,13 @@ export const CharactersDialog = memo(function CharactersDialog() {
               ? t('studioTitle')
               : t('charactersTitle')
   return (
-    <Modal title={title} closable className={styles.dialog} onClose={close}>
+    <Modal
+      title={title}
+      closable
+      className={styles.dialog}
+      mainClassName={styles.dialogMain}
+      onClose={close}
+    >
       <div key={view.type} className={styles.viewFade}>
         {view.type === 'list' ? (
           <ListView onImportFile={setImportFile} />

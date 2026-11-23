@@ -267,11 +267,15 @@ async function* readAnthropicStream(response: Response, signal: AbortSignal) {
   throw new ApiError('interrupted', '')
 }
 
-const customMessagesRequest = ({ model, system, messages, max_tokens }: CreateMessageRequest) => ({
-  model,
-  system: system || undefined,
-  max_tokens,
-  messages: messages.flatMap((message): CreateMessageRequest['messages'] => {
+/**
+ * 自定义 messages 端点：默认只发基础字段（第三方 Anthropic 兼容网关对未知字段敏感）；
+ * compatible 网关（透传 DeepSeek 官方扩展）才带上 tools/thinking/safety/title。
+ */
+const customMessagesRequest = (body: CreateMessageRequest, deepSeek: boolean) => ({
+  model: body.model,
+  system: body.system || undefined,
+  max_tokens: body.max_tokens,
+  messages: body.messages.flatMap((message): CreateMessageRequest['messages'] => {
     if (message.role === 'latest_reminder') {
       return []
     }
@@ -282,6 +286,14 @@ const customMessagesRequest = ({ model, system, messages, max_tokens }: CreateMe
     return [message]
   }),
   stream: true,
+  ...(deepSeek
+    ? {
+        tools: body.tools?.length ? body.tools : undefined,
+        safety_check: body.safety_check,
+        title: body.title,
+        thinking: body.thinking,
+      }
+    : {}),
 })
 
 type NativeChatEvent = { id: string } & (
@@ -377,33 +389,35 @@ export const streamChatMessage = (
 ) => {
   if (config.endpoint) {
     // 兼容网关（透传 DeepSeek 官方扩展）按官方方式发送扩展字段
-    return streamCompatibleMessage(config, body, signal, config.compatible === true)
+    return streamCompatibleMessage(config, body, signal, config.compatible === true, true)
   }
   if (config.format === 'messages') {
     return streamMessage(apiKey, body, signal)
   }
   const endpoint = `${API_ORIGIN}${CHAT_API_PATHS[config.format]}`
-  return streamCompatibleMessage({ ...config, endpoint, apiKey }, body, signal, true)
+  // 合成出来的官方端点必须走 fetch：原生通道按「已保存的自定义配置」校验端点与 Key，
+  // 官方端点的 chatConfig.endpoint 是空串，交给原生只会得到协议错误。
+  return streamCompatibleMessage({ ...config, endpoint, apiKey }, body, signal, true, false)
 }
 
 async function* streamCompatibleMessage(
   config: ChatConfig,
   body: CreateMessageRequest,
   signal: AbortSignal,
-  deepSeek: boolean
+  deepSeek: boolean,
+  nativeAllowed: boolean
 ): AsyncGenerator<MessageStreamEvent> {
   const { endpoint, format, apiKey } = config
   const serialize = (requestBody: CreateMessageRequest) =>
     JSON.stringify(
       format === 'messages'
-        ? customMessagesRequest(requestBody)
+        ? customMessagesRequest(requestBody, deepSeek)
         : openAIRequest(format, requestBody, deepSeek)
     )
   signal.throwIfAborted()
-  const requestHeaders: Record<string, string> = {
+  const builtInHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
     Accept: 'text/event-stream',
-    ...(config.headers ?? {}),
     ...(format === 'messages'
       ? {
           'anthropic-version': '2023-06-01',
@@ -416,14 +430,24 @@ async function* streamCompatibleMessage(
         ? { Authorization: `Bearer ${apiKey}` }
         : {}),
   }
+  // 自定义头后应用（与原生通道一致）：允许覆盖认证头；同名头按大小写不敏感去重。
+  const headerMap = new Map<string, [string, string]>()
+  for (const [name, value] of Object.entries(builtInHeaders)) {
+    headerMap.set(name.toLowerCase(), [name, value])
+  }
+  for (const [name, value] of Object.entries(config.headers ?? {})) {
+    headerMap.set(name.toLowerCase(), [name, value])
+  }
+  const requestHeaders = Object.fromEntries(headerMap.values())
   // 开发者控制台：记录最终请求（含脱敏头与 body 摘要）
   debugLog('request', `流式请求 · ${format} · ${endpoint}`, {
     headers: sanitizeHeaders(requestHeaders),
     body: serialize(body).slice(0, 3000),
   })
-  // 兼容网关（透传 DeepSeek 官方扩展）在 Android 上同样走原生通道：绕 CORS 且支持自定义头
+  // 兼容网关（透传 DeepSeek 官方扩展）在 Android 上同样走原生通道：绕 CORS 且支持自定义头；
+  // 合成出来的官方端点除外（nativeAllowed=false）。
   const native =
-    android && (!deepSeek || config.compatible === true)
+    android && nativeAllowed && (!deepSeek || config.compatible === true)
       ? openAndroidChat(android, config, serialize(body), signal)
       : undefined
   if (native) {

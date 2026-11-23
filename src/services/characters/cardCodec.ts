@@ -1,6 +1,11 @@
 import { readBlobBuffer } from '../../utils/blob.js'
 import { updateCrc } from '../chat/history/zipReader.js'
-import type { Character, MemoryCard } from './types.js'
+import {
+  isMemoryDimension,
+  MEMORY_CONTENT_LIMIT,
+  type Character,
+  type MemoryCard,
+} from './types.js'
 
 /**
  * 角色卡编解码：SillyTavern PNG 角色卡（tEXt chunk）互通 + `replica.persona` 自家卡。
@@ -34,7 +39,6 @@ export type StCardV2 = {
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
 const TEXT_CHUNK = 0x74455874 // tEXt
-const IDAT = 0x49444154
 const IEND = 0x49454e44
 
 /** 常规导入的文本上限；超出视为损坏而非截断（Muse 规则）。 */
@@ -49,6 +53,9 @@ const decodeLatin1 = (bytes: Uint8Array) => {
   }
   return text
 }
+
+/** tEXt 的载荷是 base64(UTF-8 JSON)；必须按 UTF-8 解码，按字节展开会把中文/emoji 变成乱码。 */
+const decodeUtf8 = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
 
 const encodeLatin1 = (text: string) => {
   const bytes = new Uint8Array(text.length)
@@ -76,7 +83,7 @@ const buildChunk = (type: string, data: Uint8Array<ArrayBuffer>): Uint8Array<Arr
   return chunk
 }
 
-/** 从 PNG 字节里读出所有 tEXt 的 keyword/text（也扫 zTXt 的非压缩兄弟变体名以兼容）。 */
+/** 从 PNG 字节里读出所有 tEXt 的 keyword/text（tEXt 只按规范用 Latin-1 读，载荷再单独解码）。 */
 const readTextChunks = (bytes: Uint8Array): Map<string, string> => {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   const texts = new Map<string, string>()
@@ -84,10 +91,14 @@ const readTextChunks = (bytes: Uint8Array): Map<string, string> => {
   while (offset + 12 <= bytes.length) {
     const length = view.getUint32(offset, false)
     const type = view.getUint32(offset + 4, false)
-    if (type === IDAT || type === IEND) {
+    if (type === IEND) {
       break
     }
-    if (type === TEXT_CHUNK && length < bytes.length - offset) {
+    // 越界说明文件损坏，停止扫描而不是把截断数据当正文。
+    if (offset + 12 + length > bytes.length) {
+      break
+    }
+    if (type === TEXT_CHUNK) {
       const data = bytes.subarray(offset + 8, offset + 8 + length)
       const raw = decodeLatin1(data)
       const separator = raw.indexOf('\0')
@@ -127,6 +138,10 @@ export const parseStCard = (raw: string): StCardV2 => {
 
 /** 读取 PNG 角色卡：返回卡对象与图片 Blob（作头像用）。 */
 export const readCharacterCardFromPng = async (file: Blob): Promise<{ card: StCardV2; image: Blob }> => {
+  // 角色卡头像最终会被裁成 256px；超过 32MB 的 PNG 只可能是异常文件，先挡住避免移动端 OOM。
+  if (file.size > 32 * 1024 * 1024) {
+    throw new CardError('tooLarge')
+  }
   const bytes = new Uint8Array(await readBlobBuffer(file))
   if (!PNG_SIGNATURE.every((byte, index) => bytes[index] === byte)) {
     throw new CardError('notPng')
@@ -137,7 +152,7 @@ export const readCharacterCardFromPng = async (file: Blob): Promise<{ card: StCa
   if (!encoded) {
     throw new CardError('noCard')
   }
-  const card = parseStCard(decodeLatin1(Uint8Array.from(atob(encoded), (char) => char.charCodeAt(0) & 0xff)))
+  const card = parseStCard(decodeUtf8(Uint8Array.from(atob(encoded), (char) => char.charCodeAt(0))))
   return { card, image: file }
 }
 
@@ -283,6 +298,55 @@ export const exportPersonaJson = (character: Character, memories: readonly Memor
     type: 'application/json',
   })
 
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value)
+
+/**
+ * 逐条校验记忆卡：persona 卡来自外部文件，任何一条结构不符都可能让记忆视图
+ * 或记忆注入抛错（例如 dimension 非法 → translate(undefined)），因此严格拒绝。
+ */
+const validateMemories = (value: unknown): MemoryCard[] => {
+  if (value === undefined) {
+    return []
+  }
+  if (!Array.isArray(value)) {
+    throw new CardError('invalidPersona')
+  }
+  if (value.length > MAX_MEMORY_CARDS) {
+    throw new CardError('tooLarge')
+  }
+  return value.map((item: unknown) => {
+    if (typeof item !== 'object' || item === null) {
+      throw new CardError('invalidPersona')
+    }
+    const card = item as Partial<MemoryCard>
+    if (
+      !isMemoryDimension(card.dimension) ||
+      typeof card.content !== 'string' ||
+      !card.content.trim() ||
+      card.content.length > MEMORY_CONTENT_LIMIT ||
+      typeof card.enabled !== 'boolean' ||
+      (card.importance !== 0 && card.importance !== 1 && card.importance !== 2) ||
+      !isFiniteNumber(card.createdAt) ||
+      !isFiniteNumber(card.updatedAt)
+    ) {
+      throw new CardError('invalidPersona')
+    }
+    const source = card.source
+    if (source !== null && source !== undefined) {
+      if (
+        typeof source !== 'object' ||
+        typeof source.sessionId !== 'string' ||
+        (source.quote !== undefined && typeof source.quote !== 'string') ||
+        (source.messageId !== undefined && typeof source.messageId !== 'string')
+      ) {
+        throw new CardError('invalidPersona')
+      }
+    }
+    return card as MemoryCard
+  })
+}
+
 /** 解析 replica.persona JSON：严格校验，关键字段缺失即拒。 */
 export const parsePersonaCard = async (file: Blob): Promise<ReplicaPersonaCard> => {
   const text = await file.text()
@@ -313,13 +377,28 @@ export const parsePersonaCard = async (file: Blob): Promise<ReplicaPersonaCard> 
   ) {
     throw new CardError('invalidPersona')
   }
-  if (card.memories !== undefined && !Array.isArray(card.memories)) {
+  if (
+    character.avatar !== undefined &&
+    character.avatar !== null &&
+    typeof character.avatar !== 'string'
+  ) {
     throw new CardError('invalidPersona')
   }
-  if ((card.memories?.length ?? 0) > MAX_MEMORY_CARDS) {
-    throw new CardError('tooLarge')
+  if (character.memoryEnabled !== undefined && typeof character.memoryEnabled !== 'boolean') {
+    throw new CardError('invalidPersona')
   }
-  return card as ReplicaPersonaCard
+  return {
+    format: 'replica.persona',
+    version: 1,
+    character: {
+      name: character.name.trim(),
+      prompt: character.prompt,
+      avatar: character.avatar ?? null,
+      memoryEnabled: character.memoryEnabled ?? true,
+    },
+    memories: validateMemories(card.memories),
+    extra: card.extra,
+  }
 }
 
 /** 按文件内容嗅探类型并解析（PNG 签名 → ST 卡；JSON → persona 卡）。 */

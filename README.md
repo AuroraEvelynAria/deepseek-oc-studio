@@ -81,19 +81,17 @@
 
 继承上游：Android 原生容器（Java 17，API Key 经 Android Keystore 加密存储、原生录音、相册预取）承载 Web 交互内核（React 18 + TypeScript + Zustand + Rspack 2，KaTeX / Mermaid / Prism.js）。
 
-<<<<<<< HEAD
-- **Android 原生层**：基于 Java 17 与 Android SDK 37（最低兼容 Android 9 / API 28）。通过 WebView 加载本地构建产物，并封装系统级能力：API Key 经 Android Keystore 加密存储、原生麦克风录音采集（`AudioRecord`）、系统相册快速预取以及独立的网页浏览器（`SourceBrowserActivity`）。
+- **Android 原生层**：基于 Java 17 与 Android SDK 36（最低兼容 Android 9 / API 28）。通过 WebView 加载本地构建产物，并封装系统级能力：API Key 经 Android Keystore 加密存储、原生麦克风录音采集（`AudioRecord`）、系统相册快速预取以及独立的网页浏览器（`SourceBrowserActivity`）。
 - **Web 交互层**：React 18 + TypeScript + Zustand 状态管理，基于 CSS Modules 进行交互细节调优，引入 KaTeX、Mermaid 与 Prism.js 提供排版渲染。
 - **构建系统**：Rspack 2 高速打包，与 Gradle `buildWeb` 构建任务无缝联动。
-=======
+
 本 fork 新增模块：
 - `src/services/characters/` — 角色与记忆的数据层（独立 IndexedDB `replica`）、8 维度记忆、AI 自动提取、system 注入器
 - `src/services/models/` — 模型预设库、提供商模板（`providers.ts` 数据驱动，新增提供商加一条记录即可）
 - `src/services/debug/` — 开发者控制台的日志环形缓冲、脱敏与求值上下文
-- `src/components/characters/` — 角色与模型面板（列表 / 编辑 / 记忆库 / 形象工作室预留）
+- `src/components/characters/` — 角色与模型面板（列表 / 编辑 / 记忆库 / 形象工作室）
 - `src/components/debug/` — 控制台 UI
 - `src/services/chat/exportMarkdown.ts` — 单会话 Markdown 导出
->>>>>>> 4b9ae6b (feat: OC studio enhancements — characters, memory, providers, console)
 
 ## 源码构建
 
@@ -104,17 +102,19 @@ pnpm install
 .\android\gradlew.bat -p android :app:assembleDebug
 ```
 
-编译输出：`android/app/build/outputs/apk/debug/app-debug.apk`。环境要求 Node.js 22.12+ / pnpm / JDK 17+ / Android SDK（上游 README 的构建与回归脚本说明同样适用）。
+编译输出：`android/app/build/outputs/apk/debug/app-debug.apk`。环境要求 Node.js 22.12+ / pnpm / JDK 17+ / Android SDK（上游 README 的构建与回归脚本说明同样适用）。角色卡编解码可用真实模块回归：`pnpm test:codec`。
 
 ## 路线图
 
 参考 [Zer0Qing/Muse](https://github.com/Zer0Qing/Muse) 的角色设计模块，本 fork 计划按以下顺序继续增强：
 
-- [ ] SillyTavern PNG 角色卡导入导出（tEXt chunk，与 OC 社区生态互通）
-- [ ] `replica.persona` 完整角色卡导出（人设 + 记忆 + 开场白，凭据不入卡）
-- [ ] 预设角色库（内置 OC 风格角色 + 开场白）
+- [x] SillyTavern PNG 角色卡导入导出（tEXt chunk，与 OC 社区生态互通）
+- [x] `replica.persona` 完整角色卡导出（人设 + 头像 + 记忆，凭据不入卡）
+- [x] 预设角色库（内置 OC 风格角色）
+- [x] 形象工作室（接图像 API：四候选生成 → 定妆）
+- [ ] 预设角色开场白自动进入新会话
+- [ ] 形象工作室表情包衍生（基于定妆图按情绪改姿势）
 - [ ] 记忆工具化（`save_memory` 等，AI 主动记录）
-- [ ] 形象工作室（接图像 API：四候选生成 → 定妆 → 表情包衍生）
 
 ## 免责声明
 

@@ -625,11 +625,13 @@ public final class MainActivity extends Activity {
         }
 
         @JavascriptInterface
-        public void requestHistoryExport(String fileName) {
+        public void requestHistoryExport(String fileName, String mime) {
             runOnUiThread(() -> {
+                // 聊天记录/角色卡/JSON 共用这条导出通道，按调用方给的实际 MIME 声明类型。
+                String type = mime == null || mime.isEmpty() ? "application/zip" : mime;
                 Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT)
                     .addCategory(Intent.CATEGORY_OPENABLE)
-                    .setType("application/zip")
+                    .setType(type)
                     .putExtra(Intent.EXTRA_TITLE, fileName);
                 try {
                     startActivityForResult(intent, EXPORT_HISTORY);

@@ -32,6 +32,7 @@ import { CharactersDialog } from '../components/characters/CharactersDialog.js'
 import { initCharacters } from '../services/characters/store.js'
 import { initModels } from '../services/models/store.js'
 import { installDebugContext } from '../services/debug/context.js'
+import { initDebugLog } from '../services/debug/log.js'
 import { onUploadNotice } from '../services/attachments.js'
 import { Button } from '../components/base/Button.js'
 import { stopReadAloud } from '../services/speech/readAloud.js'
@@ -291,6 +292,7 @@ export const App = () => {
     void initChat()
     void initCharacters()
     void initModels()
+    initDebugLog()
     installDebugContext()
     // 首次打开先在设置里输入 API Key
     if (!android) {

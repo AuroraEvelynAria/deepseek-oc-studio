@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { loadModelPresets, putModelPreset, deleteModelPreset } from '../characters/db.js'
 import type { ChatApiFormat } from '../api/chatConfig.js'
-import { debugLog } from '../debug/log.js'
+import { debugLog, sanitizeHeaders } from '../debug/log.js'
 import { setChatConfig, useSettings } from '../settings.js'
 
 /**
@@ -134,6 +134,26 @@ export const initModels = (): Promise<void> => {
         void putModelPreset(preset)
       }
     }
+    // 官方端点预设是默认身份与协议基准：旧数据缺它时自动补回，避免再也选不到官方端点。
+    if (!presets.some((item) => item.endpoint === '')) {
+      const now = Date.now()
+      const official: ModelPreset = {
+        // 老库里可能留着「被改写过的 official id」，避免 id 冲突覆盖用户预设。
+        id: presets.some((item) => item.id === 'official') ? `official-${now}` : 'official',
+        name: 'DeepSeek 官方',
+        model: '',
+        endpoint: '',
+        format: 'messages',
+        apiKey: '',
+        vision: true,
+        reasoning: true,
+        search: true,
+        createdAt: now,
+        updatedAt: now,
+      }
+      presets = [official, ...presets]
+      void putModelPreset(official)
+    }
     const valid = activeId !== null && presets.some((item) => item.id === activeId)
     if (!valid) {
       activeId = presets[0]?.id ?? null
@@ -184,7 +204,7 @@ export const activatePreset = (id: string) => {
     endpoint: preset.endpoint,
     format: preset.format,
     compatible: preset.endpoint === '' || preset.search,
-    headers: preset.headers,
+    headers: preset.headers ? sanitizeHeaders(preset.headers) : undefined,
   })
 }
 
@@ -202,9 +222,14 @@ export const savePreset = (input: {
 }): ModelPreset => {
   const now = Date.now()
   const existing = input.id ? get().presets.find((item) => item.id === input.id) : undefined
+  // 官方预设被填入自定义端点时不要就地改写，否则内置的官方端点会永久消失；
+  // 改成新建一条自定义预设（UI 保存后会立即激活它）。
+  const convertingOfficial = Boolean(existing && existing.endpoint === '' && input.endpoint !== '')
   const preset: ModelPreset = {
-    id: existing?.id ?? `model-${now}-${Math.random().toString(36).slice(2, 8)}`,
-    name: input.name,
+    id: convertingOfficial
+      ? `model-${now}-${Math.random().toString(36).slice(2, 8)}`
+      : existing?.id ?? `model-${now}-${Math.random().toString(36).slice(2, 8)}`,
+    name: convertingOfficial ? '自定义端点' : input.name,
     model: input.model,
     endpoint: input.endpoint,
     format: input.format,
@@ -213,17 +238,18 @@ export const savePreset = (input: {
     reasoning: input.reasoning || input.endpoint === '',
     search: input.search || input.endpoint === '',
     headers: input.endpoint === '' ? undefined : input.headers,
-    createdAt: existing?.createdAt ?? now,
+    createdAt: convertingOfficial ? now : existing?.createdAt ?? now,
     updatedAt: now,
   }
   set((state) => ({
-    presets: existing
-      ? state.presets.map((item) => (item.id === preset.id ? preset : item))
-      : [...state.presets, preset],
+    presets:
+      existing && !convertingOfficial
+        ? state.presets.map((item) => (item.id === preset.id ? preset : item))
+        : [...state.presets, preset],
   }))
   void putModelPreset(preset)
-  // 编辑的就是激活中的预设 → 立即生效
-  if (existing?.id === get().activeId) {
+  // 编辑的就是激活中的预设 → 立即生效（转换官方预设时由调用方激活新预设）。
+  if (!convertingOfficial && existing?.id === get().activeId) {
     applyPreset(preset)
   }
   return preset
@@ -231,6 +257,11 @@ export const savePreset = (input: {
 
 export const removePreset = (id: string) => {
   const { presets, activeId } = get()
+  const target = presets.find((item) => item.id === id)
+  // 官方预设是内置基准，不允许删除（UI 已禁用，这里再兜底）。
+  if (!target || target.endpoint === '') {
+    return
+  }
   const next = presets.filter((item) => item.id !== id)
   set({ presets: next })
   void deleteModelPreset(id)

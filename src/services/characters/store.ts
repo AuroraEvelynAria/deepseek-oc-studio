@@ -53,19 +53,24 @@ export const initCharacters = (): Promise<void> => {
     return Promise.resolve()
   }
   initTask ??= (async () => {
-    const [characters, memories] = await Promise.all([db.loadCharacters(), db.loadAllMemories()])
-    // 选中的角色被删除后回退官方 DeepSeek。
-    const selected = get().selectedCharacterId
-    const valid = selected !== null && characters.some((item) => item.id === selected)
-    if (selected !== null && !valid) {
-      writeId(SELECTED_KEY, null)
+    try {
+      const [characters, memories] = await Promise.all([db.loadCharacters(), db.loadAllMemories()])
+      // 选中的角色被删除后回退官方 DeepSeek。
+      const selected = get().selectedCharacterId
+      const valid = selected !== null && characters.some((item) => item.id === selected)
+      if (selected !== null && !valid) {
+        writeId(SELECTED_KEY, null)
+      }
+      set({
+        ready: true,
+        characters,
+        memories,
+        selectedCharacterId: valid ? selected : null,
+      })
+    } catch {
+      // 读取失败时保留内存现状（不要清空默认角色选择）；后续写入会重试打开数据库。
+      set({ ready: true })
     }
-    set({
-      ready: true,
-      characters,
-      memories,
-      selectedCharacterId: valid ? selected : null,
-    })
   })()
   return initTask
 }

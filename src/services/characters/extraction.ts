@@ -4,7 +4,7 @@ import { DEFAULT_CHAT_MODEL, resolveSessionHeaders, type ChatConfig } from '../a
 import type { CreateMessageRequest } from '../api/types.js'
 import { debugLog } from '../debug/log.js'
 import { useSettings } from '../settings.js'
-import { isMemoryEnabled, upsertMemory, useCharacters } from './store.js'
+import { isMemoryEnabled, resolveCharacter, upsertMemory, useCharacters } from './store.js'
 import { isMemoryDimension, MEMORY_CONTENT_LIMIT, type MemoryCard } from './types.js'
 
 /**
@@ -44,15 +44,14 @@ const enqueue = <T>(key: string, run: () => Promise<T>): Promise<T> => {
   return task
 }
 
-const collectText = async (config: ChatConfig, body: CreateMessageRequest): Promise<string> => {
+const collectText = async (
+  config: ChatConfig,
+  body: CreateMessageRequest,
+  signal: AbortSignal
+): Promise<string> => {
   const { apiKey } = useSettings.getState()
   let text = ''
-  for await (const event of streamChatMessage(
-    config,
-    apiKey ?? '',
-    body,
-    new AbortController().signal
-  )) {
+  for await (const event of streamChatMessage(config, apiKey ?? '', body, signal)) {
     if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
       text += event.delta.text
     }
@@ -74,11 +73,19 @@ const parseItems = (text: string): ExtractedItem[] => {
   }
 }
 
-/** 记忆指纹：提取期间被手动维护（增删改）时放弃结果，避免覆盖。 */
+/** 提取请求超时：没有超时的死连接会永久占住按角色串行的队列。 */
+const EXTRACTION_TIMEOUT = 60_000
+
+/**
+ * 记忆指纹：提取期间被手动维护（增删改）时放弃结果，避免覆盖。
+ * 角色删除后记忆键会被移除，与「零记忆」的指纹相同，因此显式带上角色存在性。
+ */
 const fingerprint = (characterId: string) =>
-  (useCharacters.getState().memories[characterId] ?? [])
-    .map((card) => card.updatedAt)
-    .join(',')
+  characterId !== 'default' && !resolveCharacter(characterId)
+    ? 'missing'
+    : (useCharacters.getState().memories[characterId] ?? [])
+        .map((card) => card.updatedAt)
+        .join(',')
 
 export const enqueueMemoryExtraction = (
   characterId: string | null | undefined,
@@ -92,6 +99,8 @@ export const enqueueMemoryExtraction = (
   // 默认角色（null）的记忆挂在 `default` 名下。
   const targetId = characterId ?? 'default'
   return enqueue(targetId, async () => {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), EXTRACTION_TIMEOUT)
     try {
       const before = fingerprint(targetId)
       const body: CreateMessageRequest = {
@@ -103,8 +112,12 @@ export const enqueueMemoryExtraction = (
       }
       // 提取请求同样应用自定义头与 {sessionId} 占位符（OpenCode 等网关要求）
       const config = resolveSessionHeaders(useSettings.getState().chatConfig, sessionId)
-      const items = parseItems(await collectText(config, body)).slice(0, 6)
-      if (fingerprint(targetId) !== before) {
+      const items = parseItems(await collectText(config, body, controller.signal)).slice(0, 6)
+      // 提取期间角色被删除/记忆被手动改过 → 放弃，避免写回孤儿或覆盖用户维护。
+      if (
+        fingerprint(targetId) !== before ||
+        (targetId !== 'default' && !resolveCharacter(targetId))
+      ) {
         return 0
       }
       const existing = useCharacters.getState().memories[targetId] ?? []
@@ -156,6 +169,8 @@ export const enqueueMemoryExtraction = (
       // eslint-disable-next-line no-console
       console.error('[characters] memory extraction failed', error)
       return 0
+    } finally {
+      clearTimeout(timer)
     }
   })
 }

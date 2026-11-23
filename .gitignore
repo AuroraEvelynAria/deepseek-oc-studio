@@ -24,3 +24,4 @@ android/gradle.properties
 .test-endpoint-requests.jsonl
 /android/release.jks
 /android/keystore.properties
+scripts/card-codec-test/dist/

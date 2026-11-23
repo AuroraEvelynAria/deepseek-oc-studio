@@ -22,30 +22,38 @@ interface ReplicaDB extends DBSchema {
 let dbPromise: Promise<IDBPDatabase<ReplicaDB>> | null = null
 
 const getDB = () => {
-  const opening =
-    dbPromise ??
-    (dbPromise = openDB<ReplicaDB>(DB_NAME, DB_VERSION, {
-      upgrade(db, _oldVersion, _newVersion, tx) {
-        if (!db.objectStoreNames.contains('characters')) {
-          db.createObjectStore('characters', { keyPath: 'id' })
-        }
-        if (!db.objectStoreNames.contains('memories')) {
-          const memories = db.createObjectStore('memories', { keyPath: 'id' })
-          memories.createIndex('characterId', 'characterId')
-          memories.createIndex('byDimension', ['characterId', 'dimension'])
-        }
-        if (!db.objectStoreNames.contains('models')) {
-          // 模型预设；value 结构由调用方保证（ModelPreset），这里只按 id 存取。
-          void tx
-          db.createObjectStore('models', { keyPath: 'id' })
-        }
-      },
-      blocking() {
-        // 新版本打开时让出旧连接，下次操作自动重开。
-        void opening.then((db) => db.close()).catch(() => {})
-        dbPromise = null
-      },
-    }))
+  if (dbPromise) {
+    return dbPromise
+  }
+  const opening = openDB<ReplicaDB>(DB_NAME, DB_VERSION, {
+    upgrade(db, _oldVersion, _newVersion, tx) {
+      if (!db.objectStoreNames.contains('characters')) {
+        db.createObjectStore('characters', { keyPath: 'id' })
+      }
+      if (!db.objectStoreNames.contains('memories')) {
+        const memories = db.createObjectStore('memories', { keyPath: 'id' })
+        memories.createIndex('characterId', 'characterId')
+        memories.createIndex('byDimension', ['characterId', 'dimension'])
+      }
+      if (!db.objectStoreNames.contains('models')) {
+        // 模型预设；value 结构由调用方保证（ModelPreset），这里只按 id 存取。
+        void tx
+        db.createObjectStore('models', { keyPath: 'id' })
+      }
+    },
+    blocking() {
+      // 新版本打开时让出旧连接，下次操作自动重开。
+      void opening.then((db) => db.close()).catch(() => {})
+      dbPromise = null
+    },
+  })
+  dbPromise = opening
+  // 打开失败不能把 rejected promise 缓存一整个会话，否则后续操作永远不会重试。
+  void opening.catch(() => {
+    if (dbPromise === opening) {
+      dbPromise = null
+    }
+  })
   return opening
 }
 
@@ -59,8 +67,9 @@ export const loadCharacters = async (): Promise<Character[]> => {
   try {
     return (await (await getDB()).getAll('characters')).sort((a, b) => a.createdAt - b.createdAt)
   } catch (error) {
+    // 读取失败由调用方决定「保留现状」而不是当成空库，避免误清选择。
     report('load characters')(error)
-    return []
+    throw error
   }
 }
 
@@ -72,11 +81,15 @@ export const putCharacter = (character: Character): Promise<void> =>
 export const deleteCharacter = async (id: string): Promise<void> => {
   try {
     const db = await getDB()
-    const cards = await db.getAllFromIndex('memories', 'characterId', id)
-    await Promise.all([
-      db.delete('characters', id),
-      ...cards.map((card) => db.delete('memories', card.id)),
-    ])
+    // 角色与记忆必须同一事务删除，否则中途失败会留下 UI 无法触达的孤儿记忆。
+    const tx = db.transaction(['characters', 'memories'], 'readwrite')
+    let cursor = await tx.objectStore('memories').index('characterId').openCursor(id)
+    while (cursor) {
+      await cursor.delete()
+      cursor = await cursor.continue()
+    }
+    await tx.objectStore('characters').delete(id)
+    await tx.done
   } catch (error) {
     report('delete character')(error)
   }
@@ -104,7 +117,7 @@ export const loadAllMemories = async (): Promise<Record<string, MemoryCard[]>> =
     return grouped
   } catch (error) {
     report('load all memories')(error)
-    return {}
+    throw error
   }
 }
 

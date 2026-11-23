@@ -1,14 +1,12 @@
 import clsx from 'clsx'
 import { useEffect, useId, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { isTopOverlay, pushOverlay } from '../../app/overlayStack.js'
 import { useAndroidBackInterception } from '../../app/useAndroidBackInterception.js'
 import { useTranslate } from '../../i18n/index.js'
 import { IconCloseOutline16 } from './icons.js'
 import { IconButton } from './IconButton.js'
 import styles from './Modal.module.css'
-
-/** 当前打开的弹窗，后打开的在末尾；叠放时 Esc 只关闭最上层 */
-const openModals: object[] = []
 
 /** 遮罩 + 居中卡片，Esc / 点遮罩关闭 */
 export const Modal = ({
@@ -37,15 +35,15 @@ export const Modal = ({
   useAndroidBackInterception()
   useEffect(() => {
     const token = {}
-    openModals.push(token)
+    const release = pushOverlay(token)
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && openModals.at(-1) === token) {
+      if (event.key === 'Escape' && isTopOverlay(token)) {
         onCloseRef.current()
       }
     }
     document.addEventListener('keydown', onKeyDown)
     return () => {
-      openModals.splice(openModals.indexOf(token), 1)
+      release()
       document.removeEventListener('keydown', onKeyDown)
     }
   }, [])

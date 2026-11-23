@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent } from 'react'
+import { useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import { IconChevronRightOutline14 } from '../base/icons.js'
 import {
@@ -8,6 +8,7 @@ import {
   generateCandidates,
   isImageGenAvailable,
   useAvatarStudio,
+  type AvatarSlot,
 } from '../../services/characters/avatarStudio.js'
 import { saveCharacter, resolveCharacter } from '../../services/characters/store.js'
 import { openList } from './charactersDialogState.js'
@@ -15,19 +16,24 @@ import { Button } from '../base/Button.js'
 import { showToast } from '../base/toastState.js'
 import styles from '../characters/Characters.module.css'
 
+/** 空槽位：候选图只属于生成时选中的角色，换角色时不显示别人的图。 */
+const EMPTY_SLOTS: AvatarSlot[] = Array.from({ length: AVATAR_CANDIDATES }, () => ({
+  state: 'empty',
+}))
+
 /** 形象工作室：描述 → 四候选 → 定妆设为头像（nanoMuse 流程的 OC 版）。 */
 export const AvatarStudioView = ({ id }: { id: string }) => {
   const t = useTranslate()
   const character = resolveCharacter(id)
-  const slots = useAvatarStudio((state) => state.slots)
-  const generating = useAvatarStudio((state) => state.generating)
+  const owner = useAvatarStudio((state) => state.characterId)
+  const storedSlots = useAvatarStudio((state) => state.slots)
+  const generating = useAvatarStudio((state) => state.generating) && owner === id
+  const slots = owner === id ? storedSlots : EMPTY_SLOTS
   const [description, setDescription] = useState(
     () => character?.prompt.split('\n').find((line) => line.trim()) ?? ''
   )
   const [styleId, setStyleId] = useState(useAvatarStudio.getState().styleId)
-  const [reference, setReference] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const input = useRef<HTMLInputElement>(null)
   const available = isImageGenAvailable()
 
   const generate = () => {
@@ -39,19 +45,11 @@ export const AvatarStudioView = ({ id }: { id: string }) => {
       setError(t('avatarNeedSiliconflow'))
       return
     }
-    setError(null)
-    generateCandidates(description, styleId)
-  }
-
-  const chooseReference = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.currentTarget.files?.[0]
-    event.currentTarget.value = ''
-    if (!file) {
+    if (!character) {
       return
     }
-    const reader = new FileReader()
-    reader.onload = () => setReference(reader.result as string)
-    reader.readAsDataURL(file)
+    setError(null)
+    generateCandidates(description, styleId, character.id)
   }
 
   return (
@@ -88,20 +86,6 @@ export const AvatarStudioView = ({ id }: { id: string }) => {
           ))}
         </div>
       </div>
-      <div className={styles.avatarActions}>
-        <Button size="s" variant="outlined" onClick={() => input.current?.click()}>
-          {t('avatarReference')}
-        </Button>
-        {reference ? (
-          <Button size="s" variant="outlined" onClick={() => setReference(null)}>
-            {t('avatarReferenceRemove')}
-          </Button>
-        ) : null}
-        <input ref={input} type="file" accept="image/*" hidden onChange={chooseReference} />
-      </div>
-      {reference ? (
-        <img className={styles.referencePreview} src={reference} alt="" />
-      ) : null}
       {error ? <p role="alert">{error}</p> : null}
       <div className={styles.grid}>
         {slots.map((slot, index) => (
@@ -112,12 +96,17 @@ export const AvatarStudioView = ({ id }: { id: string }) => {
             data-state={slot.state}
             disabled={slot.state !== 'ready' || generating}
             onClick={() => {
-              void adoptCandidate(slot.state === 'ready' ? slot.url : '', (dataUrl) => {
+              if (slot.state !== 'ready') {
+                return
+              }
+              void adoptCandidate(slot.url, (dataUrl) => {
                 if (character) {
                   saveCharacter({ ...character, avatar: dataUrl })
                   showToast({ key: 'avatarAdopted', params: { name: character.name } })
                 }
                 openList()
+              }).catch(() => {
+                setError(t('avatarAdoptFailed'))
               })
             }}
           >

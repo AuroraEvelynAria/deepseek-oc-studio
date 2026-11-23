@@ -1,6 +1,6 @@
 {
   "name": "deepseek-app-replica",
-  "version": "0.9.1",
+  "version": "1.0.1",
   "description": "复刻 DeepSeek 官方手机端交互与视觉体验的 Android 客户端。",
   "license": "GPL-3.0-or-later",
   "private": true,
@@ -10,6 +10,7 @@
     "build": "rspack build -c rspack.config.ts",
     "type": "tsc -p tsconfig.json",
     "lint": "oxlint src rspack.config.ts",
+    "test:codec": "rspack build -c scripts/card-codec-test/rspack.config.ts && node scripts/card-codec-test/dist/codec.cjs",
     "format": "oxfmt --write ."
   },
   "dependencies": {

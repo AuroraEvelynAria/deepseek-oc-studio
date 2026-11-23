@@ -58,6 +58,10 @@ export const AdvancedApiSettings = ({ onSave }: { onSave: () => void }) => {
       setError('advancedInvalidEndpoint')
       return
     }
+    if (endpoint && !model) {
+      setError('modelIdRequired')
+      return
+    }
     const config = {
       model,
       endpoint,
@@ -76,11 +80,25 @@ export const AdvancedApiSettings = ({ onSave }: { onSave: () => void }) => {
       }
       return
     }
-    savePreset({ ...active, ...config })
-    activatePreset(active.id)
+    // 换端点时丢弃旧预设的自定义头，避免把原网关的会话头带给另一个服务。
+    const endpointChanged =
+      chatBaseUrl(saved.endpoint, saved.format) !== chatBaseUrl(endpoint, format)
+    const next = savePreset({
+      ...active,
+      ...config,
+      headers: endpointChanged ? undefined : active.headers,
+    })
+    activatePreset(next.id)
     onSave()
   }
   const reset = () => {
+    // 重置 = 回到官方端点；当前激活预设也要一起切走，否则下次启动会被预设覆盖回来。
+    const official = useModels.getState().presets.find((preset) => preset.endpoint === '')
+    if (official) {
+      activatePreset(official.id)
+      onSave()
+      return
+    }
     if (setChatConfig(DEFAULT_CHAT_CONFIG)) {
       onSave()
     } else {

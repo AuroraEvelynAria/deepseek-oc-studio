@@ -51,8 +51,9 @@ final class CustomChatTransport {
     }
 
     private void stream(String id, Exchange exchange, String body, Consumer<String> emit) {
+        HttpURLConnection connection = null;
         try {
-            HttpURLConnection connection = (HttpURLConnection) exchange.target.toURL().openConnection();
+            connection = (HttpURLConnection) exchange.target.toURL().openConnection();
             exchange.connection = connection;
             if (exchange.cancelled) throw new IOException();
             connection.setInstanceFollowRedirects(false);
@@ -83,7 +84,10 @@ final class CustomChatTransport {
             try (var output = connection.getOutputStream()) {
                 output.write(data);
             }
+            // 取消可能发生在「建连」与「发送」之间：发完后再检查一次，避免已取消的请求继续上网。
+            if (exchange.cancelled) throw new IOException();
             int status = connection.getResponseCode();
+            if (exchange.cancelled) throw new IOException();
             if (status < 200 || status > 599 || (status >= 300 && status < 400)) {
                 throw new IOException("Unexpected status " + status);
             }
@@ -105,6 +109,8 @@ final class CustomChatTransport {
         } catch (IOException | RuntimeException ignored) {
             if (!exchange.cancelled) emit.accept(event(id, "error", Map.of()));
         } finally {
+            // 取消时 exchange 可能已从 map 移除；本地连接仍必须关闭，避免 socket 泄漏。
+            if (connection != null) connection.disconnect();
             cancel(id);
         }
     }

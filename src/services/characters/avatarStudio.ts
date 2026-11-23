@@ -87,6 +87,8 @@ export type AvatarSlot =
 
 type StudioState = {
   slots: AvatarSlot[]
+  /** 候选图所属角色：切换角色时不能把 A 的候选当成 B 的形象。 */
+  characterId: string | null
   description: string
   styleId: string
   generating: boolean
@@ -98,6 +100,7 @@ type Listener = () => void
 import { create } from 'zustand'
 export const useAvatarStudio = create<StudioState>(() => ({
   slots: Array.from({ length: AVATAR_CANDIDATES }, () => ({ state: 'empty' })),
+  characterId: null,
   description: '',
   styleId: AVATAR_STYLES[0].id,
   generating: false,
@@ -143,14 +146,25 @@ const extractImageUrl = (payload: unknown): string | null => {
   return null
 }
 
+/** 当前生成批次；新一轮生成会作废旧批次，避免旧图落进新格子。 */
+let activeRun = 0
+let activeController: AbortController | null = null
+
+const isCurrentRun = (runId: number, signal: AbortSignal) =>
+  runId === activeRun && !signal.aborted
+
 const drawOne = async (
   prompt: string,
   index: number,
-  signal: AbortSignal
+  runId: number,
+  signal: AbortSignal,
+  attempt = 0
 ): Promise<void> => {
   const key = resolveSiliconflowKey()
   if (!key) {
-    setSlots((slots) => slots.map((slot, i) => (i === index ? { state: 'failed', message: 'no-key' } : slot)))
+    if (isCurrentRun(runId, signal)) {
+      setSlots((slots) => slots.map((slot, i) => (i === index ? { state: 'failed', message: 'no-key' } : slot)))
+    }
     return
   }
   try {
@@ -166,10 +180,13 @@ const drawOne = async (
     })
     if (!response.ok) {
       const text = await response.text().catch(() => '')
-      // 限流退避重试一次
-      if (response.status === 429) {
+      // 限流退避重试一次（无上限重试会在持续 429 时把按钮永远卡在 generating）。
+      if (response.status === 429 && attempt < 1) {
         await new Promise((resolve) => setTimeout(resolve, 4000))
-        return drawOne(prompt, index, signal)
+        if (!isCurrentRun(runId, signal)) {
+          return
+        }
+        return drawOne(prompt, index, runId, signal, attempt + 1)
       }
       throw new Error(`HTTP ${response.status} ${text.slice(0, 120)}`)
     }
@@ -178,9 +195,12 @@ const drawOne = async (
     if (!url) {
       throw new Error('no image in response')
     }
+    if (!isCurrentRun(runId, signal)) {
+      return
+    }
     setSlots((slots) => slots.map((slot, i) => (i === index ? { state: 'ready', url } : slot)))
   } catch (error) {
-    if (signal.aborted) {
+    if (!isCurrentRun(runId, signal)) {
       return
     }
     const message = error instanceof Error ? error.message : String(error)
@@ -188,28 +208,41 @@ const drawOne = async (
   }
 }
 
-/** 生成 N 个候选（不阻塞 UI，格子逐个就位）。 */
-export const generateCandidates = (description: string, styleId: string): boolean => {
+/** 生成 N 个候选（不阻塞 UI，格子逐个就位）；新一轮会中止旧一轮的请求。 */
+export const generateCandidates = (
+  description: string,
+  styleId: string,
+  characterId: string
+): boolean => {
   const key = resolveSiliconflowKey()
   if (!key) {
     debugLog('event', '形象生成不可用 · 当前激活预设不是硅基流动（图像 API 需要）')
     return false
   }
   const style = AVATAR_STYLES.find((item) => item.id === styleId) ?? AVATAR_STYLES[0]
+  activeController?.abort()
+  const controller = new AbortController()
+  activeController = controller
+  const runId = ++activeRun
   useAvatarStudio.setState({
+    characterId,
     description,
     styleId: style.id,
     generating: true,
     slots: Array.from({ length: AVATAR_CANDIDATES }, () => ({ state: 'loading' })),
   })
   emit()
-  const controller = new AbortController()
   Promise.all(
     Array.from({ length: AVATAR_CANDIDATES }, (_, index) => {
       const prompt = buildCandidatePrompt(description, style, index)
-      return drawOne(prompt, index, controller.signal)
+      return drawOne(prompt, index, runId, controller.signal)
     })
   ).then(() => {
+    // 旧批次的收尾不能解除新批次的 generating。
+    if (runId !== activeRun) {
+      return
+    }
+    activeController = null
     useAvatarStudio.setState({ generating: false })
     emit()
   })
@@ -224,32 +257,37 @@ export const adoptCandidate = async (
 ): Promise<void> => {
   const response = await fetch(url)
   const blob = await response.blob()
-  const image = new Image()
-  await new Promise<void>((resolve, reject) => {
-    image.onload = () => resolve()
-    image.onerror = () => reject(new Error('image decode failed'))
-    image.src = URL.createObjectURL(blob)
-  })
-  const crop = Math.min(image.naturalWidth, image.naturalHeight)
-  const edge = Math.min(crop, 256)
-  const canvas = document.createElement('canvas')
-  canvas.width = canvas.height = edge
-  const context = canvas.getContext('2d')
-  if (!context || edge === 0) {
-    throw new Error('canvas unavailable')
+  const objectUrl = URL.createObjectURL(blob)
+  try {
+    const image = new Image()
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve()
+      image.onerror = () => reject(new Error('image decode failed'))
+      image.src = objectUrl
+    })
+    const crop = Math.min(image.naturalWidth, image.naturalHeight)
+    const edge = Math.min(crop, 256)
+    const canvas = document.createElement('canvas')
+    canvas.width = canvas.height = edge
+    const context = canvas.getContext('2d')
+    if (!context || edge === 0) {
+      throw new Error('canvas unavailable')
+    }
+    context.imageSmoothingQuality = 'high'
+    context.drawImage(
+      image,
+      (image.naturalWidth - crop) / 2,
+      (image.naturalHeight - crop) / 2,
+      crop,
+      crop,
+      0,
+      0,
+      edge,
+      edge
+    )
+    applyAvatar(canvas.toDataURL('image/webp', 0.85))
+  } finally {
+    URL.revokeObjectURL(objectUrl)
   }
-  context.imageSmoothingQuality = 'high'
-  context.drawImage(
-    image,
-    (image.naturalWidth - crop) / 2,
-    (image.naturalHeight - crop) / 2,
-    crop,
-    crop,
-    0,
-    0,
-    edge,
-    edge
-  )
-  applyAvatar(canvas.toDataURL('image/webp', 0.85))
   debugLog('state', '形象定妆 · 已设为角色头像')
 }

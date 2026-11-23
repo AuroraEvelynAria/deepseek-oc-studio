@@ -32,7 +32,7 @@ type AndroidBridge = {
   setImageViewerFullscreen: (fullscreen: boolean) => void
   requestRecentPhotos: () => void
   prefetchRecentPhotos: () => void
-  requestHistoryExport: (name: string) => void
+  requestHistoryExport: (name: string, mime: string) => void
   writeHistoryExport: (bytes: string) => boolean
   finishHistoryExport: () => boolean
   requestImageSavePermission?: () => void
@@ -80,7 +80,8 @@ export const saveAndroidHistory = async (name: string, blob: Blob): Promise<bool
       (event) => resolve((event as CustomEvent<string>).detail),
       { once: true }
     )
-    device.requestHistoryExport(name)
+    // 按实际文件类型声明 MIME：md/png/json/zip 都走这条通道，不能一律报 application/zip。
+    device.requestHistoryExport(name, blob.type.split(';')[0] || 'application/octet-stream')
   })
   if (status === 'cancelled') {
     return false

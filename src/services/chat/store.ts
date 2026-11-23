@@ -22,7 +22,7 @@ import { MANY_IMAGES_COUNT, MANY_IMAGES_MAX_EDGE, MAX_IMAGE_EDGE } from '../imag
 import { enqueueMemoryExtraction } from '../characters/extraction.js'
 import { buildRequestSystem } from '../characters/inject.js'
 import { useCharacters } from '../characters/store.js'
-import { useModels } from '../models/store.js'
+import { isReasoningEnabled, useModels } from '../models/store.js'
 import { debugLog } from '../debug/log.js'
 import { resolveSessionHeaders } from '../api/chatConfig.js'
 import { setPinnedSessions, useSettings } from '../settings.js'
@@ -334,8 +334,8 @@ const createReply = (): AssistantMessage => {
     role: 'assistant',
     createdAt: Date.now(),
     model: chatConfig.model || DEFAULT_CHAT_MODEL,
-    // 思考对所有端点可用（第三方按预设的思考能力标记决定是否发送 reasoning_effort）
-    thinking: thinkingLevel !== 'off',
+    // 思考对所有端点可用；预设明确标记不支持推理时强制关闭，避免发送 reasoning_effort 被网关拒绝。
+    thinking: thinkingLevel !== 'off' && isReasoningEnabled(),
     search: search && (!customEndpoint || (preset?.search ?? false)),
     prefix: !customEndpoint && chatConfig.format === 'messages',
     status: 'pending',
@@ -998,7 +998,7 @@ export const continueReply = (sessionId: string, messageId: string) => {
     ...previous,
     // 未记录请求配置的回复，续写时使用默认模型和当前开关。
     model: previous.model ?? (chatConfig.model || DEFAULT_CHAT_MODEL),
-    thinking: previous.thinking ?? thinkingLevel !== 'off',
+    thinking: previous.thinking ?? (thinkingLevel !== 'off' && isReasoningEnabled()),
     search: previous.search ?? (search && (chatConfig.endpoint === '' || (preset?.search ?? false))),
     status: 'pending',
     stopReason: undefined,
@@ -1358,9 +1358,10 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
     ? {
         ...initial,
         model: chatConfig.model || DEFAULT_CHAT_MODEL,
-        // 思考在自定义端点同样可用（强度随预设的思考能力标记发送 reasoning_effort）
+        // 思考在自定义端点同样可用（强度由预设的思考能力标记决定是否发送）
         thinking: initial.thinking,
-        search: false,
+        // 请求体与归档/续写使用同一个 search 值，避免「实际搜了但记录说没搜」。
+        search: initial.search,
         prefix: false,
       }
     : initial
@@ -1373,7 +1374,8 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
   streamFlushes.set(sessionId, flush)
 
   const signal = controller.signal
-  const summarize = createContextSummarizer(apiKey, signal, chatConfig)
+  // 摘要请求同样需要解析过的自定义头（{sessionId} 占位符）。
+  const summarize = createContextSummarizer(apiKey, signal, requestConfig)
   const requestModel = reply.model ?? DEFAULT_CHAT_MODEL
   const initialOutputTokens = custom ? CUSTOM_OUTPUT_TOKENS : MAX_OUTPUT_TOKENS
   const minOutputReserve = custom ? CUSTOM_OUTPUT_TOKENS : MIN_OUTPUT_RESERVE
@@ -1509,6 +1511,8 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           Math.min(minOutputReserve, maxOutputTokens),
           window
         )
+        // 预设标记不支持推理时，即使全局档位还停留在普通/深度也不发送思考参数。
+        const thinkingEnabled = initial.thinking && isReasoningEnabled()
         const body: CreateMessageRequest = {
           model: requestModel,
           max_tokens: requestMaxOutput,
@@ -1517,10 +1521,10 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           system: buildRequestSystem(getSession(sessionId)?.characterId),
           messages,
           thinking: {
-            type: initial.thinking ? 'enabled' : 'disabled',
+            type: thinkingEnabled ? 'enabled' : 'disabled',
             // 思考强度只在 OpenAI 兼容格式下携带（messages 协议严格校验字段，
             // 且其思考开关只有二值）；关/普通/深度 → 不发/medium/high
-            ...(chatConfig.format !== 'messages' && initial.thinking
+            ...(chatConfig.format !== 'messages' && thinkingEnabled
               ? {
                   effort:
                     useSettings.getState().thinkingLevel === 'deep' ? ('high' as const) : ('medium' as const),
