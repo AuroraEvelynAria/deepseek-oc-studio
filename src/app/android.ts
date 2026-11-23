@@ -35,6 +35,7 @@ type AndroidBridge = {
   requestHistoryExport: (name: string) => void
   writeHistoryExport: (bytes: string) => boolean
   finishHistoryExport: () => boolean
+  requestImageSavePermission?: () => void
   beginImageSave: (name: string, mime: string) => boolean
   writeImageSave: (bytes: string) => boolean
   finishImageSave: (keep: boolean) => boolean
@@ -104,7 +105,23 @@ export const saveAndroidHistory = async (name: string, blob: Blob): Promise<bool
 
 export const saveAndroidImage = async (name: string, blob: Blob) => {
   const device = android
-  if (!device?.beginImageSave(name, blob.type)) {
+  if (!device) {
+    throw new Error('Unable to create the image')
+  }
+  if (device.requestImageSavePermission) {
+    const status = await new Promise<string>((resolve) => {
+      window.addEventListener(
+        'android-image-save-permission',
+        (event) => resolve((event as CustomEvent<string>).detail),
+        { once: true }
+      )
+      device.requestImageSavePermission?.()
+    })
+    if (status !== 'granted') {
+      throw new Error('Permission denied')
+    }
+  }
+  if (!device.beginImageSave(name, blob.type)) {
     throw new Error('Unable to create the image')
   }
   try {

@@ -369,7 +369,11 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
       )
     }
     window.addEventListener('android-update', onUpdate)
-    setUpdate(JSON.parse(android.updateStatus()) as UpdateStatus)
+    try {
+      setUpdate(JSON.parse(android.updateStatus()) as UpdateStatus)
+    } catch {
+      // Ignore malformed native update snapshots so Settings stays usable.
+    }
     return () => window.removeEventListener('android-update', onUpdate)
   }, [])
 
@@ -745,9 +749,7 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
                 href="https://api-docs.deepseek.com/zh-cn/"
               />
             </Group>
-            <p className={styles.legal}>
-              {t('appName')}
-            </p>
+            <p className={styles.legal}>{t('appName')}</p>
           </>
         ) : null}
         {screen === 'advanced' ? (
@@ -921,7 +923,10 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
                 openAndroidPage(`${chinesePoliciesUrl}/collected-personal-information.html`)
               }
             />
-            <Row label={tr('应用权限', 'App Permissions')} onClick={() => android?.openAppPermissions()} />
+            <Row
+              label={tr('应用权限', 'App Permissions')}
+              onClick={() => android?.openAppPermissions()}
+            />
           </Group>
         ) : null}
       </div>

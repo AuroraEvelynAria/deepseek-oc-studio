@@ -386,3 +386,7 @@
   color: var(--dsw-alias-label-secondary);
   font-size: 14px;
 }
+
+[data-no-flex-gap] .md-code-block-switch > * + * {
+  margin-left: 4px;
+}

@@ -19,6 +19,7 @@ export const Welcome = () => {
   const isMobile = useIsMobile()
   const coldStartGreeting = useAndroidColdStartGreeting()
   const androidMessages = useAndroidWelcomeMessages()
+  const [hasPhotoSuggestions, setHasPhotoSuggestions] = useState(false)
   const [coldStart] = useState(coldStartGreetingPending)
   const [greeting] = useState(() => {
     if (!android) {
@@ -37,12 +38,16 @@ export const Welcome = () => {
   return (
     <div className={styles.container} data-drawer-free-pan={android ? '' : undefined}>
       {isMobile ? <MobileHeader /> : null}
-      <div className={styles.welcome} data-side-shift={android ? 'center' : undefined}>
+      <div
+        className={styles.welcome}
+        data-side-shift={android ? 'center' : undefined}
+        data-has-photo-suggestions={hasPhotoSuggestions ? 'true' : undefined}
+      >
         <div className={styles.greeting}>
           {android ? <img src={whale} alt="" /> : null}
           {android ? <span className={styles.greetingText}>{greeting}</span> : greeting}
         </div>
-        <ChatInput sessionId={null} />
+        <ChatInput sessionId={null} onPhotoSuggestionsChange={setHasPhotoSuggestions} />
         {isMobile && !android ? <div className={styles.caveat}>{t('contentCaveat')}</div> : null}
       </div>
     </div>

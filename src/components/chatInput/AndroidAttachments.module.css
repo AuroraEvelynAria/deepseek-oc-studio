@@ -141,3 +141,11 @@ body[data-ds-dark-theme] .actions button:active {
     transition: none;
   }
 }
+
+[data-no-flex-gap] .recent > * + * {
+  margin-left: 8px;
+}
+
+[data-no-flex-gap] .actions button > svg {
+  margin-bottom: 4px;
+}

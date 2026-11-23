@@ -52,6 +52,7 @@ public final class MainActivity extends Activity {
     private static final int PHOTOS = 3;
     private static final int CAMERA = 4;
     private static final int EXPORT_HISTORY = 5;
+    private static final int WRITE_IMAGES = 7;
     private WebView webView;
     private FrameLayout frame;
     private ApiKeyStore keys;
@@ -88,7 +89,7 @@ public final class MainActivity extends Activity {
         profilePreferences = getSharedPreferences("account_profile", MODE_PRIVATE);
         recentPhotos = new RecentPhotos(getContentResolver());
         historyExport = new FileExport(getContentResolver());
-        imageSave = new ImageSave(getContentResolver());
+        imageSave = new ImageSave(this);
         recorder = new NativeRecorder();
         frame = new FrameLayout(this);
         webView = new WebView(this);
@@ -107,8 +108,9 @@ public final class MainActivity extends Activity {
                 webView.evaluateJavascript("if (document.documentElement) { const root = document.documentElement;"
                     + "root.style.setProperty('--android-status-inset', '" + top + "px');"
                     + "root.style.setProperty('--android-button-nav-inset', '" + bottom + "px');"
-                    + "root.toggleAttribute('data-button-navigation', " + (bottom > 0) + ");"
-                    + "root.toggleAttribute('data-keyboard', " + ime + "); }", null);
+                    + (bottom > 0 ? "root.setAttribute('data-button-navigation', '');" : "root.removeAttribute('data-button-navigation');")
+                    + (ime ? "root.setAttribute('data-keyboard', '');" : "root.removeAttribute('data-keyboard');")
+                    + " }", null);
             }
         });
         setContentView(frame);
@@ -181,6 +183,24 @@ public final class MainActivity extends Activity {
             && url.getPort() == -1;
     }
 
+    private static String assetMimeType(String extension) {
+        String lower = extension.toLowerCase(java.util.Locale.ROOT);
+        return switch (lower) {
+            case "html" -> "text/html";
+            case "js" -> "text/javascript";
+            case "css" -> "text/css";
+            case "svg" -> "image/svg+xml";
+            case "woff2" -> "font/woff2";
+            case "woff" -> "font/woff";
+            case "ttf" -> "font/ttf";
+            case "png" -> "image/png";
+            case "jpg", "jpeg" -> "image/jpeg";
+            case "webp" -> "image/webp";
+            case "json" -> "application/json";
+            default -> MimeTypeMap.getSingleton().getMimeTypeFromExtension(lower);
+        };
+    }
+
     private final class AppPage extends WebViewClient {
         @Override
         public void onPageStarted(WebView view, String url, Bitmap favicon) {
@@ -230,10 +250,10 @@ public final class MainActivity extends Activity {
                     && !path.contains("/../"))) {
                 String name = path.substring(1);
                 String extension = name.substring(name.lastIndexOf('.') + 1);
-                String type = "js".equals(extension) ? "text/javascript"
-                    : MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension);
+                String type = assetMimeType(extension);
                 Map<String, String> headers = Map.of("Content-Security-Policy",
-                    "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+                    "default-src 'none'; script-src 'self'; worker-src 'self'; child-src 'self'; "
+                    + "style-src 'self' 'unsafe-inline'; "
                     + "img-src 'self' https: data: blob:; font-src 'self' data:; "
                     + "media-src 'self' blob:; connect-src 'self' https://api.deepseek.com; "
                     + "frame-src 'none'; base-uri 'none'; form-action 'none';");
@@ -368,7 +388,7 @@ public final class MainActivity extends Activity {
                         SelectedPhoto.writePng(getContentResolver(), uri, output);
                     }
                     files[index] = decoded;
-                } catch (IOException | SecurityException ignored) {
+                } catch (IOException | RuntimeException ignored) {
                     // The original document can still be handled by normal attachment validation.
                 }
             }
@@ -391,6 +411,8 @@ public final class MainActivity extends Activity {
             } else {
                 completeFileChooser(null);
             }
+        } else if (code == WRITE_IMAGES) {
+            reportImageSavePermission(granted(Manifest.permission.WRITE_EXTERNAL_STORAGE));
         }
     }
 
@@ -474,6 +496,12 @@ public final class MainActivity extends Activity {
     private void reportExport(String state) {
         webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('android-export', "
             + "{detail: '" + state + "'}))", null);
+    }
+
+    private void reportImageSavePermission(boolean granted) {
+        if (isDestroyed() || webView == null) return;
+        webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('android-image-save-permission', "
+            + "{detail: '" + (granted ? "granted" : "denied") + "'}))", null);
     }
 
     private void startRecording() {
@@ -611,6 +639,18 @@ public final class MainActivity extends Activity {
         public boolean finishHistoryExport() { return historyExport.close(); }
 
         @JavascriptInterface
+        public void requestImageSavePermission() {
+            runOnUiThread(() -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+                        || granted(Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
+                    reportImageSavePermission(true);
+                } else {
+                    requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, WRITE_IMAGES);
+                }
+            });
+        }
+
+        @JavascriptInterface
         public boolean beginImageSave(String name, String mime) { return imageSave.begin(name, mime); }
 
         @JavascriptInterface
@@ -648,6 +688,7 @@ public final class MainActivity extends Activity {
             float endBottom,
             boolean active
         ) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return;
             runOnUiThread(() -> {
                 if (webView == null) return;
                 if (!active) {

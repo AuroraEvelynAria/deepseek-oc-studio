@@ -621,3 +621,27 @@ a.row:active,
     max-width: 720px;
   }
 }
+
+[data-no-flex-gap] .row > * + * {
+  margin-left: 12px;
+}
+
+[data-no-flex-gap] .row > .arrow {
+  margin-left: 7px;
+}
+
+[data-no-flex-gap] .choice header > svg {
+  margin-bottom: 8px;
+}
+
+[data-no-flex-gap] .options button::before {
+  margin-right: 17px;
+}
+
+[data-no-flex-gap] .voiceBody > * + * {
+  margin-top: 8px;
+}
+
+[data-no-flex-gap] .voiceBody > .dots {
+  margin-top: 26px;
+}
