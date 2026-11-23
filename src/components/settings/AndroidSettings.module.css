@@ -155,11 +155,6 @@ a.row:active,
   }
 }
 
-.fontIcon {
-  font-size: 17px;
-  font-weight: 500;
-}
-
 .info {
   display: grid;
   place-items: center;

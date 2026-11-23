@@ -156,6 +156,23 @@ const VoiceIcon = () => (
   </svg>
 )
 
+const FontSizeIcon = () => (
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 18 18"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M1.4 14.25 3.8 8.25l2.4 6M2.2 12.25h3.2" />
+    <path d="M8.6 14.25 12.6 3.75l4 10.5M9.95 10.75h5.3" />
+  </svg>
+)
+
 const Info = ({ glyph = 'i' }: { glyph?: string }) => <span className={styles.info}>{glyph}</span>
 
 const Group = ({
@@ -632,7 +649,7 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
               />
               <Row
                 label={labels.font}
-                icon={<span className={styles.fontIcon}>ᴀA</span>}
+                icon={<FontSizeIcon />}
                 onClick={() => openPage('font')}
               />
               <Row
