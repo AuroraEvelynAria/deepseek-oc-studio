@@ -12,6 +12,10 @@ android {
     namespace = 'io.github.lijiahua1024.dsreplica'
     // 本地环境未安装 platform-37，降级到 36（targetSdk 一致；原生层未使用 API 37 特性）。
     compileSdk = 36
+    // 个人分发构建不需要 lint 阻断（lintVital 的依赖在本机网络下解析失败）。
+    lint {
+        checkReleaseBuilds = false
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -27,9 +31,9 @@ android {
 
     signingConfigs {
         release {
-            storeFile file('release.jks')
+            storeFile file('../release.jks')
             storePassword = releaseSigning.getProperty('storePassword')
-            keyAlias 'dsreplica'
+            keyAlias 'dsoc'
             keyPassword = releaseSigning.getProperty('keyPassword')
         }
     }
