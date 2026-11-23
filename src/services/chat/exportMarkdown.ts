@@ -108,8 +108,20 @@ export const buildSessionMarkdown = (session: Session): string => {
   return `${lines.join('\n').trim()}\n`
 }
 
+const pad = (value: number) => String(value).padStart(2, '0')
+
+/** 导出文件名：角色名-日期-时间（如「夜岚-20261123-1930.md」），多角色多文件按角色归堆。 */
+const exportFileName = (session: Session): string => {
+  const character = resolveCharacter(session.characterId)
+  const name = character?.name ?? 'DeepSeek'
+  const now = new Date()
+  const date = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`
+  const time = `${pad(now.getHours())}${pad(now.getMinutes())}`
+  return sanitizeFileName(`${name}-${date}-${time}`, 'chat')
+}
+
 export const exportSessionMarkdown = (session: Session): { name: string; blob: Blob } => ({
-  name: `${sanitizeFileName(session.title || translate('untitledChat'), 'chat')}.md`,
+  name: `${exportFileName(session)}.md`,
   blob: new Blob([buildSessionMarkdown(session)], { type: 'text/markdown;charset=utf-8' }),
 })
 
