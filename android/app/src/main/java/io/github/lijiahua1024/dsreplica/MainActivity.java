@@ -120,8 +120,9 @@ public final class MainActivity extends Activity {
         }
         setBars((getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
             == Configuration.UI_MODE_NIGHT_YES);
-        WebView.setWebContentsDebuggingEnabled(
-            (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0);
+        // OC Studio fork：release 包也开启 WebView 远程调试（配合开发者控制台远程排障；
+        // 个人分发场景无安全风险，且 usb 调试通道本身需要用户授权）。
+        WebView.setWebContentsDebuggingEnabled(true);
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
