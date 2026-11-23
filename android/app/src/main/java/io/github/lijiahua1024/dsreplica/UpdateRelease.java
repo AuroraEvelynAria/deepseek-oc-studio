@@ -27,7 +27,8 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 record UpdateRelease(String version, URL url, long size, String digest) {
-    private static final String REPOSITORY = "LiJiaHua1024/deepseek-app-replica";
+    // fork 的更新源：必须是本项目仓库，否则会拿上游旧版本号误判「已是最新」。
+    private static final String REPOSITORY = "AuroraEvelynAria/deepseek-oc-studio";
     private static final String LATEST = "https://api.github.com/repos/" + REPOSITORY + "/releases/latest";
     private static final String DOWNLOAD = "https://github.com/" + REPOSITORY + "/releases/download/";
     private static final Pattern VERSION = Pattern.compile("(0|[1-9][0-9]{0,8})\\.(0|[1-9][0-9]{0,8})\\.(0|[1-9][0-9]{0,8})");
@@ -60,18 +61,25 @@ record UpdateRelease(String version, URL url, long size, String digest) {
         }
         String version = tag.substring(1);
         if (compareVersions(version, installedVersion) <= 0) return null;
-        String name = "deepseek-app-replica-" + tag + ".apk";
-        String expectedUrl = DOWNLOAD + tag + "/" + name;
         JSONArray assets = release.getJSONArray("assets");
-        for (int i = 0; i < assets.length(); i++) {
-            JSONObject asset = assets.getJSONObject(i);
-            if (!name.equals(asset.optString("name"))) continue;
-            long size = asset.optLong("size");
-            String digest = asset.optString("digest");
-            if ("uploaded".equals(asset.optString("state")) && size > 0 && size <= MAX_APK
-                && expectedUrl.equalsIgnoreCase(asset.optString("browser_download_url"))
-                && digest.matches("sha256:[0-9a-f]{64}")) {
-                return new UpdateRelease(version, new URL(expectedUrl), size, digest.substring(7));
+        // 兼容当前 Gradle 产物名、fork 规范名与上游历史名；URL 必须精确落在本仓库该 tag 下。
+        String[] names = {
+            "app-release.apk",
+            "deepseek-oc-studio-" + tag + ".apk",
+            "deepseek-app-replica-" + tag + ".apk",
+        };
+        for (String name : names) {
+            String expectedUrl = DOWNLOAD + tag + "/" + name;
+            for (int i = 0; i < assets.length(); i++) {
+                JSONObject asset = assets.getJSONObject(i);
+                if (!name.equals(asset.optString("name"))) continue;
+                long size = asset.optLong("size");
+                String digest = asset.optString("digest");
+                if ("uploaded".equals(asset.optString("state")) && size > 0 && size <= MAX_APK
+                    && expectedUrl.equalsIgnoreCase(asset.optString("browser_download_url"))
+                    && digest.matches("sha256:[0-9a-f]{64}")) {
+                    return new UpdateRelease(version, new URL(expectedUrl), size, digest.substring(7));
+                }
             }
         }
         throw new IOException("No verifiable APK for the latest release");

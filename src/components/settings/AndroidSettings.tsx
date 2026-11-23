@@ -55,7 +55,7 @@ const appVersion = document.querySelector<HTMLMetaElement>(
 const policiesUrl = 'https://cdn.deepseek.com/policies'
 const chinesePoliciesUrl = `${policiesUrl}/zh-CN`
 const faqUrl = 'https://static.deepseek.com/faq/index.html'
-const releasesUrl = 'https://github.com/LiJiaHua1024/deepseek-app-replica/releases/latest'
+const releasesUrl = 'https://github.com/AuroraEvelynAria/deepseek-oc-studio/releases/latest'
 
 const updateMessages = {
   current: 'updateCurrent',
@@ -278,6 +278,7 @@ const Choice = <T extends string>({
   confirmLabel,
   confirm,
   dismiss,
+  instant = false,
 }: {
   title: string
   icon?: ReactNode
@@ -286,6 +287,8 @@ const Choice = <T extends string>({
   confirmLabel?: string
   confirm: (value: T) => void
   dismiss: () => void
+  /** 点选即生效并关闭（主题这类需要即时预览的设置）。 */
+  instant?: boolean
 }) => {
   const t = useTranslate()
   const [next, setNext] = useState(value)
@@ -310,15 +313,22 @@ const Choice = <T extends string>({
               type="button"
               role="radio"
               aria-checked={next === field.id}
-              onClick={() => setNext(field.id)}
+              onClick={() => {
+                setNext(field.id)
+                if (instant) {
+                  confirm(field.id)
+                }
+              }}
             >
               {field.label}
             </button>
           ))}
         </div>
-        <button type="button" className={styles.confirm} onClick={() => confirm(next)}>
-          {confirmLabel ?? t('confirm')}
-        </button>
+        {instant ? null : (
+          <button type="button" className={styles.confirm} onClick={() => confirm(next)}>
+            {confirmLabel ?? t('confirm')}
+          </button>
+        )}
       </section>
     </div>
   )
@@ -1016,7 +1026,7 @@ const Settings = ({ start, chatFrame }: { start: Page; chatFrame: RefObject<HTML
           title={appearance}
           value={themePreference}
           fields={themes}
-          confirmLabel={tr('确认', 'Confirm')}
+          instant
           confirm={(value) => {
             setThemePreference(value)
             setPopup(null)
